@@ -1,0 +1,18 @@
+# Claude Code / ruflo local state
+.claude-flow/
+.claude/
+.swarm/
+.hive-mind/
+
+# macOS
+.DS_Store
+._*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Local scratch / engagement output
+*.log
+tmp/
