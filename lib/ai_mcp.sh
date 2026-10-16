@@ -154,7 +154,7 @@ case "$1" in
     ;;
   inspect)
     echo -e "\033[1;36mLaunching MCP Inspector UI...\033[0m"
-    npx @modelcontextprotocol/inspector
+    npx -y @modelcontextprotocol/inspector
     ;;
   setup)
     echo -e "\033[1;36mRe-running MCP Suite setup...\033[0m"

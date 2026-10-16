@@ -4,7 +4,7 @@
 # =============================================================================
 
 show_menu() {
-  clear
+  clear 2>/dev/null || true
   echo ""
   echo -e "${BOLD}${CYAN}  ╔═══════════════════════════════════════════════════════════════════╗${RESET}"
   echo -e "${BOLD}${CYAN}  ║        SECURITY TERMINAL SETUP — BEST-IN-CLASS 2.0                ║${RESET}"
@@ -35,20 +35,26 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}18${RESET}  Config files      ${DIM}.zshrc, pentest.zsh, welcome.zsh, .tmux.conf${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}19${RESET}  System Doctor     ${DIM}Audit and verify all installed tools${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET}   Install everything (Recommended full assessment setup)"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${CYAN}D${RESET}   Run System Doctor only"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}   Quit"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET} / ${YELLOW}Y${RESET}   Install everything (Recommended full assessment setup / unattended)"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${CYAN}D${RESET}       Run System Doctor only"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}       Quit"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
   echo -e "${BOLD}${CYAN}  ╚═══════════════════════════════════════════════════════════════════╝${RESET}"
   echo ""
-  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 4 6 7 8 11 12 17 18) or A for all:${RESET}"
+  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 4 6 7 8 11 12 17 18), 'A' or 'y' for all [default: A]:${RESET}"
   echo -ne "  ${BOLD}> ${RESET}"
   read -r choices
+  # Default to 'A' (all) if user presses Enter
+  if [[ -z "$choices" ]]; then
+    choices="A"
+  fi
 }
 
 run_selections() {
   local input="$*"
-  [[ -z "$input" ]] && { echo "No components selected. Exiting."; exit 0; }
+  if [[ -z "$input" ]]; then
+    input="A"
+  fi
 
   local upper
   upper=$(echo "$input" | tr '[:lower:]' '[:upper:]')
@@ -66,37 +72,53 @@ run_selections() {
     fi
   done
 
-  preflight
+  # Check if user asked for ALL or entered 'y' / 'yes' / '-y' / '--yes'
+  local has_all=0
+  local has_yes=0
+  local has_other_components=0
 
   for token in $upper; do
     if [[ "$token" == "A" || "$token" == "ALL" || "$token" == "--ALL" || "$token" == "-A" ]]; then
-      install_core
-      install_fonts "all"
-      install_node
-      install_claude
-      install_code
-      install_terminals
-      install_shell_tools
-      setup_mcp_suite
-      install_pentest
-      install_bugbounty
-      install_ad_pivoting
-      install_web_api
-      install_cloud
-      install_cloud_devsec
-      install_mobile_re
-      install_ai_llm
-      install_workflow
-      install_dashboard
-      write_configs
-      sec_doctor
-      return
+      has_all=1
+    elif [[ "$token" == "Y" || "$token" == "YES" || "$token" == "-Y" || "$token" == "--YES" ]]; then
+      has_yes=1
+    else
+      has_other_components=1
     fi
   done
+
+  # If "all" was chosen, OR if "yes/-y" was given without specifying individual component numbers:
+  if [[ "$has_all" -eq 1 ]] || [[ "$has_yes" -eq 1 && "$has_other_components" -eq 0 ]]; then
+    preflight
+    install_core
+    install_fonts "all"
+    install_node
+    install_claude
+    install_code
+    install_terminals
+    install_shell_tools
+    setup_mcp_suite
+    install_pentest
+    install_bugbounty
+    install_ad_pivoting
+    install_web_api
+    install_cloud
+    install_cloud_devsec
+    install_mobile_re
+    install_ai_llm
+    install_workflow
+    install_dashboard
+    write_configs
+    sec_doctor
+    return
+  fi
+
+  preflight
 
   # Process individual items
   for item in $input; do
     case "$item" in
+      -y|--yes|y|Y|yes|YES)              ;; # Unattended flag handled, ignore in loop
       1|--core)                          install_core ;;
       2|--fonts)                         install_fonts "all" ;;
       3|--node)                          install_node ;;

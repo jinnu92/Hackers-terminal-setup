@@ -456,7 +456,7 @@ alias llmchat='llm'
 alias jwtdecode='jwt_tool'
 alias llmscan='garak'
 
-alias mcpinspect='npx @modelcontextprotocol/inspector'
+alias mcpinspect='npx -y @modelcontextprotocol/inspector'
 
 bbrecon() {
   local domain=$1

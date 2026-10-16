@@ -15,6 +15,14 @@ err()  { echo -e "${RED}[-]${RESET} $1"; }
 step() { echo -e "\n${BOLD}${CYAN}━━━ $1 ━━━${RESET}"; }
 ok()   { echo -e "${GREEN}✓${RESET} $1"; }
 
+# ─── Unattended & Non-Interactive Defaults ─────────────────────────────────────
+# Prevent apt, Homebrew, npx, and scripts from halting for [y/n] or Enter prompts
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+export NONINTERACTIVE="${NONINTERACTIVE:-1}"
+export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
+export HOMEBREW_NO_AUTO_UPDATE="${HOMEBREW_NO_AUTO_UPDATE:-1}"
+export CI="${CI:-true}"
+
 # ─── OS Detection ─────────────────────────────────────────────────────────────
 detect_os() {
   OS="$(uname -s)"

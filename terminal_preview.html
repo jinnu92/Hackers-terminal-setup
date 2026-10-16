@@ -1339,9 +1339,16 @@ return config
 
         <!-- Dynamic Command Generator Bar -->
         <div class="export-bar" id="export">
-          <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
-            <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Your Tailored Installation Command:</span>
-            <div class="export-cmd" id="install-command">./ter.sh --core --fonts --dev --mcp --terminals --ad-pivot --web-api --devsecops --mobile --bugbounty --dashboard</div>
+          <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Your Tailored Installation Command:</span>
+              <label class="toggle-wrap" style="font-size:0.78rem; color:#a6e3a1; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="chk-unattended" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>⚡ Unattended Mode (<code>-y</code> / Zero Prompts)</span>
+              </label>
+            </div>
+            <div class="export-cmd" id="install-command">./ter.sh -y</div>
+            <span style="font-size:0.72rem; color:var(--text-muted);">💡 <em>Tip: Adding <code>-y</code> skips all interactive prompts in apt, brew, and npx. In Claude Code, use <code>claude-yolo</code> or <code>--dangerously-skip-permissions</code> to bypass tool confirmation dialogs.</em></span>
           </div>
           <button class="copy-btn" onclick="copyInstallCmd()">📋 Copy Command</button>
         </div>
@@ -1603,17 +1610,35 @@ Hackers-terminal-setup/
     }
 
     function updateCommand() {
+      const unattended = document.getElementById('chk-unattended') && document.getElementById('chk-unattended').checked;
       const parts = ['./ter.sh'];
-      if (document.getElementById('chk-core').checked) parts.push('--core', '--shell-tools');
-      if (document.getElementById('chk-fonts').checked) parts.push('--fonts');
-      if (document.getElementById('chk-dev').checked) parts.push('--dev');
-      if (document.getElementById('chk-mcp').checked) parts.push('--mcp');
-      if (document.getElementById('chk-terminals').checked) parts.push('--terminals', '--dashboard');
-      if (document.getElementById('chk-ad-pivot') && document.getElementById('chk-ad-pivot').checked) parts.push('--ad-pivot');
-      if (document.getElementById('chk-web-api') && document.getElementById('chk-web-api').checked) parts.push('--web-api');
-      if (document.getElementById('chk-devsecops') && document.getElementById('chk-devsecops').checked) parts.push('--devsecops');
-      if (document.getElementById('chk-mobile') && document.getElementById('chk-mobile').checked) parts.push('--mobile');
-      if (document.getElementById('chk-recon') && document.getElementById('chk-recon').checked) parts.push('--bugbounty', '--pentest');
+      if (unattended) parts.push('-y');
+
+      const allChecked = document.getElementById('chk-core').checked &&
+        document.getElementById('chk-fonts').checked &&
+        document.getElementById('chk-dev').checked &&
+        document.getElementById('chk-mcp').checked &&
+        document.getElementById('chk-terminals').checked &&
+        document.getElementById('chk-ad-pivot').checked &&
+        document.getElementById('chk-web-api').checked &&
+        document.getElementById('chk-devsecops').checked &&
+        document.getElementById('chk-mobile').checked &&
+        document.getElementById('chk-recon').checked;
+
+      if (allChecked) {
+        if (!unattended) parts.push('--all');
+      } else {
+        if (document.getElementById('chk-core').checked) parts.push('--core', '--shell-tools');
+        if (document.getElementById('chk-fonts').checked) parts.push('--fonts');
+        if (document.getElementById('chk-dev').checked) parts.push('--dev');
+        if (document.getElementById('chk-mcp').checked) parts.push('--mcp');
+        if (document.getElementById('chk-terminals').checked) parts.push('--terminals', '--dashboard');
+        if (document.getElementById('chk-ad-pivot') && document.getElementById('chk-ad-pivot').checked) parts.push('--ad-pivot');
+        if (document.getElementById('chk-web-api') && document.getElementById('chk-web-api').checked) parts.push('--web-api');
+        if (document.getElementById('chk-devsecops') && document.getElementById('chk-devsecops').checked) parts.push('--devsecops');
+        if (document.getElementById('chk-mobile') && document.getElementById('chk-mobile').checked) parts.push('--mobile');
+        if (document.getElementById('chk-recon') && document.getElementById('chk-recon').checked) parts.push('--bugbounty', '--pentest');
+      }
 
       const cmdEl = document.getElementById('install-command');
       cmdEl.textContent = parts.join(' ');

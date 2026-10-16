@@ -33,6 +33,14 @@ err()  { echo -e "${RED}[-]${RESET} $1"; }
 step() { echo -e "\n${BOLD}${CYAN}━━━ $1 ━━━${RESET}"; }
 ok()   { echo -e "${GREEN}✓${RESET} $1"; }
 
+# ─── Unattended & Non-Interactive Defaults ─────────────────────────────────────
+# Prevent apt, Homebrew, npx, and scripts from halting for [y/n] or Enter prompts
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+export NONINTERACTIVE="${NONINTERACTIVE:-1}"
+export HOMEBREW_NO_ENV_HINTS="${HOMEBREW_NO_ENV_HINTS:-1}"
+export HOMEBREW_NO_AUTO_UPDATE="${HOMEBREW_NO_AUTO_UPDATE:-1}"
+export CI="${CI:-true}"
+
 # ─── OS Detection ─────────────────────────────────────────────────────────────
 detect_os() {
   OS="$(uname -s)"
@@ -1849,7 +1857,7 @@ case "$1" in
     ;;
   inspect)
     echo -e "\033[1;36mLaunching MCP Inspector UI...\033[0m"
-    npx @modelcontextprotocol/inspector
+    npx -y @modelcontextprotocol/inspector
     ;;
   setup)
     echo -e "\033[1;36mRe-running MCP Suite setup...\033[0m"
@@ -2821,7 +2829,7 @@ alias llmchat='llm'
 alias jwtdecode='jwt_tool'
 alias llmscan='garak'
 
-alias mcpinspect='npx @modelcontextprotocol/inspector'
+alias mcpinspect='npx -y @modelcontextprotocol/inspector'
 
 bbrecon() {
   local domain=$1
@@ -3095,7 +3103,7 @@ TMUXCONF
 # =============================================================================
 
 show_menu() {
-  clear
+  clear 2>/dev/null || true
   echo ""
   echo -e "${BOLD}${CYAN}  ╔═══════════════════════════════════════════════════════════════════╗${RESET}"
   echo -e "${BOLD}${CYAN}  ║        SECURITY TERMINAL SETUP — BEST-IN-CLASS 2.0                ║${RESET}"
@@ -3126,20 +3134,26 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}18${RESET}  Config files      ${DIM}.zshrc, pentest.zsh, welcome.zsh, .tmux.conf${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}19${RESET}  System Doctor     ${DIM}Audit and verify all installed tools${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET}   Install everything (Recommended full assessment setup)"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${CYAN}D${RESET}   Run System Doctor only"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}   Quit"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET} / ${YELLOW}Y${RESET}   Install everything (Recommended full assessment setup / unattended)"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${CYAN}D${RESET}       Run System Doctor only"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}       Quit"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
   echo -e "${BOLD}${CYAN}  ╚═══════════════════════════════════════════════════════════════════╝${RESET}"
   echo ""
-  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 4 6 7 8 11 12 17 18) or A for all:${RESET}"
+  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 4 6 7 8 11 12 17 18), 'A' or 'y' for all [default: A]:${RESET}"
   echo -ne "  ${BOLD}> ${RESET}"
   read -r choices
+  # Default to 'A' (all) if user presses Enter
+  if [[ -z "$choices" ]]; then
+    choices="A"
+  fi
 }
 
 run_selections() {
   local input="$*"
-  [[ -z "$input" ]] && { echo "No components selected. Exiting."; exit 0; }
+  if [[ -z "$input" ]]; then
+    input="A"
+  fi
 
   local upper
   upper=$(echo "$input" | tr '[:lower:]' '[:upper:]')
@@ -3157,37 +3171,53 @@ run_selections() {
     fi
   done
 
-  preflight
+  # Check if user asked for ALL or entered 'y' / 'yes' / '-y' / '--yes'
+  local has_all=0
+  local has_yes=0
+  local has_other_components=0
 
   for token in $upper; do
     if [[ "$token" == "A" || "$token" == "ALL" || "$token" == "--ALL" || "$token" == "-A" ]]; then
-      install_core
-      install_fonts "all"
-      install_node
-      install_claude
-      install_code
-      install_terminals
-      install_shell_tools
-      setup_mcp_suite
-      install_pentest
-      install_bugbounty
-      install_ad_pivoting
-      install_web_api
-      install_cloud
-      install_cloud_devsec
-      install_mobile_re
-      install_ai_llm
-      install_workflow
-      install_dashboard
-      write_configs
-      sec_doctor
-      return
+      has_all=1
+    elif [[ "$token" == "Y" || "$token" == "YES" || "$token" == "-Y" || "$token" == "--YES" ]]; then
+      has_yes=1
+    else
+      has_other_components=1
     fi
   done
+
+  # If "all" was chosen, OR if "yes/-y" was given without specifying individual component numbers:
+  if [[ "$has_all" -eq 1 ]] || [[ "$has_yes" -eq 1 && "$has_other_components" -eq 0 ]]; then
+    preflight
+    install_core
+    install_fonts "all"
+    install_node
+    install_claude
+    install_code
+    install_terminals
+    install_shell_tools
+    setup_mcp_suite
+    install_pentest
+    install_bugbounty
+    install_ad_pivoting
+    install_web_api
+    install_cloud
+    install_cloud_devsec
+    install_mobile_re
+    install_ai_llm
+    install_workflow
+    install_dashboard
+    write_configs
+    sec_doctor
+    return
+  fi
+
+  preflight
 
   # Process individual items
   for item in $input; do
     case "$item" in
+      -y|--yes|y|Y|yes|YES)              ;; # Unattended flag handled, ignore in loop
       1|--core)                          install_core ;;
       2|--fonts)                         install_fonts "all" ;;
       3|--node)                          install_node ;;
@@ -3232,6 +3262,7 @@ if [[ $# -gt 0 ]]; then
       echo "Usage: ./ter.sh [OPTIONS] [NUMBERS...]"
       echo ""
       echo "Options:"
+      echo "  -y, --yes        Unattended mode (install all with zero [y/n] prompts)"
       echo "  -a, --all        Install all components"
       echo "  --core           Install core terminal tools (OMZ, p10k, fzf, bat, etc.)"
       echo "  --fonts          Install Hacker & Developer Nerd Fonts"
@@ -3257,10 +3288,11 @@ if [[ $# -gt 0 ]]; then
       echo "  -h, --help       Show this help message"
       echo ""
       echo "Examples:"
-      echo "  ./ter.sh                                  # Launch interactive menu"
+      echo "  ./ter.sh -y                               # Completely unattended zero-prompt install"
+      echo "  ./ter.sh                                  # Launch interactive menu (press Enter or 'y' for all)"
       echo "  ./ter.sh --all                            # Install complete hacker terminal"
+      echo "  ./ter.sh -y --fonts --dev --mcp           # Install selected tools unattended"
       echo "  ./ter.sh --ad-pivot --web-api --devsecops # Install comprehensive assessment suite"
-      echo "  ./ter.sh --fonts --dev --mcp              # Install fonts, dev stack, and MCP suite"
       echo "  ./ter.sh --doctor                         # Audit current environment & tools"
       echo ""
       exit 0
