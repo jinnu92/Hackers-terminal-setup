@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hackers Terminal Setup — Best-in-Class Showcase & Capabilities Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --card-border: #30363d;
+      --term-bg: #1e1e2e; /* Catppuccin Mocha */
+      --term-header: #181825;
+      --accent-cyan: #89dceb;
+      --accent-blue: #89b4fa;
+      --accent-green: #a6e3a1;
+      --accent-purple: #cba6f7;
+      --accent-pink: #f5c2e7;
+      --accent-yellow: #f9e2af;
+      --accent-red: #f38ba8;
+      --accent-peach: #fab387;
+      --text: #cdd6f4;
+      --text-muted: #6c7086;
+      --sidebar-width: 290px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Navigation */
+    header {
+      background: rgba(22, 27, 34, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #a6e3a1, #89dceb);
+      color: #111;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      letter-spacing: 0.5px;
+    }
+    .title-h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .badge-sub {
+      font-size: 0.75rem;
+      color: var(--accent-purple);
+      background: rgba(203, 166, 247, 0.12);
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(203, 166, 247, 0.3);
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .pill-btn {
+      background: #21262d;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .pill-btn:hover {
+      background: #30363d;
+      border-color: #8b949e;
+      color: #fff;
+    }
+    .pill-btn.primary {
+      background: linear-gradient(135deg, #89b4fa, #cba6f7);
+      color: #111;
+      border: none;
+      font-weight: 600;
+    }
+    .pill-btn.primary:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+
+    /* Main Layout */
+    .app-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 65px);
+    }
+
+    /* Sidebar Navigation */
+    aside {
+      width: var(--sidebar-width);
+      background: var(--card-bg);
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .nav-section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      color: var(--text-muted);
+      padding: 16px 20px 8px 20px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+      border-left: 3px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+    .nav-item.active {
+      background: rgba(137, 180, 250, 0.08);
+      border-left-color: var(--accent-blue);
+      color: #fff;
+      font-weight: 600;
+    }
+    .nav-item .icon {
+      font-size: 1.1rem;
+      width: 22px;
+      text-align: center;
+    }
+    .badge-count {
+      margin-left: auto;
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+
+    /* Content Area */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at 80% 20%, rgba(203, 166, 247, 0.04) 0%, rgba(13, 17, 23, 1) 60%);
+      overflow-y: auto;
+      padding: 24px 32px;
+    }
+
+    /* View Panes */
+    .view-pane {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      animation: fadeIn 0.25s ease-in-out;
+    }
+    .view-pane.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hero Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(30, 30, 46, 0.85) 0%, rgba(24, 24, 37, 0.95) 100%);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    .hero-info h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .hero-info p {
+      color: #a6adc8;
+      font-size: 0.92rem;
+      max-width: 680px;
+      line-height: 1.5;
+    }
+    .tag-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .tech-tag {
+      font-size: 0.73rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 9px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(137, 220, 235, 0.2);
+    }
+
+    /* Terminal Window Mockup */
+    .terminal-window {
+      background: var(--term-bg);
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .terminal-titlebar {
+      background: var(--term-header);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      user-select: none;
+    }
+    .window-controls {
+      display: flex;
+      gap: 8px;
+    }
+    .control-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .control-dot.close { background: #f38ba8; }
+    .control-dot.minimize { background: #f9e2af; }
+    .control-dot.maximize { background: #a6e3a1; }
+    .terminal-tabs {
+      display: flex;
+      gap: 4px;
+      margin-left: 20px;
+    }
+    .terminal-tab {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      padding: 4px 14px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .terminal-tab.active {
+      background: rgba(255, 255, 255, 0.07);
+      color: #fff;
+    }
+    .titlebar-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .terminal-body {
+      padding: 20px 24px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: var(--text);
+      min-height: 480px;
+      max-height: 580px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Prompt Styling */
+    .prompt-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .p-seg {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .p-dir { background: #313244; color: var(--accent-blue); }
+    .p-git { background: #45475a; color: var(--accent-purple); }
+    .p-node { background: rgba(166, 227, 161, 0.15); color: var(--accent-green); }
+    .p-time { background: #181825; color: var(--text-muted); font-size: 0.72rem; }
+    .p-arrow { color: var(--accent-green); font-weight: 700; margin-left: 2px; }
+    .p-cmd { color: #fff; font-weight: 600; }
+
+    /* Colors in Terminal */
+    .c-green { color: var(--accent-green); }
+    .c-cyan { color: var(--accent-cyan); }
+    .c-blue { color: var(--accent-blue); }
+    .c-purple { color: var(--accent-purple); }
+    .c-yellow { color: var(--accent-yellow); }
+    .c-red { color: var(--accent-red); }
+    .c-peach { color: var(--accent-peach); }
+    .c-muted { color: var(--text-muted); }
+    .c-bold { font-weight: 700; }
+    .c-dim { opacity: 0.65; }
+
+    /* Interactive Command Bar */
+    .command-quickbar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      background: #11111b;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      align-items: center;
+      overflow-x: auto;
+    }
+    .quickbar-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      white-space: nowrap;
+      margin-right: 4px;
+    }
+    .cmd-chip {
+      background: #24273a;
+      border: 1px solid #363a4f;
+      color: var(--accent-blue);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cmd-chip:hover {
+      background: var(--accent-blue);
+      color: #111;
+      border-color: var(--accent-blue);
+    }
+
+    /* Capabilities Matrix Cards */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 18px;
+      margin-top: 8px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-2px);
+      border-color: #58a6ff;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .badge-core { background: rgba(166, 227, 161, 0.15); color: var(--accent-green); }
+    .badge-mcp { background: rgba(203, 166, 247, 0.15); color: var(--accent-purple); }
+    .badge-sec { background: rgba(243, 139, 168, 0.15); color: var(--accent-red); }
+    .badge-gpu { background: rgba(137, 220, 235, 0.15); color: var(--accent-cyan); }
+    .card-desc {
+      font-size: 0.85rem;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+    .card-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.82rem;
+    }
+    .card-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #c9d1d9;
+    }
+    .card-list li code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-yellow);
+      font-size: 0.78rem;
+    }
+    .card-footer {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .toggle-checkbox {
+      appearance: none;
+      width: 36px;
+      height: 20px;
+      background: #30363d;
+      border-radius: 20px;
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.2s ease;
+    }
+    .toggle-checkbox:checked {
+      background: var(--accent-green);
+    }
+    .toggle-checkbox::before {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s ease;
+    }
+    .toggle-checkbox:checked::before {
+      transform: translateX(16px);
+      background: #111;
+    }
+
+    /* Split Pane Simulator */
+    .split-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      height: 480px;
+    }
+    .split-col {
+      background: #181825;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* CLI Generator Bar */
+    .export-bar {
+      background: #161b22;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .export-cmd {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      background: #0d1117;
+      padding: 10px 16px;
+      border-radius: 8px;
+      color: var(--accent-green);
+      flex: 1;
+      border: 1px solid #30363d;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .copy-btn {
+      background: var(--accent-blue);
+      color: #111;
+      font-weight: 600;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .copy-btn:hover {
+      background: #b4befe;
+    }
+
+    /* Animations */
+    .blinking-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 15px;
+      background: var(--accent-cyan);
+      margin-left: 4px;
+      vertical-align: middle;
+      animation: blink 1s step-start infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #313244; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #45475a; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo-group">
+      <span class="logo-badge">HTS 2.0</span>
+      <h1 class="title-h1">Hackers Terminal Setup</h1>
+      <span class="badge-sub">Best-in-Class Daily Environment</span>
+    </div>
+    <div class="header-actions">
+      <button class="pill-btn" onclick="switchTab('matrix')">⚙️ Configure Profile</button>
+      <a class="pill-btn primary" href="#export" onclick="switchTab('matrix')">🚀 Generate Install Command</a>
+    </div>
+  </header>
+
+  <!-- App Layout -->
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside>
+      <div class="nav-section-title">Showcase Views</div>
+      <div class="nav-item active" onclick="switchTab('daily-shell')">
+        <span class="icon">⚡</span> Daily Dev Shell
+        <span class="badge-count">Starship</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('claude-ai')">
+        <span class="icon">🤖</span> Claude Code & MCP
+        <span class="badge-count">AI Agent</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('gpu-terms')">
+        <span class="icon">🖥️</span> GPU Terminal Matrix
+        <span class="badge-count">Ghostty</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('power-tools')">
+        <span class="icon">🦀</span> Modern Rust Tools
+        <span class="badge-count">btop/yazi</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('security-ops')">
+        <span class="icon">🛡️</span> Pentest & Recon
+        <span class="badge-count">Recon</span>
+      </div>
+
+      <div class="nav-section-title">Decision & Usages</div>
+      <div class="nav-item" onclick="switchTab('matrix')">
+        <span class="icon">📊</span> Usages & Profiles
+        <span class="badge-count">Custom</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('architecture')">
+        <span class="icon">📦</span> Modular Architecture
+        <span class="badge-count">lib/</span>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main>
+
+      <!-- VIEW 1: Daily Dev Shell -->
+      <section id="view-daily-shell" class="view-pane active">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>⚡ Daily Driver Terminal Environment</h2>
+            <p>Experience sub-millisecond shell latency, asynchronous auto-suggestions, smart fuzzy directory jumping, and high-speed git status reporting without bloat.</p>
+            <div class="tag-row">
+              <span class="tech-tag">Starship Prompt</span>
+              <span class="tech-tag">zsh-autosuggestions</span>
+              <span class="tech-tag">zsh-syntax-highlighting</span>
+              <span class="tech-tag">zoxide (smart cd)</span>
+              <span class="tech-tag">Atuin (SQLite History)</span>
+              <span class="tech-tag">Nerd Fonts Ligatures</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active">~/workspace/api (zsh)</span>
+              <span class="terminal-tab">+ new tab</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>Ghostty 1.1</span>
+              <span>120x35</span>
+            </div>
+          </div>
+
+          <div class="terminal-body" id="shell-sim-body">
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span> <span class="p-seg p-git"> main [⇡1 !2]</span> <span class="p-seg p-node">⬢ v26.12.0</span> <span class="p-seg p-time"> 14:32:05</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">eza --tree --level=2 --icons --git</span>
+<span class="c-blue">.</span>
+├── <span class="c-purple">src/</span>
+│   ├── <span class="c-cyan">server.ts</span>         <span class="c-muted">[M]</span>
+│   ├── <span class="c-cyan">auth.ts</span>
+│   └── <span class="c-cyan">routes.ts</span>         <span class="c-muted">[+]</span>
+├── <span class="c-yellow">package.json</span>
+├── <span class="c-yellow">tsconfig.json</span>
+└── <span class="c-muted">README.md</span>
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span> <span class="p-seg p-git"> main [⇡1 !2]</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">z auth</span>  <span class="c-muted"># zoxide intelligent directory jumping</span>
+<span class="c-green">✓ Jumped to ~/workspace/api/src/auth</span>
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api/src/auth</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd"><span class="c-cyan">atuin search</span> --interactive</span>
+<span class="c-cyan">┌─────────────────────── Atuin Shell History (Encrypted SQLite) ───────────────────────┐</span>
+<span class="c-cyan">│</span> <span class="c-green">Ctrl+R</span> <span class="c-muted">Filtered: 1,429 commands | Secrets scrubbed: true</span>                            <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>                                                                                      <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>  <span class="c-muted">2 mins ago</span>   <span class="c-purple">git status</span>                                                            <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>  <span class="c-muted">5 mins ago</span>   <span class="c-purple">claude "audit the authentication middleware for timing attacks"</span>        <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>  <span class="c-muted">1 hour ago</span>   <span class="c-purple">uv run pytest tests/test_crypto.py</span>                                    <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>  <span class="c-muted">yesterday</span>    <span class="c-purple">docker compose up -d postgres redis</span>                                   <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>  <span class="c-muted">3 days ago</span>   <span class="c-purple">sec-mcp setup --safe</span>                                                  <span class="c-cyan">│</span>
+<span class="c-cyan">└──────────────────────────────────────────────────────────────────────────────────────┘</span>
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api/src/auth</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">git diff</span>
+<span class="c-dim"># Powered by delta (Syntax-highlighted pager)</span>
+<span class="c-blue">────────────────────────────────────────────────────────────────────────────────────────</span>
+<span class="c-bold">src/auth.ts</span>
+<span class="c-blue">────────────────────────────────────────────────────────────────────────────────────────</span>
+<span class="c-cyan">@@ -42,6 +42,8 @@ export async function verifyToken(req: Request)</span>
+<span class="c-red">-    if (token === hardcodedSecret) return true;</span>
+<span class="c-green">+    const isMatch = crypto.timingSafeEqual(Buffer.from(token), Buffer.from(envSecret));</span>
+<span class="c-green">+    if (!isMatch) throw new UnauthorizedError("Invalid credentials");</span>
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api/src/auth</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span id="daily-typing">git commit -m "fix(auth): prevent timing side-channels in token verification"</span><span class="blinking-cursor"></span>
+          </div>
+
+          <div class="command-quickbar">
+            <span class="quickbar-label">Interactive Demo:</span>
+            <button class="cmd-chip" onclick="simulateShell('status')">📊 git status</button>
+            <button class="cmd-chip" onclick="simulateShell('eza')">📂 eza --tree</button>
+            <button class="cmd-chip" onclick="simulateShell('atuin')">🔍 Atuin History</button>
+            <button class="cmd-chip" onclick="simulateShell('doctor')">🩺 sec-doctor</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: Claude Code & MCP AI Agent -->
+      <section id="view-claude-ai" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🤖 Claude Code & MCP Server Suite</h2>
+            <p>Anthropic's terminal-native agent paired with scoped, secure Model Context Protocol servers. Read files safely, inspect repositories, test APIs, and automate dev tasks.</p>
+            <div class="tag-row">
+              <span class="tech-tag">Claude Code CLI</span>
+              <span class="tech-tag">Filesystem MCP (Scoped)</span>
+              <span class="tech-tag">GitHub MCP</span>
+              <span class="tech-tag">Fetch / Brave Search</span>
+              <span class="tech-tag">Memory / SQLite</span>
+              <span class="tech-tag">uvx / npx Runners</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active">claude (Agent Session)</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>MCP: 5 Servers Connected</span>
+              <span>Claude 3.7 Sonnet</span>
+            </div>
+          </div>
+
+          <div class="terminal-body" id="claude-sim-body">
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/secure-vault</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">claude</span>
+
+<span class="c-peach c-bold">╭────────────────────────────────────────────────────────────────────────╮</span>
+<span class="c-peach c-bold">│</span>  <span class="c-bold">Claude Code</span> <span class="c-muted">v0.2.32 (Anthropic Agentic CLI)</span>                          <span class="c-peach c-bold">│</span>
+<span class="c-peach c-bold">│</span>  Model: <span class="c-green">claude-3-7-sonnet-20250219</span> | Context: <span class="c-cyan">200k tokens</span>               <span class="c-peach c-bold">│</span>
+<span class="c-peach c-bold">│</span>  MCP Protocol: <span class="c-purple">Active (Filesystem, Git, Brave-Search, Memory, Semgrep)</span> <span class="c-peach c-bold">│</span>
+<span class="c-peach c-bold">╰────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="c-cyan">></span> <span class="c-bold">Check this repo for hardcoded API keys and explain any vulnerabilities found.</span>
+
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">filesystem:list_directory</span> <span class="c-muted">{"path": "/Users/krack/workspace/secure-vault"}</span>
+  <span class="c-green">✓</span> Found 14 files across 4 directories.
+
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">semgrep:run_scan</span> <span class="c-muted">{"rules": "p/secrets,p/owasp-top-ten"}</span>
+  <span class="c-green">✓</span> Scan completed in 410ms. Findings: 1 warning.
+
+<span class="c-purple">Claude:</span>
+I inspected the workspace and found a potential secret exposure in <span class="c-cyan">config/database.ts:18</span>:
+
+<span class="c-red">18 | const DB_CONN = "postgres://admin:Sup3rS3cret2026@db.internal:5432/vault";</span>
+
+<span class="c-bold">Risk Assessment:</span>
+Hardcoding database credentials violates 12-factor configuration guidelines and exposes credentials
+in version control history.
+
+<span class="c-green">Proposed Solution:</span>
+1. Migrate the secret to an environment variable accessed via <span class="c-yellow">process.env.DATABASE_URL</span>.
+2. Generate a <span class="c-cyan">.env.example</span> template.
+3. Automatically load the variable with <span class="c-purple">direnv</span> in your local shell.
+
+<span class="c-cyan">></span> Would you like me to apply this patch and verify with tests? <span class="c-muted">[y/n]</span> <span class="blinking-cursor"></span>
+          </div>
+
+          <div class="command-quickbar">
+            <span class="quickbar-label">Claude MCP Actions:</span>
+            <button class="cmd-chip" onclick="simulateClaude('mcp-list')">📋 /mcp list</button>
+            <button class="cmd-chip" onclick="simulateClaude('patch')">🔧 Apply Security Patch</button>
+            <button class="cmd-chip" onclick="simulateClaude('research')">🌐 Research CVE-2026-X</button>
+            <button class="cmd-chip" onclick="simulateClaude('reset')">🔄 Clear Session</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: GPU Terminal Emulators -->
+      <section id="view-gpu-terms" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🖥️ GPU-Accelerated Terminal Emulator Matrix</h2>
+            <p>Modern terminals render text on your graphics card (Metal on macOS, Vulkan/OpenGL on Linux) for 120 FPS scrolling, zero input lag, native tabs, and true-color transparency.</p>
+            <div class="tag-row">
+              <span class="tech-tag">Ghostty (Zig + Metal/GTK4)</span>
+              <span class="tech-tag">WezTerm (Rust + Lua Scripting)</span>
+              <span class="tech-tag">Kitty (OpenGL + GPU Shaders)</span>
+              <span class="tech-tag">Alacritty (Rust Minimalist)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="split-grid">
+          <!-- Ghostty Card -->
+          <div class="split-col">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-weight:700; color:#fff; font-size:1rem;">👻 Ghostty (Recommended on macOS & Wayland)</span>
+              <span class="card-badge badge-gpu">Metal Native</span>
+            </div>
+            <p class="c-muted" style="margin-bottom:10px;">Created by Mitchell Hashimoto. Built with Zig. Native macOS tabs & windows, blur, sub-pixel rendering, zero config bloat.</p>
+            <span class="c-cyan c-bold"># ~/.config/ghostty/config</span>
+<pre style="color:var(--text); font-size:0.75rem; background:#11111b; padding:10px; border-radius:6px; margin:8px 0; border:1px solid #313244;">
+theme = "catppuccin-mocha"
+font-family = "JetBrainsMono Nerd Font"
+font-size = 14
+font-feature = ["calt", "liga", "dlig"]
+window-padding-x = 12
+window-padding-y = 10
+macos-titlebar-style = "transparent"
+background-opacity = 0.92
+background-blur-radius = 20
+keybind = super+t=new_tab
+keybind = super+d=new_split:right
+keybind = super+shift+d=new_split:down
+</pre>
+            <button class="pill-btn primary" style="width:100%; justify-content:center; margin-top:8px;" onclick="alert('Ghostty install command:\nbrew install --cask ghostty (macOS)\nor binary/copr on Linux')">Install Ghostty Config</button>
+          </div>
+
+          <!-- WezTerm Card -->
+          <div class="split-col">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-weight:700; color:#fff; font-size:1rem;">⚡ WezTerm (Cross-Platform Lua Multiplexer)</span>
+              <span class="card-badge badge-gpu">Lua Engine</span>
+            </div>
+            <p class="c-muted" style="margin-bottom:10px;">Multiplexer terminal emulator written in Rust. Program every facet of tabs, status bars, and workspaces via Lua without tmux.</p>
+            <span class="c-purple c-bold"># ~/.config/wezterm/wezterm.lua</span>
+<pre style="color:var(--text); font-size:0.75rem; background:#11111b; padding:10px; border-radius:6px; margin:8px 0; border:1px solid #313244;">
+local wezterm = require 'wezterm'
+local config = wezterm.config_builder()
+config.color_scheme = 'Catppuccin Mocha'
+config.font = wezterm.font('JetBrains Mono')
+config.font_size = 13.5
+config.enable_tab_bar = true
+config.window_background_opacity = 0.94
+config.macos_window_background_blur = 20
+return config
+</pre>
+            <button class="pill-btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="alert('WezTerm install command:\nbrew install --cask wezterm (macOS)\nor apt install wezterm (Linux)')">Install WezTerm Config</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: Modern Power Tools -->
+      <section id="view-power-tools" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🦀 Modern CLI Power-Ups (Rust & Go Replacements)</h2>
+            <p>Replace 40-year-old UNIX utilities with modern, multi-threaded, syntax-aware, memory-safe CLI tools designed for modern screens and workflows.</p>
+            <div class="tag-row">
+              <span class="tech-tag">btop (top replacement)</span>
+              <span class="tech-tag">yazi (terminal file manager)</span>
+              <span class="tech-tag">delta (git pager)</span>
+              <span class="tech-tag">uv / uvx (pip/pipx replacement)</span>
+              <span class="tech-tag">eza (ls replacement)</span>
+              <span class="tech-tag">ripgrep (grep replacement)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active">btop (Real-time Resource Monitor)</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>CPU: 4.2%</span>
+              <span>RAM: 9.8 GB / 32 GB</span>
+              <span>GPU: 1.1%</span>
+            </div>
+          </div>
+
+          <div class="terminal-body">
+<span class="c-cyan">┌─ CPU ────────────────────────────────────────────────────────┐ ┌─ MEMORY ──────────────────────────────────────────────┐</span>
+<span class="c-cyan">│</span> <span class="c-green">Core 1:  [████░░░░░░░░░░]  12%</span>    <span class="c-green">Core 5: [██░░░░░░░░░░░░]   6%</span> <span class="c-cyan">│ │</span> <span class="c-purple">Total:  32.0 GiB</span>   <span class="c-green">Used:   9.82 GiB [███░░░░░░░░░] 30%</span>     <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-green">Core 2:  [██░░░░░░░░░░░░]   8%</span>    <span class="c-green">Core 6: [█░░░░░░░░░░░░░]   4%</span> <span class="c-cyan">│ │</span> <span class="c-blue">Cached:  6.40 GiB</span>   <span class="c-yellow">Swap:   0.00 GiB [░░░░░░░░░░░░]  0%</span>     <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-green">Core 3:  [██████░░░░░░░░]  24%</span>    <span class="c-green">Core 7: [░░░░░░░░░░░░░░]   1%</span> <span class="c-cyan">│ └─────────────────────────────────────────────────────┘</span>
+<span class="c-cyan">│</span> <span class="c-green">Core 4:  [█░░░░░░░░░░░░░]   3%</span>    <span class="c-green">Core 8: [░░░░░░░░░░░░░░]   2%</span> <span class="c-cyan">│ ┌─ DISKS ──────────────────────────────────────────────┐</span>
+<span class="c-cyan">└──────────────────────────────────────────────────────────────┘ │</span> <span class="c-peach">/System/Volumes/Data: 494 GB free [█████████░░░] 68%</span> <span class="c-cyan">│</span>
+<span class="c-cyan">┌─ PROCESSES ───────────────────────────────────────────────────────────────────────────── 142 Active Tasks ──────┐</span>
+<span class="c-cyan">│</span> <span class="c-muted">PID    Program             Threads   User      Memory     CPU%   Command Line</span>                                    <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-yellow">48912</span>  <span class="c-green">claude</span>              <span class="c-muted">14</span>        <span class="c-blue">krack</span>     <span class="c-purple">184 MB</span>     <span class="c-green">2.4%</span>   claude-code                                     <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-yellow">47101</span>  <span class="c-green">ghostty</span>             <span class="c-muted">22</span>        <span class="c-blue">krack</span>     <span class="c-purple">112 MB</span>     <span class="c-green">1.8%</span>   /Applications/Ghostty.app/Contents/MacOS/ghostty<span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-yellow">49200</span>  <span class="c-green">uvx prowler</span>         <span class="c-muted">8</span>         <span class="c-blue">krack</span>     <span class="c-purple">96 MB</span>      <span class="c-green">1.1%</span>   prowler aws --compliance cis_v3                <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-yellow">33214</span>  <span class="c-green">node (mcp-git)</span>      <span class="c-muted">10</span>        <span class="c-blue">krack</span>     <span class="c-purple">64 MB</span>      <span class="c-green">0.4%</span>   @modelcontextprotocol/server-github             <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-yellow">12891</span>  <span class="c-green">atuin-daemon</span>        <span class="c-muted">4</span>         <span class="c-blue">krack</span>     <span class="c-purple">22 MB</span>      <span class="c-green">0.1%</span>   atuin daemon                                    <span class="c-cyan">│</span>
+<span class="c-cyan">└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: Security Ops -->
+      <section id="view-security-ops" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🛡️ Security & Bug Bounty Recon Pipeline</h2>
+            <p>Ready-to-fire automated intelligence pipelines. Scan subdomains, probe live web servers, hunt secret tokens, fuzz APIs, and generate audit reports with a single command.</p>
+            <div class="tag-row">
+              <span class="tech-tag">bbrecon</span>
+              <span class="tech-tag">nuclei</span>
+              <span class="tech-tag">subfinder</span>
+              <span class="tech-tag">httpx</span>
+              <span class="tech-tag">trufflehog</span>
+              <span class="tech-tag">sec_doctor</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active">bbrecon demo.target.com</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>Status: Active Pipeline</span>
+              <span>Output: ~/recon/target/</span>
+            </div>
+          </div>
+
+          <div class="terminal-body">
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/recon</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">bbrecon tesla.com</span>
+<span class="c-green">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+<span class="c-bold c-cyan">  BUG BOUNTY FULL RECON: tesla.com</span>
+<span class="c-green">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+<span class="c-green">[+]</span> Output directory: <span class="c-yellow">/Users/krack/recon/tesla.com/20261017_004512</span>
+
+<span class="c-bold c-cyan">━━━ [1/7] Subdomain Discovery ━━━</span>
+<span class="c-green">[+]</span> Running subfinder...
+<span class="c-green">[+]</span> Passive sources returned 1,482 domains.
+<span class="c-green">✓</span> Total unique subdomains: <span class="c-bold">1,894</span>
+
+<span class="c-bold c-cyan">━━━ [2/7] Probing Live HTTP Services ━━━</span>
+<span class="c-green">[+]</span> Running httpx with tech detection and title extraction...
+<span class="c-cyan">https://auth.tesla.com</span> [200] [Okta SSO, React, Cloudflare] [Tesla SSO Login]
+<span class="c-cyan">https://api-toolbox.tesla.com</span> [403] [Express, Node.js] [Forbidden]
+<span class="c-cyan">https://fleet.tesla.com</span> [200] [Go-http-client, Envoy] [Fleet Management Portal]
+<span class="c-green">✓</span> Live HTTP services: <span class="c-bold">412 hosts</span>
+
+<span class="c-bold c-cyan">━━━ [3/7] Secret & Token Hunting ━━━</span>
+<span class="c-green">[+]</span> Running trufflehog git scanner on associated public repos...
+<span class="c-green">✓</span> Verified secrets leaked: <span class="c-green">0</span>
+
+<span class="c-bold c-cyan">━━━ [4/7] Vulnerability Scanning with Nuclei ━━━</span>
+<span class="c-green">[+]</span> Executing high-severity community templates...
+<span class="c-green">✓</span> Scan finished. Full report saved to: <span class="c-yellow">tesla.com_recon_report.html</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 6: Usages & Decision Matrix -->
+      <section id="view-matrix" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>📊 Customize Your Terminal Profile</h2>
+            <p>Select what fits your day-to-day workflow. Whether you're doing pure software development, agentic AI pair programming, or full-spectrum security auditing, toggle modules below to generate your tailored installation command.</p>
+          </div>
+        </div>
+
+        <div class="cards-grid">
+          <!-- Card 1: Core Shell -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🐚 Core Shell & Ergonomics</span>
+              <span class="card-badge badge-core">Essential</span>
+            </div>
+            <p class="card-desc">The foundation for modern typing speed, directory navigation, and history safety.</p>
+            <ul class="card-list">
+              <li><code>zsh + Starship</code> Ultra-fast cross-shell prompt</li>
+              <li><code>atuin</code> Encrypted SQLite history + secret scrub</li>
+              <li><code>direnv</code> Directory-specific isolated environments</li>
+              <li><code>zoxide + fzf</code> Jump anywhere in 2 keystrokes</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">Included by default</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-core" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 2: Modern Fonts -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🔤 Modern Nerd Fonts</span>
+              <span class="card-badge badge-core">Recommended</span>
+            </div>
+            <p class="card-desc">Crisp developer fonts with full symbol support, git glyphs, and ligatures (<code>!=</code>, <code>=&gt;</code>, <code>===</code>).</p>
+            <ul class="card-list">
+              <li><code>JetBrains Mono</code> Clean, legible programming font</li>
+              <li><code>Fira Code</code> Pioneering ligature support</li>
+              <li><code>MesloLGS</code> Standard Powerlevel10k glyph font</li>
+              <li><code>Cascadia Code & Hack</code> Microsoft & Open-source standards</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">Auto-installed to OS</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-fonts" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 3: Node & Claude Code -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🤖 Claude Code & Dev Stack</span>
+              <span class="card-badge badge-mcp">AI Agent</span>
+            </div>
+            <p class="card-desc">Node.js LTS with user-level npm prefix (no root needed), Claude Code CLI, and VS Code.</p>
+            <ul class="card-list">
+              <li><code>Node.js LTS</code> Modern runtime & package manager</li>
+              <li><code>@anthropic-ai/claude-code</code> Terminal pair programmer</li>
+              <li><code>VS Code (code CLI)</code> Editor command-line integration</li>
+              <li><code>uv / uvx</code> Astral 10-100x Python tool runner</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">Daily Dev / AI</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-dev" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 4: Preconfigured MCP Suite -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🔌 Preconfigured MCP Suite</span>
+              <span class="card-badge badge-mcp">Agent Tools</span>
+            </div>
+            <p class="card-desc">Model Context Protocol tools for Claude Code and Claude Desktop with strict directory sandboxing.</p>
+            <ul class="card-list">
+              <li><code>Filesystem MCP</code> Scoped to safe project folders</li>
+              <li><code>GitHub MCP</code> Inspect PRs, issues, and codebases</li>
+              <li><code>Brave Search / Fetch</code> Real-time web retrieval</li>
+              <li><code>Memory & SQLite</code> Persistent context between sessions</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">Zero-exposure sandbox</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-mcp" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 5: GPU Terminal Emulators -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🖥️ GPU Terminals & Themes</span>
+              <span class="card-badge badge-gpu">Hardware Accel</span>
+            </div>
+            <p class="card-desc">Install Ghostty, WezTerm, Kitty, or Alacritty with pre-tuned Tokyo Night / Catppuccin Mocha configs.</p>
+            <ul class="card-list">
+              <li><code>Ghostty</code> Metal-native macOS tabs & transparency</li>
+              <li><code>WezTerm</code> Lua scriptable terminal multiplexer</li>
+              <li><code>Kitty</code> Fast OpenGL tiling terminal emulator</li>
+              <li><code>Catppuccin Mocha</code> Aesthetic unified theme</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">Config deployed to ~/.config</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-terminals" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 6: Pentest & Bug Bounty -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🛡️ Pentest & Recon Suite</span>
+              <span class="card-badge badge-sec">Security</span>
+            </div>
+            <p class="card-desc">Industry-standard security toolchains for network auditing, web fuzzing, and bug bounty hunting.</p>
+            <ul class="card-list">
+              <li><code>nmap, masscan, sqlmap</code> Network & DB penetration</li>
+              <li><code>subfinder, httpx, nuclei</code> Fast attack surface recon</li>
+              <li><code>trufflehog, gitleaks</code> Secret token detection</li>
+              <li><code>bbrecon, quickrecon</code> One-liner automated pipelines</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">For security practitioners</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-sec" class="toggle-checkbox" onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic Command Generator Bar -->
+        <div class="export-bar" id="export">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Your Customized Execution Command:</span>
+            <div class="export-cmd" id="install-command">./ter.sh --core --fonts --dev --mcp --terminals</div>
+          </div>
+          <button class="copy-btn" onclick="copyInstallCmd()">📋 Copy Command</button>
+        </div>
+      </section>
+
+      <!-- VIEW 7: Architecture -->
+      <section id="view-architecture" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>📦 Modular Architecture (`lib/` Breakdown)</h2>
+            <p>Maintainable, clean decomposition. Each domain lives in its own module under <code>lib/</code>, and a single compiler script <code>bundle.sh</code> builds the single-file curl-pipeable distribution.</p>
+          </div>
+        </div>
+
+        <div class="split-grid">
+          <div class="split-col">
+            <span class="c-cyan c-bold">Directory Structure:</span>
+<pre style="font-size:0.8rem; color:var(--text); line-height:1.5; margin-top:8px;">
+Hackers-terminal-setup/
+├── <span class="c-green">ter.sh</span>                <span class="c-muted"># Universal entrypoint (sources lib/ or runs bundled)</span>
+├── <span class="c-yellow">bundle.sh</span>             <span class="c-muted"># Compiler: joins lib/*.sh into standalone curl distribution</span>
+├── <span class="c-purple">terminal_preview.html</span> <span class="c-muted"># Interactive visual showcase and profile builder</span>
+├── <span class="c-blue">lib/</span>
+│   ├── <span class="c-cyan">common.sh</span>         <span class="c-muted"># Colors, logging, banners, OS detection</span>
+│   ├── <span class="c-cyan">pkg_mgr.sh</span>        <span class="c-muted"># Brew, apt, dnf, pacman unified wrapper</span>
+│   ├── <span class="c-cyan">helpers.sh</span>        <span class="c-muted"># Go, pipx, npm global prefix isolation</span>
+│   ├── <span class="c-cyan">preflight.sh</span>      <span class="c-muted"># Dependencies, disk checks, root safety</span>
+│   ├── <span class="c-cyan">fonts.sh</span>          <span class="c-muted"># Modern Nerd Fonts multi-distro installer</span>
+│   ├── <span class="c-cyan">dev.sh</span>            <span class="c-muted"># Node.js LTS, Claude Code, VS Code CLI</span>
+│   ├── <span class="c-cyan">terminals.sh</span>      <span class="c-muted"># Ghostty, WezTerm, Kitty + aesthetic configs</span>
+│   ├── <span class="c-cyan">shell_tools.sh</span>    <span class="c-muted"># Atuin, direnv, uv, btop, yazi, delta, Starship</span>
+│   ├── <span class="c-cyan">pentest.sh</span>        <span class="c-muted"># Core offensive security auditing suite</span>
+│   ├── <span class="c-cyan">bugbounty.sh</span>      <span class="c-muted"># Web recon, discovery & nuclei automation</span>
+│   ├── <span class="c-cyan">cloud.sh</span>          <span class="c-muted"># Cloud & container security testing tools</span>
+│   ├── <span class="c-cyan">ai_mcp.sh</span>         <span class="c-muted"># Preconfigured safe MCP suite & Claude config</span>
+│   ├── <span class="c-cyan">workflow.sh</span>       <span class="c-muted"># Tmux, aliases, custom helper functions</span>
+│   ├── <span class="c-cyan">doctor.sh</span>         <span class="c-muted"># sec_doctor automated health dashboard</span>
+│   ├── <span class="c-cyan">configs.sh</span>        <span class="c-muted"># Dotfile generators (.zshrc, .tmux.conf, configs)</span>
+│   └── <span class="c-cyan">menu.sh</span>           <span class="c-muted"># Interactive ASCII menu & CLI argument parser</span>
+</pre>
+          </div>
+
+          <div class="split-col">
+            <span class="c-purple c-bold">Key Architectural Principles:</span>
+            <ul class="card-list" style="margin-top:12px; gap:12px;">
+              <li>
+                <span class="c-green">✓ Clean Single-Responsibility Modules</span><br>
+                <span class="c-muted">Each file in <code>lib/</code> handles one domain. Adding a new tool is as simple as adding 4 lines to the relevant module.</span>
+              </li>
+              <li>
+                <span class="c-green">✓ Dual-Mode Execution</span><br>
+                <span class="c-muted">If cloned locally, <code>ter.sh</code> dynamically sources <code>lib/*.sh</code> for fast live iteration. If bundled, <code>bundle.sh</code> outputs a single 0-dependency script for <code>curl -fsSL ... | bash</code>.</span>
+              </li>
+              <li>
+                <span class="c-green">✓ Non-Root Safety</span><br>
+                <span class="c-muted">NPM global packages use <code>~/.npm-global</code>, pip tools use <code>uv</code>/<code>pipx</code>, and Go binaries use <code>~/go/bin</code>, eliminating <code>sudo npm</code> hazards.</span>
+              </li>
+              <li>
+                <span class="c-green">✓ Sandboxed Agent Tooling</span><br>
+                <span class="c-muted">Filesystem MCP servers are never configured to expose <code>$HOME</code> or root, preventing credential leaks to LLMs.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    function switchTab(viewId) {
+      // Update sidebar
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      const activeNav = Array.from(document.querySelectorAll('.nav-item')).find(el => {
+        const text = el.textContent.toLowerCase();
+        if (viewId === 'daily-shell' && text.includes('daily')) return true;
+        if (viewId === 'claude-ai' && text.includes('claude')) return true;
+        if (viewId === 'gpu-terms' && text.includes('gpu')) return true;
+        if (viewId === 'power-tools' && text.includes('rust')) return true;
+        if (viewId === 'security-ops' && text.includes('pentest')) return true;
+        if (viewId === 'matrix' && text.includes('usages')) return true;
+        if (viewId === 'architecture' && text.includes('modular')) return true;
+        return false;
+      });
+      if (activeNav) activeNav.classList.add('active');
+
+      // Update panes
+      document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
+      const targetPane = document.getElementById('view-' + viewId);
+      if (targetPane) targetPane.classList.add('active');
+    }
+
+    function updateCommand() {
+      const parts = ['./ter.sh'];
+      if (document.getElementById('chk-core').checked) parts.push('--core');
+      if (document.getElementById('chk-fonts').checked) parts.push('--fonts');
+      if (document.getElementById('chk-dev').checked) parts.push('--dev');
+      if (document.getElementById('chk-mcp').checked) parts.push('--mcp');
+      if (document.getElementById('chk-terminals').checked) parts.push('--terminals');
+      if (document.getElementById('chk-sec').checked) parts.push('--pentest', '--bugbounty');
+
+      const cmdEl = document.getElementById('install-command');
+      cmdEl.textContent = parts.join(' ');
+    }
+
+    function copyInstallCmd() {
+      const cmdText = document.getElementById('install-command').textContent;
+      navigator.clipboard.writeText(cmdText).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.background = '#a6e3a1';
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.style.background = '#89b4fa';
+        }, 1800);
+      });
+    }
+
+    function simulateShell(action) {
+      const body = document.getElementById('shell-sim-body');
+      if (action === 'status') {
+        body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api/src/auth</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">git status -s</span>
+ <span class="c-green">M</span> auth.ts
+ <span class="c-cyan">A</span> routes.ts
+ <span class="c-red">??</span> .env.local`;
+      } else if (action === 'eza') {
+        body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">eza -lah --icons</span>
+<span class="c-muted">drwxr-xr-x</span> <span class="c-blue">krack</span>  <span class="c-green">192B</span>  <span class="c-purple">src/</span>
+<span class="c-muted">-rw-r--r--</span> <span class="c-blue">krack</span>  <span class="c-green">1.2K</span>  <span class="c-yellow">package.json</span>
+<span class="c-muted">-rw-r--r--</span> <span class="c-blue">krack</span>  <span class="c-green">340B</span>  <span class="c-yellow">tsconfig.json</span>
+<span class="c-muted">-rw-r--r--</span> <span class="c-blue">krack</span>  <span class="c-green">2.1K</span>  <span class="c-muted">README.md</span>`;
+      } else if (action === 'atuin') {
+        body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">atuin stats</span>
+<span class="c-cyan">Total commands:</span> 4,821
+<span class="c-cyan">Most used:</span> git (34%), claude (18%), eza (12%), uv (8%)
+<span class="c-green">Privacy filter active:</span> 14 tokens scrubbed automatically`;
+      } else if (action === 'doctor') {
+        body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">sec_doctor</span>
+<span class="c-green">━━━ Security & Shell Doctor Audit ━━━</span>
+<span class="c-green">✓</span> Shell: zsh 5.9
+<span class="c-green">✓</span> Prompt: Starship 1.22.1 (0.8ms latency)
+<span class="c-green">✓</span> History: Atuin SQLite v18.3.0 (encrypted)
+<span class="c-green">✓</span> AI Agent: Claude Code CLI v0.2.32
+<span class="c-green">✓</span> MCP Servers: 5 active & sandboxed
+<span class="c-green">✓</span> All systems optimal!`;
+      }
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function simulateClaude(action) {
+      const body = document.getElementById('claude-sim-body');
+      if (action === 'mcp-list') {
+        body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">/mcp</span>
+<span class="c-purple">Configured MCP Servers:</span>
+  • <span class="c-green">filesystem</span> (Scoped: ~/workspace/)
+  • <span class="c-green">github</span> (User: @krack)
+  • <span class="c-green">brave-search</span> (Online search)
+  • <span class="c-green">memory</span> (Persistent graph)
+  • <span class="c-green">semgrep</span> (Code security auditor)`;
+      } else if (action === 'patch') {
+        body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">y</span>
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">filesystem:write_file</span> <span class="c-muted">{"path": "config/database.ts"}</span>
+<span class="c-green">✓</span> File updated cleanly.
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">bash</span> <span class="c-muted">{"command": "npm test"}</span>
+<span class="c-green">✓</span> 12 tests passed, 0 failures. Secret safely extracted to .env!`;
+      } else if (action === 'research') {
+        body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">Research latest OpenSSL CVE</span>
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">fetch:get</span> <span class="c-muted">{"url": "https://nvd.nist.gov/vuln/detail/CVE-2026-0001"}</span>
+<span class="c-purple">Claude:</span> Verified that this vulnerability only affects versions &lt; 3.2. Current system has 3.3.0 installed. No patch required.`;
+      } else if (action === 'reset') {
+        body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/secure-vault</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">claude</span>
+<span class="c-cyan">Session initialized. MCP Servers active. Ready for instructions.</span><span class="blinking-cursor"></span>`;
+      }
+      body.scrollTop = body.scrollHeight;
+    }
+  </script>
+</body>
+</html>
