@@ -84,6 +84,14 @@ resolve_pkg() {
         uv)           echo "uv" ;;
         btop)         echo "btop" ;;
         starship)     echo "starship" ;;
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
+        jadx)         echo "jadx" ;;
+        apktool)      echo "apktool" ;;
+        syft)         echo "syft" ;;
+        grype)        echo "grype" ;;
+        chisel)       echo "chisel" ;;
+        ligolo-ng)    echo "ligolo-ng" ;;
         *)            echo "$pkg" ;;
       esac ;;
     apt)
@@ -152,6 +160,12 @@ resolve_pkg() {
         atuin)        echo "" ;;          # installed via install script
         starship)     echo "" ;;          # installed via install script
         uv)           echo "" ;;          # installed via astral.sh script
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
+        jadx)         echo "jadx" ;;
+        apktool)      echo "apktool" ;;
+        responder)    echo "responder" ;;
+        chisel)       echo "chisel" ;;
         *)            echo "$pkg" ;;
       esac ;;
     dnf|yum)
@@ -171,6 +185,8 @@ resolve_pkg() {
         btop)         echo "btop" ;;
         direnv)       echo "direnv" ;;
         starship)     echo "starship" ;;
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
         *)            echo "$pkg" ;;
       esac ;;
     pacman)
@@ -192,6 +208,10 @@ resolve_pkg() {
         atuin)        echo "atuin" ;;
         starship)     echo "starship" ;;
         uv)           echo "uv" ;;
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
+        jadx)         echo "jadx" ;;
+        apktool)      echo "android-apktool" ;;
         *)            echo "$pkg" ;;
       esac ;;
     zypper)

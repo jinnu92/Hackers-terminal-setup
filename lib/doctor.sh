@@ -71,6 +71,32 @@ sec_doctor() {
   _doc_item "gobuster" "gobuster" "gobuster version"
   _doc_item "mitmproxy" "mitmproxy" "mitmproxy --version"
 
+  echo -e "\n${BOLD}${YELLOW}Active Directory & Pivoting:${RESET}"
+  _doc_item "Ligolo-ng" "ligolo" "echo 'ready'"
+  _doc_item "Chisel" "chisel" "chisel --version"
+  _doc_item "NetExec (nxc)" "nxc" "nxc --version"
+  _doc_item "BloodHound (Python)" "bloodhound-python" "echo 'ready'"
+  _doc_item "Certipy (AD CS)" "certipy" "certipy -v"
+  _doc_item "Responder" "responder" "echo 'ready'"
+
+  echo -e "\n${BOLD}${YELLOW}Web & API Security:${RESET}"
+  _doc_item "Schemathesis" "schemathesis" "schemathesis --version"
+  _doc_item "Kiterunner (kr)" "kr" "kr version"
+  _doc_item "Caido (CLI/GUI)" "caido" "echo 'ready'"
+  _doc_item "Arjun" "arjun" "arjun -h 2>&1 | head -1"
+  _doc_item "Feroxbuster" "feroxbuster" "feroxbuster -V"
+
+  echo -e "\n${BOLD}${YELLOW}Container, SBOM & DevSecOps:${RESET}"
+  _doc_item "Trivy" "trivy" "trivy --version"
+  _doc_item "Syft" "syft" "syft --version"
+  _doc_item "Grype" "grype" "grype version"
+  _doc_item "Checkov" "checkov" "checkov --version"
+  _doc_item "Kube-hunter" "kube-hunter" "echo 'ready'"
+
+  echo -e "\n${BOLD}${YELLOW}Mobile & Reverse Engineering:${RESET}"
+  _doc_item "Jadx" "jadx" "jadx --version"
+  _doc_item "Apktool" "apktool" "apktool --version"
+
   echo -e "\n${BOLD}${YELLOW}Cloud & AI Security:${RESET}"
   _doc_item "AWS CLI" "aws" "aws --version"
   _doc_item "Azure CLI" "az" "az --version"
@@ -81,7 +107,8 @@ sec_doctor() {
   _doc_item "Ollama" "ollama" "ollama --version"
   _doc_item "Promptfoo" "promptfoo" "promptfoo --version"
 
-  echo -e "\n${BOLD}${YELLOW}Workflow & Config Files:${RESET}"
+  echo -e "\n${BOLD}${YELLOW}Workflow & Terminal Dashboards:${RESET}"
+  _doc_item "Fastfetch" "fastfetch" "fastfetch --version"
   _doc_item "lazygit" "lazygit" "lazygit --version"
   _doc_item "jq" "jq" "jq --version"
   _doc_item "yq" "yq" "yq --version"

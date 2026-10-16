@@ -104,13 +104,18 @@ This generates a standalone, single-file `ter.sh` with zero external dependencie
 | 6 | **GPU Terminals** | Ghostty, WezTerm, Kitty, Alacritty + Catppuccin Mocha configs, ligatures, window blur |
 | 7 | **Shell History & Secrets** | Atuin (encrypted SQLite history + secret scrubbing), direnv (.envrc isolation), Astral uv/uvx, btop, yazi, Starship prompt |
 | 8 | **MCP Server Suite** | Scoped Filesystem MCP, GitHub MCP, Fetch MCP, Brave Search MCP, Memory MCP, `sec-mcp` CLI |
-| 9 | **Pentest** | nmap, sqlmap, hydra, john, hashcat, gobuster, masscan, tcpdump, httpie, SecLists, netexec, impacket, pwntools, scapy |
+| 9 | **Pentest** | nmap, sqlmap, hydra, john, hashcat, gobuster, masscan, tcpdump, httpie, SecLists, impacket, pwntools, scapy |
 | 10 | **Bug bounty** | subfinder, httpx, nuclei, katana, dnsx, interactsh, gau, hakrawler, waybackurls, amass, dalfox, ffuf, feroxbuster, nikto, mitmproxy, arjun, Burp Suite, Caido |
-| 11 | **Cloud security** | AWS CLI, Azure CLI, gcloud, prowler, pacu, cloudfox, gitleaks, trufflehog, s3scanner |
-| 12 | **AI / LLM security** | garak, promptfoo, llm, jwt_tool, Ollama |
-| 13 | **Workflow** | lazygit, jq, yq, gh, pandoc, xh, yazi, Obsidian |
-| 14 | **Config files** | `~/.zshrc`, `~/.oh-my-zsh/custom/pentest.zsh`, `~/.oh-my-zsh/custom/advanced_pentest.zsh`, `~/.oh-my-zsh/custom/welcome.zsh`, `~/.tmux.conf`, `~/pentest/` & `~/workspace/` |
-| 15 | **System Doctor** | Diagnostic health audit command (`doctor` / `sec-doctor`) verifying all tools and configs |
+| 11 | **Active Directory & Pivoting** | Ligolo-ng (kernel TUN pivot routing), Chisel, NetExec (`nxc`), BloodHound-python, Certipy (AD CS), Responder |
+| 12 | **Web & API Security** | Schemathesis (property fuzzer for OpenAPI/GraphQL), Kiterunner (`kr`), Caido CLI daemon, Arjun |
+| 13 | **Cloud & DevSecOps** | Trivy (unified container/IaC scanner), Syft & Grype (SBOM creator & matcher), Checkov, Kube-hunter |
+| 14 | **Mobile & Reverse Eng** | Jadx & Jadx-gui (DEX to Java decompiler), Apktool (APK resource decoding & rebuilding) |
+| 15 | **Cloud security** | AWS CLI, Azure CLI, gcloud, prowler, pacu, cloudfox, gitleaks, trufflehog, s3scanner |
+| 16 | **AI / LLM security** | garak, promptfoo, llm, jwt_tool, Ollama |
+| 17 | **Workflow** | lazygit, jq, yq, gh, pandoc, xh, yazi, Obsidian |
+| 18 | **Tactical Welcome Cockpit** | Fastfetch + sub-15ms terminal welcome banner with network, VPN/tunnel, proxy, and telemetry |
+| 19 | **Config files** | `~/.zshrc`, `~/.tmux.conf`, `pentest.zsh`, `advanced_pentest.zsh`, `welcome.zsh`, `starship.toml`, `ghostty/config` |
+| 20 | **System Doctor** | Diagnostic health audit command (`doctor` / `sec-doctor`) verifying all tools and configs |
 
 ---
 

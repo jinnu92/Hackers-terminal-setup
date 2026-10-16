@@ -10,7 +10,7 @@ set -e
 # If running directly from cloned repo with lib/ present, source modules dynamically for live development
 _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -d "$_HTS_ROOT/lib" ]]; then
-  for _mod in common pkg_mgr helpers preflight fonts dev terminals shell_tools pentest bugbounty cloud ai_mcp workflow doctor configs menu; do
+  for _mod in common pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
     [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
   done
 fi
@@ -151,6 +151,14 @@ resolve_pkg() {
         uv)           echo "uv" ;;
         btop)         echo "btop" ;;
         starship)     echo "starship" ;;
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
+        jadx)         echo "jadx" ;;
+        apktool)      echo "apktool" ;;
+        syft)         echo "syft" ;;
+        grype)        echo "grype" ;;
+        chisel)       echo "chisel" ;;
+        ligolo-ng)    echo "ligolo-ng" ;;
         *)            echo "$pkg" ;;
       esac ;;
     apt)
@@ -219,6 +227,12 @@ resolve_pkg() {
         atuin)        echo "" ;;          # installed via install script
         starship)     echo "" ;;          # installed via install script
         uv)           echo "" ;;          # installed via astral.sh script
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
+        jadx)         echo "jadx" ;;
+        apktool)      echo "apktool" ;;
+        responder)    echo "responder" ;;
+        chisel)       echo "chisel" ;;
         *)            echo "$pkg" ;;
       esac ;;
     dnf|yum)
@@ -238,6 +252,8 @@ resolve_pkg() {
         btop)         echo "btop" ;;
         direnv)       echo "direnv" ;;
         starship)     echo "starship" ;;
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
         *)            echo "$pkg" ;;
       esac ;;
     pacman)
@@ -259,6 +275,10 @@ resolve_pkg() {
         atuin)        echo "atuin" ;;
         starship)     echo "starship" ;;
         uv)           echo "uv" ;;
+        fastfetch)    echo "fastfetch" ;;
+        trivy)        echo "trivy" ;;
+        jadx)         echo "jadx" ;;
+        apktool)      echo "android-apktool" ;;
         *)            echo "$pkg" ;;
       esac ;;
     zypper)
@@ -1239,6 +1259,309 @@ install_shell_tools() {
 
 # ─── End: lib/shell_tools.sh ────────────────────────────────────────────
 
+# ─── Begin: lib/ad_pivoting.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/ad_pivoting.sh — Internal Network, Active Directory & Pivoting Tools
+#  Includes: Ligolo-ng, Chisel, NetExec (nxc), BloodHound, Responder, Certipy
+# =============================================================================
+
+install_ad_pivoting() {
+  step "Internal Network, Active Directory & Pivoting Suite"
+
+  # 1. Ligolo-ng (Modern Layer 3 TUN-interface pivoting)
+  if ! command -v ligolo-proxy &>/dev/null && ! command -v ligolo &>/dev/null; then
+    log "Installing Ligolo-ng proxy..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install ligolo-ng 2>/dev/null || {
+        local tmpdir
+        tmpdir=$(mktemp -d)
+        local arch="arm64"
+        [[ "$ARCH" != "arm64" ]] && arch="amd64"
+        curl -fsSL "https://github.com/nicocha30/ligolo-ng/releases/latest/download/ligolo-ng_proxy_0.6.2_darwin_${arch}.tar.gz" -o "$tmpdir/ligolo.tar.gz" 2>/dev/null || true
+        if [[ -f "$tmpdir/ligolo.tar.gz" ]]; then
+          tar -xzf "$tmpdir/ligolo.tar.gz" -C "$HOME/.local/bin" 2>/dev/null || true
+          chmod +x "$HOME/.local/bin/proxy" 2>/dev/null || true
+          ln -sf "$HOME/.local/bin/proxy" "$HOME/.local/bin/ligolo" 2>/dev/null || true
+          ok "Ligolo-ng installed to ~/.local/bin/ligolo"
+        fi
+        rm -rf "$tmpdir"
+      }
+    else
+      local tmpdir
+      tmpdir=$(mktemp -d)
+      local arch="amd64"
+      [[ "$ARCH" == "aarch64" ]] && arch="arm64"
+      curl -fsSL "https://github.com/nicocha30/ligolo-ng/releases/latest/download/ligolo-ng_proxy_0.6.2_linux_${arch}.tar.gz" -o "$tmpdir/ligolo.tar.gz" 2>/dev/null || true
+      if [[ -f "$tmpdir/ligolo.tar.gz" ]]; then
+        tar -xzf "$tmpdir/ligolo.tar.gz" -C "$HOME/.local/bin" 2>/dev/null || true
+        chmod +x "$HOME/.local/bin/proxy" 2>/dev/null || true
+        ln -sf "$HOME/.local/bin/proxy" "$HOME/.local/bin/ligolo" 2>/dev/null || true
+        ok "Ligolo-ng installed to ~/.local/bin/ligolo"
+      fi
+      rm -rf "$tmpdir"
+    fi
+  else
+    ok "Ligolo-ng already installed"
+  fi
+
+  # 2. Chisel (Fast TCP/UDP tunnel over HTTP/WebSockets)
+  if ! command -v chisel &>/dev/null; then
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install chisel
+    else
+      go_install "github.com/jpillora/chisel@latest" chisel
+    fi
+  else
+    ok "Chisel already installed: $(chisel --version 2>/dev/null || echo 'ready')"
+  fi
+
+  # 3. NetExec (nxc — modern CrackMapExec successor)
+  if ! command -v nxc &>/dev/null && ! command -v netexec &>/dev/null; then
+    log "Installing NetExec (nxc)..."
+    if command -v uv &>/dev/null; then
+      uv tool install netexec || pipx_install netexec
+    else
+      pipx_install netexec
+    fi
+  else
+    ok "NetExec already installed"
+  fi
+
+  # 4. BloodHound Python & RustHound-CE
+  if ! command -v bloodhound-python &>/dev/null; then
+    log "Installing BloodHound-python..."
+    if command -v uv &>/dev/null; then
+      uv tool install bloodhound || pipx_install bloodhound
+    else
+      pipx_install bloodhound
+    fi
+  else
+    ok "BloodHound-python already installed"
+  fi
+
+  # 5. Certipy (Active Directory Certificate Services AD CS auditing)
+  if ! command -v certipy &>/dev/null; then
+    log "Installing Certipy..."
+    if command -v uv &>/dev/null; then
+      uv tool install certipy-ad || pipx_install certipy-ad
+    else
+      pipx_install certipy-ad
+    fi
+  else
+    ok "Certipy already installed"
+  fi
+
+  # 6. Responder (LLMNR/NBT-NS Poisoner)
+  if [[ "$OS" == "Linux" ]]; then
+    pkg_install responder
+  else
+    if [[ ! -d "$HOME/.local/share/Responder" ]]; then
+      log "Cloning Responder to ~/.local/share/Responder..."
+      git clone --depth=1 https://github.com/lgandx/Responder.git "$HOME/.local/share/Responder" 2>/dev/null || true
+      cat > "$HOME/.local/bin/responder" << 'RESP_RUNNER'
+sudo python3 "$HOME/.local/share/Responder/Responder.py" "$@"
+RESP_RUNNER
+      chmod +x "$HOME/.local/bin/responder"
+      ok "Responder runner installed to ~/.local/bin/responder"
+    fi
+  fi
+
+  ok "Active Directory & Pivoting suite complete"
+}
+
+# ─── End: lib/ad_pivoting.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/web_api.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/web_api.sh — Modern Web & API Security Assessment Suite
+#  Includes: Schemathesis, Kiterunner, Caido CLI, Arjun, FFUF, Feroxbuster
+# =============================================================================
+
+install_web_api() {
+  step "Modern Web Application & API Security Assessment Suite"
+
+  # 1. Schemathesis (Property-based API Testing for OpenAPI/Swagger/GraphQL)
+  if ! command -v schemathesis &>/dev/null && ! command -v st &>/dev/null; then
+    log "Installing Schemathesis..."
+    if [[ "$OS" == "Darwin" ]] && brew list schemathesis &>/dev/null; then
+      ok "Schemathesis already installed via brew"
+    else
+      if command -v uv &>/dev/null; then
+        uv tool install schemathesis || pipx_install schemathesis
+      else
+        pipx_install schemathesis
+      fi
+    fi
+  else
+    ok "Schemathesis already installed: $(schemathesis --version 2>/dev/null || echo 'ready')"
+  fi
+
+  # 2. Kiterunner (Assetnote API route and endpoint discovery)
+  if ! command -v kr &>/dev/null; then
+    log "Installing Kiterunner (kr)..."
+    go_install "github.com/assetnote/kiterunner/cmd/kr@latest" kr
+  else
+    ok "Kiterunner already installed: $(kr version 2>/dev/null || echo 'ready')"
+  fi
+
+  # 3. Caido CLI / Daemon (Modern Rust Web Security Interception Proxy)
+  if ! command -v caido-cli &>/dev/null && ! command -v caido &>/dev/null; then
+    log "Installing Caido CLI..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install_cask caido
+    elif command -v cargo &>/dev/null; then
+      cargo install caido-cli 2>/dev/null || true
+    fi
+  else
+    ok "Caido already installed"
+  fi
+
+  # 4. Arjun (HTTP Parameter Discovery)
+  if ! command -v arjun &>/dev/null; then
+    log "Installing Arjun..."
+    if command -v uv &>/dev/null; then
+      uv tool install arjun || pipx_install arjun
+    else
+      pipx_install arjun
+    fi
+  else
+    ok "Arjun already installed"
+  fi
+
+  # 5. FFUF & Feroxbuster
+  pkg_install ffuf feroxbuster
+
+  ok "Web & API Security Assessment suite complete"
+}
+
+# ─── End: lib/web_api.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/cloud_devsec.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/cloud_devsec.sh — Cloud, Container & DevSecOps Assessment Suite
+#  Includes: Trivy, Syft, Grype, Checkov, Kube-bench, Kube-hunter
+# =============================================================================
+
+install_cloud_devsec() {
+  step "Cloud, Container & DevSecOps Assessment Suite"
+
+  # 1. Trivy (Aqua Security unified vulnerability, container, and IaC scanner)
+  if ! command -v trivy &>/dev/null; then
+    log "Installing Trivy..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install trivy
+    else
+      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$HOME/.local/bin" || warn "Trivy install script failed"
+    fi
+  else
+    ok "Trivy already installed: $(trivy --version 2>/dev/null | head -1)"
+  fi
+
+  # 2. Syft (Anchore SBOM generator)
+  if ! command -v syft &>/dev/null; then
+    log "Installing Syft..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install syft
+    else
+      curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$HOME/.local/bin" || warn "Syft install script failed"
+    fi
+  else
+    ok "Syft already installed: $(syft --version 2>/dev/null | head -1)"
+  fi
+
+  # 3. Grype (Anchore vulnerability matcher)
+  if ! command -v grype &>/dev/null; then
+    log "Installing Grype..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install grype
+    else
+      curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$HOME/.local/bin" || warn "Grype install script failed"
+    fi
+  else
+    ok "Grype already installed: $(grype version 2>/dev/null | head -1)"
+  fi
+
+  # 4. Checkov (Infrastructure-as-Code SAST scanner)
+  if ! command -v checkov &>/dev/null; then
+    log "Installing Checkov..."
+    if command -v uv &>/dev/null; then
+      uv tool install checkov || pipx_install checkov
+    else
+      pipx_install checkov
+    fi
+  else
+    ok "Checkov already installed: $(checkov --version 2>/dev/null || echo 'ready')"
+  fi
+
+  # 5. Kube-bench & Kube-hunter
+  if ! command -v kube-hunter &>/dev/null; then
+    log "Installing Kube-hunter..."
+    if command -v uv &>/dev/null; then
+      uv tool install kube-hunter || pipx_install kube-hunter
+    else
+      pipx_install kube-hunter
+    fi
+  fi
+
+  ok "Cloud, Container & DevSecOps suite complete"
+}
+
+# ─── End: lib/cloud_devsec.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/mobile_re.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/mobile_re.sh — Mobile & Binary Reverse Engineering Assessment Suite
+#  Includes: Jadx, Apktool
+# =============================================================================
+
+install_mobile_re() {
+  step "Mobile & Binary Reverse Engineering Suite (Jadx, Apktool)"
+
+  # 1. Jadx (DEX to Java decompiler + GUI)
+  if ! command -v jadx &>/dev/null; then
+    log "Installing Jadx..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install jadx
+    else
+      case "$PKG_MGR" in
+        apt)    pkg_install jadx ;;
+        pacman) pkg_install jadx ;;
+        *)
+          local tmpdir
+          tmpdir=$(mktemp -d)
+          curl -fsSL "https://github.com/skylot/jadx/releases/latest/download/jadx-1.5.0.zip" -o "$tmpdir/jadx.zip" 2>/dev/null || true
+          if [[ -f "$tmpdir/jadx.zip" ]]; then
+            mkdir -p "$HOME/.local/share/jadx"
+            unzip -q "$tmpdir/jadx.zip" -d "$HOME/.local/share/jadx" 2>/dev/null || true
+            ln -sf "$HOME/.local/share/jadx/bin/jadx" "$HOME/.local/bin/jadx"
+            ln -sf "$HOME/.local/share/jadx/bin/jadx-gui" "$HOME/.local/bin/jadx-gui"
+            ok "Jadx installed to ~/.local/bin/jadx"
+          fi
+          rm -rf "$tmpdir"
+          ;;
+      esac
+    fi
+  else
+    ok "Jadx already installed: $(jadx --version 2>/dev/null | head -1)"
+  fi
+
+  # 2. Apktool (APK resource disassembler & patcher)
+  if ! command -v apktool &>/dev/null; then
+    log "Installing Apktool..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install apktool
+    else
+      pkg_install apktool
+    fi
+  else
+    ok "Apktool already installed: $(apktool --version 2>/dev/null | head -1)"
+  fi
+
+  ok "Mobile & Binary Reverse Engineering suite complete"
+}
+
+# ─── End: lib/mobile_re.sh ────────────────────────────────────────────
+
 # ─── Begin: lib/pentest.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/pentest.sh — Core Offensive Security & Penetration Testing Tools
@@ -1677,6 +2000,226 @@ install_workflow() {
 
 # ─── End: lib/workflow.sh ────────────────────────────────────────────
 
+# ─── Begin: lib/dashboard.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/dashboard.sh — Modern Terminal Welcome Cockpit & Fastfetch Dashboard
+# =============================================================================
+
+install_dashboard() {
+  step "Modern Terminal Welcome Dashboard & Fastfetch"
+
+  # 1. Install fastfetch (high-speed modern C replacement for neofetch)
+  if ! command -v fastfetch &>/dev/null; then
+    log "Installing fastfetch..."
+    case "$PKG_MGR" in
+      brew)   pkg_install fastfetch ;;
+      apt)
+        sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch 2>/dev/null && \
+          sudo apt-get update -qq && sudo apt-get install -y fastfetch || warn "fastfetch ppa install failed"
+        ;;
+      dnf)    sudo dnf install -y fastfetch || warn "dnf install fastfetch failed" ;;
+      pacman) sudo pacman -S --noconfirm --needed fastfetch || warn "pacman install fastfetch failed" ;;
+      *)      warn "fastfetch: install from github.com/fastfetch-cli/fastfetch" ;;
+    esac
+  else
+    ok "fastfetch already installed: $(fastfetch --version 2>/dev/null | head -1)"
+  fi
+
+  # 2. Deploy minimal aesthetic fastfetch config
+  local ff_dir="$HOME/.config/fastfetch"
+  mkdir -p "$ff_dir"
+  log "Writing Fastfetch configuration ($ff_dir/config.jsonc)..."
+  cat > "$ff_dir/config.jsonc" << 'FF_CFG'
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "small",
+    "padding": {
+      "top": 1,
+      "left": 2,
+      "right": 3
+    }
+  },
+  "display": {
+    "separator": " ❯ "
+  },
+  "modules": [
+    { "type": "title", "color": { "user": "cyan", "at": "dim", "host": "blue" } },
+    { "type": "os", "key": "OS", "keyColor": "blue" },
+    { "type": "kernel", "key": "Kernel", "keyColor": "blue" },
+    { "type": "uptime", "key": "Uptime", "keyColor": "green" },
+    { "type": "packages", "key": "Packages", "keyColor": "green" },
+    { "type": "shell", "key": "Shell", "keyColor": "yellow" },
+    { "type": "memory", "key": "RAM", "keyColor": "magenta" },
+    { "type": "disk", "key": "Disk", "keyColor": "cyan" },
+    { "type": "colors", "symbol": "circle" }
+  ]
+}
+FF_CFG
+  ok "Fastfetch configuration deployed"
+
+  # 3. Deploy modern welcome.zsh script
+  write_modern_welcome
+  ok "Tactical Security Welcome Cockpit deployed to ~/.oh-my-zsh/custom/welcome.zsh"
+}
+
+write_modern_welcome() {
+  local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+  mkdir -p "$ZSH_CUSTOM"
+
+  log "Deploying modernized Tactical Security Cockpit to welcome.zsh..."
+  cat > "$ZSH_CUSTOM/welcome.zsh" << 'WELCOME_SCRIPT'
+# =============================================================================
+# Modern Tactical Security Cockpit — High Performance (<15ms), Zero-Lag Welcome
+# =============================================================================
+
+_W_RED='\033[38;5;203m';    _W_GREEN='\033[38;5;120m';  _W_YELLOW='\033[38;5;221m'
+_W_CYAN='\033[38;5;117m';   _W_BLUE='\033[38;5;111m';   _W_MAGENTA='\033[38;5;183m'
+_W_PURPLE='\033[38;5;141m'; _W_BOLD='\033[1m';          _W_DIM='\033[2m'; _W_RESET='\033[0m'
+
+_PENTEST_TIPS=(
+  "Prefix any command with SPACE to keep it out of shell history."
+  "Use 'proxyon' before testing — routes traffic through Burp/Caido on :8080."
+  "Run 'mkeng' to scaffold today's engagement directory hierarchy."
+  "Use 'bbrecon <domain>' for a full automated recon pipeline."
+  "Run 'mcp_audit' to check all MCP configs for dangerous permission flags."
+  "Use 'agentscan .' to find prompt injection and hardcoded secrets in agent code."
+  "Run 'upgradeshell' for a pty upgrade cheat sheet."
+  "Use 'revshell <ip> <port>' to generate multi-language reverse shells."
+  "Run 'llm_fuzz <endpoint>' to fire adversarial prompts at an LLM API."
+  "Use 'jwtinspect <token>' to decode a JWT without transmitting to third-party sites."
+  "Run 'scan <target>' for a full nmap scan saved into ./scans/."
+  "Use 'secrets_scan_local' to scan current dir with TruffleHog."
+  "Run 'awscheck' to inspect active AWS identity and attached IAM policies."
+  "Ctrl+R opens Atuin encrypted SQLite history search with token scrubbing."
+  "Run 'schematest <spec.json>' to property-fuzz APIs with Schemathesis."
+  "Run 'nxc smb <subnet> -u user -p pass' for high-speed AD credential auditing."
+  "Use 'ligolo_start' to scaffold kernel TUN pivoting instead of proxychains."
+  "Run 'trivy fs .' to audit container, filesystem, and IaC vulnerabilities."
+  "Run 'sbom_audit <image>' to generate Syft SBOM and cross-scan with Grype."
+  "Run 'claude' (or 'cc') to start Claude Code for terminal agentic coding."
+  "Run 'doctor' (or 'sec-doctor') to audit all installed security & dev tools."
+  "Use 'yazi' for lightning-fast async terminal file management with image previews."
+  "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
+  "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
+)
+
+_random_tip() {
+  local idx=$(( RANDOM % ${#_PENTEST_TIPS[@]} ))
+  echo "${_PENTEST_TIPS[$idx]}"
+}
+
+_get_local_ip() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "127.0.0.1"
+  else
+    hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1"
+  fi
+}
+
+_get_vpn_info() {
+  local ifaces=("ligolo" "tun0" "tun1" "utun1" "utun2" "utun3" "utun4" "wg0" "wg1" "ppp0")
+  for iface in "${ifaces[@]}"; do
+    if ifconfig "$iface" 2>/dev/null | grep -q "inet "; then
+      local vpn_ip
+      vpn_ip=$(ifconfig "$iface" 2>/dev/null | grep "inet " | awk '{print $2}' | head -1)
+      echo -e "${_W_GREEN}● ACTIVE${_W_RESET} ${_W_DIM}(${iface}: ${vpn_ip})${_W_RESET}"
+      return
+    fi
+  done
+  echo -e "${_W_YELLOW}○ INACTIVE${_W_RESET}"
+}
+
+_get_proxy_info() {
+  if [[ -n "$http_proxy" || -n "$HTTP_PROXY" ]]; then
+    echo -e "${_W_GREEN}● ON${_W_RESET} ${_W_DIM}(${http_proxy:-$HTTP_PROXY})${_W_RESET}"
+  elif lsof -nP -iTCP:8080 -sTCP:LISTEN &>/dev/null; then
+    echo -e "${_W_CYAN}● LISTENER READY${_W_RESET} ${_W_DIM}(127.0.0.1:8080)${_W_RESET}"
+  else
+    echo -e "${_W_DIM}○ OFF (use 'proxyon')${_W_RESET}"
+  fi
+}
+
+_get_ram_info() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    local page_size mem_used mem_total
+    page_size=$(vm_stat 2>/dev/null | grep "page size of" | awk '{print $8}')
+    [[ -z "$page_size" ]] && page_size=16384
+    local pages_active pages_wired
+    pages_active=$(vm_stat 2>/dev/null | grep "Pages active:" | awk '{print $3}' | tr -d '.')
+    pages_wired=$(vm_stat 2>/dev/null | grep "Pages wired down:" | awk '{print $4}' | tr -d '.')
+    mem_used=$(( (pages_active + pages_wired) * page_size / 1073741824 ))
+    mem_total=$(( $(sysctl -n hw.memsize 2>/dev/null) / 1073741824 ))
+    echo "${mem_used}G / ${mem_total}G"
+  else
+    free -h 2>/dev/null | awk '/^Mem:/ {print $3 " / " $2}' || echo "N/A"
+  fi
+}
+
+_get_uptime_clean() {
+  uptime 2>/dev/null | sed -E 's/^.+up +([^,]+), .*/\1/' || echo "N/A"
+}
+
+_show_welcome() {
+  [[ $- != *i* ]] && return
+  [[ -n "$VSCODE_INJECTION" ]] && return
+
+  local local_ip vpn_info proxy_info ram_info uptime_str the_date tip_text os_label arch_label
+  local_ip=$(_get_local_ip)
+  vpn_info=$(_get_vpn_info)
+  proxy_info=$(_get_proxy_info)
+  ram_info=$(_get_ram_info)
+  uptime_str=$(_get_uptime_clean)
+  the_date=$(date "+%a %d %b %H:%M")
+  tip_text=$(_random_tip)
+  os_label="$(uname -s)"
+  arch_label="$(uname -m)"
+
+  echo ""
+  echo -e "${_W_BOLD}${_W_CYAN}╭─────────────────────────────────────────────────────────────────────────────╮${_W_RESET}"
+  echo -e "${_W_BOLD}${_W_CYAN}│${_W_RESET}  ${_W_BOLD}${_W_PURPLE}⚡ HACKER TERMINAL COCKPIT 2.0${_W_RESET}            ${_W_DIM}[${os_label} • ${arch_label} • ${the_date}]${_W_RESET}  ${_W_BOLD}${_W_CYAN}│${_W_RESET}"
+  echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
+  printf "  ${_W_BOLD}%-35s${_W_RESET}  ${_W_BOLD}%-35s${_W_RESET}\n" "NETWORK & TUNNELS" "SYSTEM & TELEMETRY"
+  printf "  ${_W_DIM}├─ Local IP :${_W_RESET} %-23s  ${_W_DIM}├─ Uptime :${_W_RESET} %-23s\n" "$local_ip" "$uptime_str"
+  printf "  ${_W_DIM}├─ Tunnel   :${_W_RESET} %-34b  ${_W_DIM}├─ Memory :${_W_RESET} %-23s\n" "$vpn_info" "$ram_info"
+  printf "  ${_W_DIM}└─ Proxy    :${_W_RESET} %-34b  ${_W_DIM}└─ Shell  :${_W_RESET} %-23s\n" "$proxy_info" "zsh ${ZSH_VERSION:-5.9}"
+  echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
+  printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
+  printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
+  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(cc)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
+  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}nxc${_W_RESET}\n"
+  echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
+  
+  local tip_wrapped
+  tip_wrapped=$(echo "$tip_text" | fold -s -w 67)
+  local first=1
+  while IFS= read -r line; do
+    if [[ $first -eq 1 ]]; then
+      printf "  ${_W_MAGENTA}${_W_BOLD}💡 TIP:${_W_RESET} ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
+      first=0
+    else
+      printf "         ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
+    fi
+  done <<< "$tip_wrapped"
+
+  echo -e "${_W_BOLD}${_W_CYAN}╰─────────────────────────────────────────────────────────────────────────────╯${_W_RESET}"
+  echo ""
+}
+
+_WELCOME_SHOWN=0
+_welcome_once() {
+  if [[ $_WELCOME_SHOWN -eq 0 ]]; then
+    _WELCOME_SHOWN=1
+    _show_welcome
+    add-zsh-hook -d precmd _welcome_once
+  fi
+}
+add-zsh-hook precmd _welcome_once
+WELCOME_SCRIPT
+}
+
+# ─── End: lib/dashboard.sh ────────────────────────────────────────────
+
 # ─── Begin: lib/doctor.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/doctor.sh — Security Terminal Doctor & Diagnostic Audit
@@ -1750,6 +2293,32 @@ sec_doctor() {
   _doc_item "gobuster" "gobuster" "gobuster version"
   _doc_item "mitmproxy" "mitmproxy" "mitmproxy --version"
 
+  echo -e "\n${BOLD}${YELLOW}Active Directory & Pivoting:${RESET}"
+  _doc_item "Ligolo-ng" "ligolo" "echo 'ready'"
+  _doc_item "Chisel" "chisel" "chisel --version"
+  _doc_item "NetExec (nxc)" "nxc" "nxc --version"
+  _doc_item "BloodHound (Python)" "bloodhound-python" "echo 'ready'"
+  _doc_item "Certipy (AD CS)" "certipy" "certipy -v"
+  _doc_item "Responder" "responder" "echo 'ready'"
+
+  echo -e "\n${BOLD}${YELLOW}Web & API Security:${RESET}"
+  _doc_item "Schemathesis" "schemathesis" "schemathesis --version"
+  _doc_item "Kiterunner (kr)" "kr" "kr version"
+  _doc_item "Caido (CLI/GUI)" "caido" "echo 'ready'"
+  _doc_item "Arjun" "arjun" "arjun -h 2>&1 | head -1"
+  _doc_item "Feroxbuster" "feroxbuster" "feroxbuster -V"
+
+  echo -e "\n${BOLD}${YELLOW}Container, SBOM & DevSecOps:${RESET}"
+  _doc_item "Trivy" "trivy" "trivy --version"
+  _doc_item "Syft" "syft" "syft --version"
+  _doc_item "Grype" "grype" "grype version"
+  _doc_item "Checkov" "checkov" "checkov --version"
+  _doc_item "Kube-hunter" "kube-hunter" "echo 'ready'"
+
+  echo -e "\n${BOLD}${YELLOW}Mobile & Reverse Engineering:${RESET}"
+  _doc_item "Jadx" "jadx" "jadx --version"
+  _doc_item "Apktool" "apktool" "apktool --version"
+
   echo -e "\n${BOLD}${YELLOW}Cloud & AI Security:${RESET}"
   _doc_item "AWS CLI" "aws" "aws --version"
   _doc_item "Azure CLI" "az" "az --version"
@@ -1760,7 +2329,8 @@ sec_doctor() {
   _doc_item "Ollama" "ollama" "ollama --version"
   _doc_item "Promptfoo" "promptfoo" "promptfoo --version"
 
-  echo -e "\n${BOLD}${YELLOW}Workflow & Config Files:${RESET}"
+  echo -e "\n${BOLD}${YELLOW}Workflow & Terminal Dashboards:${RESET}"
+  _doc_item "Fastfetch" "fastfetch" "fastfetch --version"
   _doc_item "lazygit" "lazygit" "lazygit --version"
   _doc_item "jq" "jq" "jq --version"
   _doc_item "yq" "yq" "yq --version"
@@ -2444,251 +3014,11 @@ ADVPENTEST
   # ─────────────────────────────────────────────────────────────────────────
   # ~/.oh-my-zsh/custom/welcome.zsh
   # ─────────────────────────────────────────────────────────────────────────
-  log "Writing welcome.zsh..."
-  cat > "$ZSH_CUSTOM/welcome.zsh" << 'WELCOME'
-# =============================================================================
-# Welcome Banner — cross-platform, fires once per new terminal
-# =============================================================================
-
-_W_RED='\033[0;31m';  _W_GREEN='\033[0;32m'; _W_YELLOW='\033[1;33m'
-_W_CYAN='\033[0;36m'; _W_MAGENTA='\033[0;35m'
-_W_BOLD='\033[1m';    _W_DIM='\033[2m';       _W_RESET='\033[0m'
-
-_PENTEST_TIPS=(
-  "Prefix any command with SPACE to keep it out of shell history."
-  "Use 'proxyon' before testing — routes traffic through Burp on :8080."
-  "Run 'mkeng' to scaffold today's engagement directory."
-  "Use 'bbrecon <domain>' for a full automated recon pipeline."
-  "Run 'mcp_audit' to check all MCP configs for dangerous permissions."
-  "Use 'agentscan .' to find prompt injection risks in agent code."
-  "Run 'upgradeshell' for a pty upgrade cheat sheet."
-  "Use 'revshell <ip> <port>' to generate reverse shell one-liners."
-  "Run 'llm_fuzz <endpoint>' to fire adversarial prompts at an LLM API."
-  "Use 'jwtinspect <token>' to decode a JWT without hitting jwt.io."
-  "Run 'scan <target>' for a full nmap scan into ./scans/ directory."
-  "Use 'secrets_scan_local' to scan current dir for leaked credentials."
-  "Run 'awscheck' to see AWS identity and attached IAM policies."
-  "Ctrl+R — fuzzy history search via Atuin with SQLite encryption."
-  "Run 'genreport <name>' to scaffold a pentest report template."
-  "Use 'hashit <string>' to get MD5/SHA1/SHA256 in one shot."
-  "Run 'serve 8080' to spin up a Python HTTP server with your IP:port."
-  "Use 'portcheck <host> <port>' for a quick nc-based open port check."
-  "Run 'leaks' to scan the current git repo for secrets with gitleaks."
-  "Use 'mcplogs <server>' to tail live MCP server logs."
-  "Run 'nuclei -update-templates' to stay current on vuln checks."
-  "Ctrl+A | (tmux) to split pane, Ctrl+A - for horizontal split."
-  "Use 'lg' (lazygit) to manage exploit repos without leaving terminal."
-  "Run 'tldr <tool>' for quick practical examples."
-  "Use 'webfuzz <url>' to run ffuf with SecLists automatically."
-  "Use 'quickrecon <domain>' for instant whois + DNS + HTTP headers."
-  "Run 'jwtdecode <token>' with jwt_tool for full JWT attack analysis."
-  "Use 'garak' to run automated LLM vulnerability scans."
-  "Run 'prowler' for cloud security posture assessment (AWS/Azure/GCP)."
-  "Use 'direnv' — drop a .envrc in engagement folder for auto env load."
-  "Run 'claude' (or 'cc') to start Claude Code for terminal agentic coding."
-  "Use 'c .' to open the current directory in Visual Studio Code."
-  "Run 'doctor' (or 'sec-doctor') to audit all installed security & dev tools."
-  "Set terminal font to 'MesloLGS NF' or 'JetBrainsMono Nerd Font' for icons."
-  "Use 'claude-yolo' to run Claude Code with auto-approved permissions."
-)
-
-_random_tip() {
-  local idx=$(( RANDOM % ${#_PENTEST_TIPS[@]} ))
-  echo "${_PENTEST_TIPS[$idx]}"
-}
-
-cheat() {
-  local filter="${1:-}"
-  echo ""
-  echo -e "${_W_BOLD}${_W_CYAN}  ┌──────────────────────────────────────────────────────────────────┐${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}  │              SECURITY COMMAND REFERENCE                         │${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}  └──────────────────────────────────────────────────────────────────┘${_W_RESET}"
-
-  _sec() {
-    local title=$1; shift
-    local show=0
-    if [[ -z "$filter" ]]; then
-      show=1
-    else
-      echo "$title" | grep -qi "$filter" && show=1
-      for e in "$@"; do echo "$e" | grep -qi "$filter" && show=1 && break; done
-    fi
-    [[ $show -eq 0 ]] && return
-    echo -e "\n  ${_W_BOLD}${_W_YELLOW}▸ $title${_W_RESET}"
-    for entry in "$@"; do
-      [[ -n "$filter" ]] && ! echo "$entry$title" | grep -qi "$filter" && continue
-      local cmd="${entry%%—*}"
-      local desc="${entry#*—}"
-      printf "    ${_W_GREEN}%-32s${_W_RESET}${_W_DIM}%s${_W_RESET}\n" "$cmd" "$desc"
-    done
-  }
-
-  _sec "RECON & ENUMERATION" \
-    "bbrecon <domain>              —full recon pipeline (subs→alive→urls→nuclei)" \
-    "subfind <domain>              —passive subdomain enum" \
-    "subdomains <domain>           —gobuster DNS brute-force" \
-    "probehttp <targets.txt>       —probe alive + tech stack" \
-    "crawl <url>                   —katana web crawler" \
-    "geturls <domain>              —fetch historical URLs (gau+wayback)" \
-    "quickrecon <domain>           —whois + DNS + HTTP headers" \
-    "nmap_quick / nmap_full        —quick or full port scan" \
-    "nmap_vuln <target>            —vuln script scan" \
-    "scan <target>                 —full nmap → ./scans/<target>/"
-
-  _sec "DEV, CODING & AGENTIC AI" \
-    "claude (or cc)               —Claude Code agentic coding CLI" \
-    "claude-yolo                  —Claude Code without permission prompts" \
-    "code [path] / c.             —open VS Code in current/given path" \
-    "sec-mcp list / inspect       —inspect and manage MCP servers" \
-    "uv / uvx <tool>              —run ephemeral python tools instantly" \
-    "node -v / npm -v             —Node.js & npm runtime" \
-    "doctor (or sec-doctor)       —run system health check & audit" \
-    "mcpinspect                   —MCP inspector tool" \
-    "llmscan / llmchat            —garak LLM vuln scanner / ollama chat"
-
-  _sec "WEB TESTING" \
-    "proxyon / proxyoff            —toggle Burp proxy (:8080)" \
-    "xssscan <url>                 —dalfox XSS scan" \
-    "dirscan <url>                 —feroxbuster recursive dir scan" \
-    "webfuzz <url>                 —ffuf + SecLists auto wordlist" \
-    "curl_headers <url>            —HTTP headers only" \
-    "http <args>                   —xh fast HTTP client" \
-    "serve [port]                  —python HTTP server + IP:port"
-
-  _sec "EXPLOITATION & SHELLS" \
-    "revshell <ip> <port>          —reverse shell one-liners" \
-    "rlisten <port>                —nc listener" \
-    "upgradeshell                  —pty upgrade cheat sheet" \
-    "portcheck <host> <port>       —check if port is open"
-
-  _sec "CLOUD SECURITY" \
-    "awscheck                      —AWS identity + IAM policies" \
-    "awswho                        —sts get-caller-identity" \
-    "s3ls / s3pub <bucket>         —list buckets / check ACL" \
-    "secrets_scan_local            —trufflehog scan current dir" \
-    "leaks                         —gitleaks scan current repo" \
-    "gcpwho / azwho                —GCP / Azure identity"
-
-  _sec "AI / LLM / MCP SECURITY" \
-    "llm_fuzz [endpoint] [model]   —adversarial prompt fuzzing" \
-    "jwtinspect <token>            —decode JWT header + payload" \
-    "jwtdecode <token>             —jwt_tool full analysis" \
-    "mcp_audit                     —audit all MCP server configs" \
-    "agentscan [dir]               —scan agent code for issues" \
-    "mcplogs [server]              —tail MCP server logs" \
-    "llmscan                       —garak LLM vulnerability scanner" \
-    "llmchat                       —query LLMs from terminal"
-
-  _sec "HASHING & ENCODING" \
-    "hashit <string>               —MD5 + SHA1 + SHA256" \
-    "sha256 <file>                 —file sha256 checksum" \
-    "b64enc / b64dec               —base64 encode / decode" \
-    "urlencode / urldecode         —URL encode / decode"
-
-  _sec "ENGAGEMENT" \
-    "mkeng                         —scaffold today's engagement dir" \
-    "genreport [name]              —pentest report template" \
-    "penlog                        —open today's notes in vim" \
-    "myip / localip                —public / local IP"
-
-  _sec "WORKFLOW" \
-    "lg                            —lazygit TUI" \
-    "btop                          —modern real-time resource monitor" \
-    "yazi                          —lightning-fast async file manager" \
-    "atuin search                  —encrypted SQLite history search" \
-    "json                          —pretty print JSON (jq)" \
-    "yaml2json / json2yaml         —convert YAML ↔ JSON" \
-    "ll / lt / llt / lls           —eza ls variants" \
-    "Ctrl+R                        —fuzzy history search" \
-    "Ctrl+T                        —fuzzy file picker" \
-    "z <path>                      —zoxide smart jump"
-
-  echo ""
-  echo -e "  ${_W_DIM}Filter: cheat <keyword>   e.g. cheat cloud | cheat jwt | cheat dev | cheat recon${_W_RESET}"
-  echo ""
-}
-
-alias '?'='cheat'
-alias ref='cheat'
-
-tip() {
-  echo ""
-  echo -e "  ${_W_BOLD}${_W_MAGENTA} Tip:${_W_RESET} ${_W_YELLOW}$(_random_tip)${_W_RESET}"
-  echo ""
-}
-
-_get_local_ip() {
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "N/A"
-  else
-    hostname -I 2>/dev/null | awk '{print $1}' || \
-    ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127 | head -1 || \
-    echo "N/A"
+  # ~/.oh-my-zsh/custom/welcome.zsh (Tactical Security Cockpit)
+  # ─────────────────────────────────────────────────────────────────────────
+  if command -v write_modern_welcome &>/dev/null; then
+    write_modern_welcome
   fi
-}
-
-_get_vpn_status() {
-  local ifaces=("utun1" "tun0" "vpn0" "ppp0")
-  for iface in "${ifaces[@]}"; do
-    if ifconfig "$iface" 2>/dev/null | grep -q "inet "; then
-      local vpn_ip
-      vpn_ip=$(ifconfig "$iface" 2>/dev/null | grep "inet " | awk '{print $2}' | head -1)
-      echo -e "\033[0;32mVPN ON\033[0m \033[2m($vpn_ip)\033[0m"
-      return
-    fi
-  done
-  echo -e "\033[2mVPN off\033[0m"
-}
-
-_show_welcome() {
-  [[ $- != *i* ]] && return
-  [[ -n "$VSCODE_INJECTION" ]] && return
-
-  local local_ip vpn_status the_date aws_profile tip_text
-  local_ip=$(_get_local_ip)
-  vpn_status=$(_get_vpn_status)
-  the_date=$(date "+%a %d %b %Y  %H:%M")
-  aws_profile="${AWS_PROFILE:-${AWS_DEFAULT_PROFILE:-default}}"
-  tip_text=$(_random_tip)
-
-  echo ""
-  echo -e "${_W_BOLD}${_W_CYAN}  ╔══════════════════════════════════════════════════════════════════╗${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}  ║${_W_RESET}  ${_W_BOLD}${_W_RED} SECURITY TERMINAL${_W_RESET}                                              ${_W_BOLD}${_W_CYAN}║${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}  ╠══════════════════════════════════════════════════════════════════╣${_W_RESET}"
-  printf "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_DIM}%-18s${_W_RESET} ${_W_BOLD}%-44s${_W_BOLD}${_W_CYAN}║${_W_RESET}\n" "Date:"       "$the_date"
-  printf "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_DIM}%-18s${_W_RESET} ${_W_BOLD}%-44s${_W_BOLD}${_W_CYAN}║${_W_RESET}\n" "Local IP:"   "$local_ip"
-  echo -e "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_DIM}VPN:${_W_RESET}               $vpn_status"
-  printf "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_DIM}%-18s${_W_RESET} ${_W_DIM}%-44s${_W_BOLD}${_W_CYAN}║${_W_RESET}\n" "AWS Profile:" "$aws_profile"
-  echo -e "${_W_BOLD}${_W_CYAN}  ╠══════════════════════════════════════════════════════════════════╣${_W_RESET}"
-  echo -e "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_BOLD}Quick ref:${_W_RESET} ${_W_GREEN}cheat${_W_RESET} or ${_W_GREEN}?${_W_RESET}        ${_W_BOLD}Filter:${_W_RESET} ${_W_GREEN}cheat <keyword>${_W_RESET}"
-  echo -e "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_BOLD}Categories:${_W_RESET} ${_W_YELLOW}recon  web  cloud  ai  mcp  dev  shells  workflow${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}  ╠══════════════════════════════════════════════════════════════════╣${_W_RESET}"
-  local tip_wrapped
-  tip_wrapped=$(echo "$tip_text" | fold -s -w 64)
-  local first=1
-  while IFS= read -r line; do
-    if [[ $first -eq 1 ]]; then
-      printf "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_MAGENTA}${_W_BOLD} Tip:${_W_RESET} ${_W_YELLOW}%-62s${_W_RESET}\n" "$line"
-      first=0
-    else
-      printf "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}        ${_W_YELLOW}%-62s${_W_RESET}\n" "$line"
-    fi
-  done <<< "$tip_wrapped"
-  echo -e "${_W_BOLD}${_W_CYAN}  ╚══════════════════════════════════════════════════════════════════╝${_W_RESET}"
-  echo ""
-}
-
-_WELCOME_SHOWN=0
-_welcome_once() {
-  if [[ $_WELCOME_SHOWN -eq 0 ]]; then
-    _WELCOME_SHOWN=1
-    _show_welcome
-    add-zsh-hook -d precmd _welcome_once
-  fi
-}
-add-zsh-hook precmd _welcome_once
-WELCOME
-  ok "welcome.zsh written"
 
   # ─────────────────────────────────────────────────────────────────────────
   # ~/.tmux.conf
@@ -2773,8 +3103,7 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ╠═══════════════════════════════════════════════════════════════════╣${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  Detected: ${BOLD}$DISTRO${RESET} ($ARCH) — pkg: ${BOLD}$PKG_MGR${RESET}"
   echo -e "${BOLD}${CYAN}  ╠═══════════════════════════════════════════════════════════════════╣${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Select components to install:${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Core & Developer Stack:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}1${RESET}   Core terminal     ${DIM}OMZ plugins, p10k, fzf, bat, eza, tmux${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}2${RESET}   Hacker Fonts      ${DIM}MesloLGS, JetBrains Mono, Fira Code, Hack...${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}   Node.js & npm     ${DIM}Modern LTS Node.js + safe non-root npm prefix${RESET}"
@@ -2783,21 +3112,27 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}6${RESET}   GPU Terminals     ${DIM}Ghostty, WezTerm, Kitty + aesthetic configs${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}7${RESET}   Shell History     ${DIM}Atuin SQLite history, direnv, uv, btop, yazi${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}8${RESET}   MCP Server Suite  ${DIM}Preconfigured Claude Code & Desktop MCP suite${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Security Assessment Suites:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}9${RESET}   Pentest tools     ${DIM}nmap, sqlmap, hydra, john, gobuster, SecLists${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}10${RESET}  Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf, katana${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Cloud security    ${DIM}awscli, azure, gcloud, prowler, gitleaks...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  AI / LLM sec      ${DIM}garak, promptfoo, jwt_tool, ollama...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  Workflow tools    ${DIM}lazygit, jq, yq, gh, pandoc, obsidian...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}14${RESET}  Config files      ${DIM}.zshrc, pentest.zsh, welcome.zsh, .tmux.conf${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}15${RESET}  System Doctor     ${DIM}Audit and verify all installed tools${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Active Directory  ${DIM}Ligolo-ng, Chisel, NetExec, BloodHound, Certipy${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  Web & API Sec     ${DIM}Schemathesis, Kiterunner, Caido, Arjun, FFUF${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  Cloud & DevSecOps ${DIM}Trivy, Syft, Grype, Checkov, Kube-hunter, AWS${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}14${RESET}  Mobile & Reverse  ${DIM}Jadx, Apktool (DEX/APK decompilation & analysis)${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}15${RESET}  AI / LLM sec      ${DIM}garak, promptfoo, jwt_tool, ollama...${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}16${RESET}  Workflow tools    ${DIM}lazygit, jq, yq, gh, pandoc, obsidian...${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}17${RESET}  Tactical Cockpit  ${DIM}Fastfetch + Modern Welcome Terminal Cockpit${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}18${RESET}  Config files      ${DIM}.zshrc, pentest.zsh, welcome.zsh, .tmux.conf${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}19${RESET}  System Doctor     ${DIM}Audit and verify all installed tools${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET}   Install everything (Recommended for new setup)"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET}   Install everything (Recommended full assessment setup)"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${CYAN}D${RESET}   Run System Doctor only"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}   Quit"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
   echo -e "${BOLD}${CYAN}  ╚═══════════════════════════════════════════════════════════════════╝${RESET}"
   echo ""
-  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 3 4 5 6 7 8 14) or A for all:${RESET}"
+  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 4 6 7 8 11 12 17 18) or A for all:${RESET}"
   echo -ne "  ${BOLD}> ${RESET}"
   read -r choices
 }
@@ -2836,9 +3171,14 @@ run_selections() {
       setup_mcp_suite
       install_pentest
       install_bugbounty
+      install_ad_pivoting
+      install_web_api
       install_cloud
+      install_cloud_devsec
+      install_mobile_re
       install_ai_llm
       install_workflow
+      install_dashboard
       write_configs
       sec_doctor
       return
@@ -2848,22 +3188,29 @@ run_selections() {
   # Process individual items
   for item in $input; do
     case "$item" in
-      1|--core)                  install_core ;;
-      2|--fonts)                 install_fonts "all" ;;
-      3|--node)                  install_node ;;
-      4|--claude)                install_claude ;;
-      5|--code)                  install_code ;;
-      dev|--dev)                 install_dev ;;
-      6|--terminals|--gpu)       install_terminals ;;
-      7|--shell-tools|--history) install_shell_tools ;;
-      8|--mcp)                   setup_mcp_suite ;;
-      9|--pentest)               install_pentest ;;
-      10|--bugbounty)            install_bugbounty ;;
-      11|--cloud)                install_cloud ;;
-      12|--ai)                   install_ai_llm ;;
-      13|--workflow)             install_workflow ;;
-      14|--config|--configs)     write_configs ;;
-      15|d|D|--doctor)           sec_doctor ;;
+      1|--core)                          install_core ;;
+      2|--fonts)                         install_fonts "all" ;;
+      3|--node)                          install_node ;;
+      4|--claude)                        install_claude ;;
+      5|--code)                          install_code ;;
+      dev|--dev)                         install_dev ;;
+      6|--terminals|--gpu)               install_terminals ;;
+      7|--shell-tools|--history)         install_shell_tools ;;
+      8|--mcp)                           setup_mcp_suite ;;
+      9|--pentest)                       install_pentest ;;
+      10|--bugbounty)                    install_bugbounty ;;
+      11|--ad-pivot|--ad|--pivoting)     install_ad_pivoting ;;
+      12|--web-api|--api-sec|--api)      install_web_api ;;
+      13|--cloud|--devsecops|--cloud-sec)
+        install_cloud
+        install_cloud_devsec
+        ;;
+      14|--mobile|--reverse|--re)        install_mobile_re ;;
+      15|--ai)                           install_ai_llm ;;
+      16|--workflow)                     install_workflow ;;
+      17|--dashboard|--fastfetch)        install_dashboard ;;
+      18|--config|--configs)             write_configs ;;
+      19|d|D|--doctor)                   sec_doctor ;;
       *) warn "Unknown option: '$item' — skipping" ;;
     esac
   done
@@ -2895,20 +3242,26 @@ if [[ $# -gt 0 ]]; then
       echo "  --terminals      Install modern GPU terminal emulators (Ghostty/WezTerm/Kitty)"
       echo "  --shell-tools    Install Atuin (SQLite history), direnv, uv, btop, yazi, Starship"
       echo "  --mcp            Install preconfigured safe MCP Server Suite & sec-mcp CLI"
-      echo "  --pentest        Install pentest tools"
-      echo "  --bugbounty      Install bug bounty tools"
-      echo "  --cloud          Install cloud security tools"
+      echo "  --pentest        Install pentest tools (nmap, sqlmap, hydra, john, SecLists)"
+      echo "  --bugbounty      Install bug bounty tools (subfinder, httpx, nuclei, ffuf, katana)"
+      echo "  --ad-pivot       Install Active Directory & Pivoting tools (Ligolo-ng, Chisel, NetExec)"
+      echo "  --web-api        Install Web & API security tools (Schemathesis, Kiterunner, Caido, Arjun)"
+      echo "  --devsecops      Install Container & DevSecOps tools (Trivy, Syft, Grype, Checkov)"
+      echo "  --mobile         Install Mobile & Reverse Engineering tools (Jadx, Apktool)"
+      echo "  --cloud          Install cloud security tools (AWS CLI, Azure, gcloud, prowler)"
       echo "  --ai             Install AI / LLM security tools"
       echo "  --workflow       Install workflow tools"
+      echo "  --dashboard      Install Fastfetch & Tactical Security Welcome Cockpit"
       echo "  --config         Write configuration files (.zshrc, pentest.zsh, etc.)"
       echo "  -d, --doctor     Run system diagnostic audit"
       echo "  -h, --help       Show this help message"
       echo ""
       echo "Examples:"
-      echo "  ./ter.sh                     # Launch interactive menu"
-      echo "  ./ter.sh --all               # Install complete hacker terminal"
-      echo "  ./ter.sh --fonts --dev --mcp # Install fonts, dev stack, and MCP suite"
-      echo "  ./ter.sh --doctor            # Audit current environment & tools"
+      echo "  ./ter.sh                                  # Launch interactive menu"
+      echo "  ./ter.sh --all                            # Install complete hacker terminal"
+      echo "  ./ter.sh --ad-pivot --web-api --devsecops # Install comprehensive assessment suite"
+      echo "  ./ter.sh --fonts --dev --mcp              # Install fonts, dev stack, and MCP suite"
+      echo "  ./ter.sh --doctor                         # Audit current environment & tools"
       echo ""
       exit 0
       ;;

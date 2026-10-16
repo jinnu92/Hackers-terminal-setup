@@ -227,7 +227,7 @@
     .hero-info p {
       color: #a6adc8;
       font-size: 0.92rem;
-      max-width: 680px;
+      max-width: 720px;
       line-height: 1.5;
     }
     .tag-row {
@@ -314,10 +314,31 @@
       line-height: 1.55;
       color: var(--text);
       min-height: 480px;
-      max-height: 580px;
+      max-height: 600px;
       overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
+    }
+
+    /* Colors in Terminal */
+    .c-green { color: var(--accent-green); }
+    .c-cyan { color: var(--accent-cyan); }
+    .c-blue { color: var(--accent-blue); }
+    .c-purple { color: var(--accent-purple); }
+    .c-yellow { color: var(--accent-yellow); }
+    .c-red { color: var(--accent-red); }
+    .c-peach { color: var(--accent-peach); }
+    .c-muted { color: var(--text-muted); }
+    .c-bold { font-weight: 700; }
+    .c-dim { opacity: 0.65; }
+
+    /* Cockpit Specific Box */
+    .cockpit-box {
+      border: 1px solid var(--accent-cyan);
+      border-radius: 8px;
+      padding: 14px 18px;
+      background: rgba(137, 220, 235, 0.03);
+      margin-bottom: 14px;
     }
 
     /* Prompt Styling */
@@ -344,18 +365,6 @@
     .p-time { background: #181825; color: var(--text-muted); font-size: 0.72rem; }
     .p-arrow { color: var(--accent-green); font-weight: 700; margin-left: 2px; }
     .p-cmd { color: #fff; font-weight: 600; }
-
-    /* Colors in Terminal */
-    .c-green { color: var(--accent-green); }
-    .c-cyan { color: var(--accent-cyan); }
-    .c-blue { color: var(--accent-blue); }
-    .c-purple { color: var(--accent-purple); }
-    .c-yellow { color: var(--accent-yellow); }
-    .c-red { color: var(--accent-red); }
-    .c-peach { color: var(--accent-peach); }
-    .c-muted { color: var(--text-muted); }
-    .c-bold { font-weight: 700; }
-    .c-dim { opacity: 0.65; }
 
     /* Interactive Command Bar */
     .command-quickbar {
@@ -396,10 +405,42 @@
       border-color: var(--accent-blue);
     }
 
+    /* Preset Selection Bar */
+    .preset-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      background: #161b22;
+      border: 1px solid var(--card-border);
+      padding: 14px 18px;
+      border-radius: 12px;
+    }
+    .preset-pill {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .preset-pill:hover, .preset-pill.active {
+      background: var(--accent-blue);
+      color: #111;
+      border-color: var(--accent-blue);
+      font-weight: 600;
+    }
+
     /* Capabilities Matrix Cards */
     .cards-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
       gap: 18px;
       margin-top: 8px;
     }
@@ -440,7 +481,9 @@
     .badge-core { background: rgba(166, 227, 161, 0.15); color: var(--accent-green); }
     .badge-mcp { background: rgba(203, 166, 247, 0.15); color: var(--accent-purple); }
     .badge-sec { background: rgba(243, 139, 168, 0.15); color: var(--accent-red); }
-    .badge-gpu { background: rgba(137, 220, 235, 0.15); color: var(--accent-cyan); }
+    .badge-ad { background: rgba(250, 179, 135, 0.15); color: var(--accent-peach); }
+    .badge-api { background: rgba(137, 220, 235, 0.15); color: var(--accent-cyan); }
+    .badge-devsec { background: rgba(249, 226, 175, 0.15); color: var(--accent-yellow); }
     .card-desc {
       font-size: 0.85rem;
       color: #8b949e;
@@ -485,8 +528,8 @@
     }
     .toggle-checkbox {
       appearance: none;
-      width: 36px;
-      height: 20px;
+      width: 38px;
+      height: 22px;
       background: #30363d;
       border-radius: 20px;
       position: relative;
@@ -500,8 +543,8 @@
     .toggle-checkbox::before {
       content: '';
       position: absolute;
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: #fff;
       top: 3px;
@@ -596,10 +639,11 @@
     <div class="logo-group">
       <span class="logo-badge">HTS 2.0</span>
       <h1 class="title-h1">Hackers Terminal Setup</h1>
-      <span class="badge-sub">Best-in-Class Daily Environment</span>
+      <span class="badge-sub">Best-in-Class Assessment & Dev Environment</span>
     </div>
     <div class="header-actions">
-      <button class="pill-btn" onclick="switchTab('matrix')">⚙️ Configure Profile</button>
+      <button class="pill-btn" onclick="switchTab('welcome-cockpit')">⚡ View Welcome Cockpit</button>
+      <button class="pill-btn" onclick="switchTab('matrix')">⚙️ Assessment Tool Matrix</button>
       <a class="pill-btn primary" href="#export" onclick="switchTab('matrix')">🚀 Generate Install Command</a>
     </div>
   </header>
@@ -609,7 +653,11 @@
     <!-- Sidebar -->
     <aside>
       <div class="nav-section-title">Showcase Views</div>
-      <div class="nav-item active" onclick="switchTab('daily-shell')">
+      <div class="nav-item active" onclick="switchTab('welcome-cockpit')">
+        <span class="icon">🚀</span> Tactical Welcome Cockpit
+        <span class="badge-count">New</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('daily-shell')">
         <span class="icon">⚡</span> Daily Dev Shell
         <span class="badge-count">Starship</span>
       </div>
@@ -621,19 +669,19 @@
         <span class="icon">🖥️</span> GPU Terminal Matrix
         <span class="badge-count">Ghostty</span>
       </div>
+      <div class="nav-item" onclick="switchTab('security-ops')">
+        <span class="icon">🛡️</span> Pentest & Recon Pipeline
+        <span class="badge-count">Live</span>
+      </div>
       <div class="nav-item" onclick="switchTab('power-tools')">
         <span class="icon">🦀</span> Modern Rust Tools
         <span class="badge-count">btop/yazi</span>
       </div>
-      <div class="nav-item" onclick="switchTab('security-ops')">
-        <span class="icon">🛡️</span> Pentest & Recon
-        <span class="badge-count">Recon</span>
-      </div>
 
-      <div class="nav-section-title">Decision & Usages</div>
+      <div class="nav-section-title">Assessment Tools & Builder</div>
       <div class="nav-item" onclick="switchTab('matrix')">
-        <span class="icon">📊</span> Usages & Profiles
-        <span class="badge-count">Custom</span>
+        <span class="icon">📊</span> Assessment Tools Matrix
+        <span class="badge-count">Toggle</span>
       </div>
       <div class="nav-item" onclick="switchTab('architecture')">
         <span class="icon">📦</span> Modular Architecture
@@ -644,8 +692,73 @@
     <!-- Main Content Area -->
     <main>
 
+      <!-- VIEW 0: Modernized Tactical Welcome Cockpit -->
+      <section id="view-welcome-cockpit" class="view-pane active">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🚀 Modern Tactical Welcome Cockpit</h2>
+            <p>Every time you open a new terminal window or tab, this sub-15ms, zero-lag cockpit loads immediately. It tracks your network identities, active TUN/VPN pivoting connections, proxy status, system telemetry, and rotating security pro-tips.</p>
+            <div class="tag-row">
+              <span class="tech-tag">Sub-15ms Launch</span>
+              <span class="tech-tag">Fastfetch Integration</span>
+              <span class="tech-tag">Tunnel & VPN Telemetry</span>
+              <span class="tech-tag">Interception Proxy Watcher</span>
+              <span class="tech-tag">Security Tips Rotation</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active">zsh — Terminal Cockpit (Tab 1)</span>
+              <span class="terminal-tab">+ new tab</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>Ghostty 1.1 • Metal</span>
+              <span>120x35</span>
+            </div>
+          </div>
+
+          <div class="terminal-body" id="cockpit-sim-body">
+<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────╮</span>
+<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>  <span class="c-cyan c-bold">│</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+  <span class="c-bold">NETWORK & TUNNELS</span>                    <span class="c-bold">SYSTEM & TELEMETRY</span>
+  <span class="c-muted">├─ Local IP :</span> <span class="c-cyan">192.168.1.45</span> (en0)       <span class="c-muted">├─ Uptime :</span> 2 days 14h 22m
+  <span class="c-muted">├─ Tunnel   :</span> <span id="cockpit-vpn-status"><span class="c-green">● ACTIVE</span> <span class="c-muted">(tun0: 10.10.14.8 / ligolo)</span></span>   <span class="c-muted">├─ Memory :</span> 11.2G / 32.0G (35%)
+  <span class="c-muted">└─ Proxy    :</span> <span id="cockpit-proxy-status"><span class="c-green">● ON</span> <span class="c-muted">(127.0.0.1:8080 - Caido/Burp)</span></span>   <span class="c-muted">└─ Shell  :</span> zsh 5.9 (arm64)
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+  <span class="c-bold">SECURITY & AGENTIC WORKSPACE</span>
+  <span class="c-muted">├─ Active Dir :</span> <span class="c-purple">~/pentest/2026-10-17_acme_corp/</span> <span class="c-muted">(Scaffolded via 'mkeng')</span>
+  <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(cc)</span> • <span class="c-cyan">5 Sandboxed MCPs</span> <span class="c-muted">(sec-mcp)</span>
+  <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">cheat</span> <span class="c-muted">(or ?)</span> • <span class="c-yellow">doctor</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+  <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!</span>
+<span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span> <span class="p-seg p-git"> engagement-active</span> <span class="p-seg p-time"> 00:58:34</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="blinking-cursor"></span>
+          </div>
+
+          <div class="command-quickbar">
+            <span class="quickbar-label">Cockpit Live Simulator:</span>
+            <button class="cmd-chip" onclick="toggleCockpitVPN()">🔌 Toggle VPN Status</button>
+            <button class="cmd-chip" onclick="toggleCockpitProxy()">🛡️ Toggle Proxy Status</button>
+            <button class="cmd-chip" onclick="cycleCockpitTip()">💡 Next Security Tip</button>
+            <button class="cmd-chip" onclick="runFastfetchDemo()">📊 Fastfetch System Stats</button>
+            <button class="cmd-chip" onclick="resetCockpit()">🔄 Reload Tab</button>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 1: Daily Dev Shell -->
-      <section id="view-daily-shell" class="view-pane active">
+      <section id="view-daily-shell" class="view-pane">
         <div class="hero-banner">
           <div class="hero-info">
             <h2>⚡ Daily Driver Terminal Environment</h2>
@@ -653,7 +766,6 @@
             <div class="tag-row">
               <span class="tech-tag">Starship Prompt</span>
               <span class="tech-tag">zsh-autosuggestions</span>
-              <span class="tech-tag">zsh-syntax-highlighting</span>
               <span class="tech-tag">zoxide (smart cd)</span>
               <span class="tech-tag">Atuin (SQLite History)</span>
               <span class="tech-tag">Nerd Fonts Ligatures</span>
@@ -670,7 +782,6 @@
             </div>
             <div class="terminal-tabs">
               <span class="terminal-tab active">~/workspace/api (zsh)</span>
-              <span class="terminal-tab">+ new tab</span>
             </div>
             <div class="titlebar-meta">
               <span>Ghostty 1.1</span>
@@ -829,7 +940,7 @@ in version control history.
           <div class="split-col">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <span style="font-weight:700; color:#fff; font-size:1rem;">👻 Ghostty (Recommended on macOS & Wayland)</span>
-              <span class="card-badge badge-gpu">Metal Native</span>
+              <span class="card-badge badge-api">Metal Native</span>
             </div>
             <p class="c-muted" style="margin-bottom:10px;">Created by Mitchell Hashimoto. Built with Zig. Native macOS tabs & windows, blur, sub-pixel rendering, zero config bloat.</p>
             <span class="c-cyan c-bold"># ~/.config/ghostty/config</span>
@@ -841,22 +952,21 @@ font-feature = ["calt", "liga", "dlig"]
 window-padding-x = 12
 window-padding-y = 10
 macos-titlebar-style = "transparent"
-background-opacity = 0.92
-background-blur-radius = 20
+background-opacity = 0.94
+background-blur-radius = 24
 keybind = super+t=new_tab
 keybind = super+d=new_split:right
 keybind = super+shift+d=new_split:down
 </pre>
-            <button class="pill-btn primary" style="width:100%; justify-content:center; margin-top:8px;" onclick="alert('Ghostty install command:\nbrew install --cask ghostty (macOS)\nor binary/copr on Linux')">Install Ghostty Config</button>
           </div>
 
           <!-- WezTerm Card -->
           <div class="split-col">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <span style="font-weight:700; color:#fff; font-size:1rem;">⚡ WezTerm (Cross-Platform Lua Multiplexer)</span>
-              <span class="card-badge badge-gpu">Lua Engine</span>
+              <span class="card-badge badge-api">Lua Engine</span>
             </div>
-            <p class="c-muted" style="margin-bottom:10px;">Multiplexer terminal emulator written in Rust. Program every facet of tabs, status bars, and workspaces via Lua without tmux.</p>
+            <p class="c-muted" style="margin-bottom:10px;">Multiplexer terminal emulator written in Rust. Program tabs, status bars, and workspaces via Lua without tmux.</p>
             <span class="c-purple c-bold"># ~/.config/wezterm/wezterm.lua</span>
 <pre style="color:var(--text); font-size:0.75rem; background:#11111b; padding:10px; border-radius:6px; margin:8px 0; border:1px solid #313244;">
 local wezterm = require 'wezterm'
@@ -869,25 +979,79 @@ config.window_background_opacity = 0.94
 config.macos_window_background_blur = 20
 return config
 </pre>
-            <button class="pill-btn" style="width:100%; justify-content:center; margin-top:8px;" onclick="alert('WezTerm install command:\nbrew install --cask wezterm (macOS)\nor apt install wezterm (Linux)')">Install WezTerm Config</button>
           </div>
         </div>
       </section>
 
-      <!-- VIEW 4: Modern Power Tools -->
+      <!-- VIEW 4: Security Ops -->
+      <section id="view-security-ops" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🛡️ Security Assessment & Attack Pipeline</h2>
+            <p>From active internal Active Directory pivoting with Ligolo-ng and NetExec to API contract property testing with Schemathesis and container auditing with Trivy.</p>
+            <div class="tag-row">
+              <span class="tech-tag">Ligolo-ng (L3 TUN Pivot)</span>
+              <span class="tech-tag">NetExec (AD Auditing)</span>
+              <span class="tech-tag">Schemathesis (API Fuzzing)</span>
+              <span class="tech-tag">Trivy (Container / IaC)</span>
+              <span class="tech-tag">Nuclei v3</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active" id="sec-tab-title">nxc smb 10.10.10.0/24</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>Profile: Internal AD Assessment</span>
+              <span>Target: corporate.internal</span>
+            </div>
+          </div>
+
+          <div class="terminal-body" id="sec-pipeline-body">
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/internal</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">nxc smb 10.10.10.0/24 -u 'svc_backup' -p 'Backup2026!' --shares</span>
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [*] Windows Server 2022 Build 20348 (name:DC01) (domain:CORP)
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             <span class="c-green">[+] CORP\svc_backup:Backup2026! (Pwn3d!)</span>
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             <span class="c-yellow">[+] Enumerated Shares:</span>
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [+]   ADMIN$       (READ, WRITE)
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [+]   C$           (READ, WRITE)
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [+]   SYSVOL       (READ)
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/internal</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">ligolo -selfcert</span>
+<span class="c-cyan">INFO[0000]</span> Ligolo-ng proxy listening on 0.0.0.0:11601
+<span class="c-green">INFO[0003]</span> New agent joined: WIN-DESKTOP-04 (session: 1, remote: 10.10.10.55:49152)
+<span class="c-cyan">ligolo-ng »</span> session
+<span class="c-cyan">ligolo-ng (session 1) »</span> start
+<span class="c-green">[+] Starting tunnel to agent... Tunnel established!</span>
+<span class="c-cyan">ligolo-ng (session 1) »</span> route add 10.10.10.0/24
+<span class="c-green">✓ Kernel TUN routing active! You can now run raw 'nmap -sS 10.10.10.10' directly without proxychains.</span><span class="blinking-cursor"></span>
+          </div>
+
+          <div class="command-quickbar">
+            <span class="quickbar-label">Simulate Assessment Action:</span>
+            <button class="cmd-chip" onclick="simulateSecDemo('nxc')">🏢 NetExec (nxc)</button>
+            <button class="cmd-chip" onclick="simulateSecDemo('schemathesis')">🌐 Schemathesis API Fuzz</button>
+            <button class="cmd-chip" onclick="simulateSecDemo('trivy')">☁️ Trivy Container Scan</button>
+            <button class="cmd-chip" onclick="simulateSecDemo('bbrecon')">📡 bbrecon Pipeline</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: Modern Rust Tools -->
       <section id="view-power-tools" class="view-pane">
         <div class="hero-banner">
           <div class="hero-info">
             <h2>🦀 Modern CLI Power-Ups (Rust & Go Replacements)</h2>
             <p>Replace 40-year-old UNIX utilities with modern, multi-threaded, syntax-aware, memory-safe CLI tools designed for modern screens and workflows.</p>
-            <div class="tag-row">
-              <span class="tech-tag">btop (top replacement)</span>
-              <span class="tech-tag">yazi (terminal file manager)</span>
-              <span class="tech-tag">delta (git pager)</span>
-              <span class="tech-tag">uv / uvx (pip/pipx replacement)</span>
-              <span class="tech-tag">eza (ls replacement)</span>
-              <span class="tech-tag">ripgrep (grep replacement)</span>
-            </div>
           </div>
         </div>
 
@@ -904,7 +1068,6 @@ return config
             <div class="titlebar-meta">
               <span>CPU: 4.2%</span>
               <span>RAM: 9.8 GB / 32 GB</span>
-              <span>GPU: 1.1%</span>
             </div>
           </div>
 
@@ -913,7 +1076,6 @@ return config
 <span class="c-cyan">│</span> <span class="c-green">Core 1:  [████░░░░░░░░░░]  12%</span>    <span class="c-green">Core 5: [██░░░░░░░░░░░░]   6%</span> <span class="c-cyan">│ │</span> <span class="c-purple">Total:  32.0 GiB</span>   <span class="c-green">Used:   9.82 GiB [███░░░░░░░░░] 30%</span>     <span class="c-cyan">│</span>
 <span class="c-cyan">│</span> <span class="c-green">Core 2:  [██░░░░░░░░░░░░]   8%</span>    <span class="c-green">Core 6: [█░░░░░░░░░░░░░]   4%</span> <span class="c-cyan">│ │</span> <span class="c-blue">Cached:  6.40 GiB</span>   <span class="c-yellow">Swap:   0.00 GiB [░░░░░░░░░░░░]  0%</span>     <span class="c-cyan">│</span>
 <span class="c-cyan">│</span> <span class="c-green">Core 3:  [██████░░░░░░░░]  24%</span>    <span class="c-green">Core 7: [░░░░░░░░░░░░░░]   1%</span> <span class="c-cyan">│ └─────────────────────────────────────────────────────┘</span>
-<span class="c-cyan">│</span> <span class="c-green">Core 4:  [█░░░░░░░░░░░░░]   3%</span>    <span class="c-green">Core 8: [░░░░░░░░░░░░░░]   2%</span> <span class="c-cyan">│ ┌─ DISKS ──────────────────────────────────────────────┐</span>
 <span class="c-cyan">└──────────────────────────────────────────────────────────────┘ │</span> <span class="c-peach">/System/Volumes/Data: 494 GB free [█████████░░░] 68%</span> <span class="c-cyan">│</span>
 <span class="c-cyan">┌─ PROCESSES ───────────────────────────────────────────────────────────────────────────── 142 Active Tasks ──────┐</span>
 <span class="c-cyan">│</span> <span class="c-muted">PID    Program             Threads   User      Memory     CPU%   Command Line</span>                                    <span class="c-cyan">│</span>
@@ -927,95 +1089,43 @@ return config
         </div>
       </section>
 
-      <!-- VIEW 5: Security Ops -->
-      <section id="view-security-ops" class="view-pane">
-        <div class="hero-banner">
-          <div class="hero-info">
-            <h2>🛡️ Security & Bug Bounty Recon Pipeline</h2>
-            <p>Ready-to-fire automated intelligence pipelines. Scan subdomains, probe live web servers, hunt secret tokens, fuzz APIs, and generate audit reports with a single command.</p>
-            <div class="tag-row">
-              <span class="tech-tag">bbrecon</span>
-              <span class="tech-tag">nuclei</span>
-              <span class="tech-tag">subfinder</span>
-              <span class="tech-tag">httpx</span>
-              <span class="tech-tag">trufflehog</span>
-              <span class="tech-tag">sec_doctor</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="terminal-window">
-          <div class="terminal-titlebar">
-            <div class="window-controls">
-              <span class="control-dot close"></span>
-              <span class="control-dot minimize"></span>
-              <span class="control-dot maximize"></span>
-            </div>
-            <div class="terminal-tabs">
-              <span class="terminal-tab active">bbrecon demo.target.com</span>
-            </div>
-            <div class="titlebar-meta">
-              <span>Status: Active Pipeline</span>
-              <span>Output: ~/recon/target/</span>
-            </div>
-          </div>
-
-          <div class="terminal-body">
-<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/recon</span>
-<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">bbrecon tesla.com</span>
-<span class="c-green">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
-<span class="c-bold c-cyan">  BUG BOUNTY FULL RECON: tesla.com</span>
-<span class="c-green">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
-<span class="c-green">[+]</span> Output directory: <span class="c-yellow">/Users/krack/recon/tesla.com/20261017_004512</span>
-
-<span class="c-bold c-cyan">━━━ [1/7] Subdomain Discovery ━━━</span>
-<span class="c-green">[+]</span> Running subfinder...
-<span class="c-green">[+]</span> Passive sources returned 1,482 domains.
-<span class="c-green">✓</span> Total unique subdomains: <span class="c-bold">1,894</span>
-
-<span class="c-bold c-cyan">━━━ [2/7] Probing Live HTTP Services ━━━</span>
-<span class="c-green">[+]</span> Running httpx with tech detection and title extraction...
-<span class="c-cyan">https://auth.tesla.com</span> [200] [Okta SSO, React, Cloudflare] [Tesla SSO Login]
-<span class="c-cyan">https://api-toolbox.tesla.com</span> [403] [Express, Node.js] [Forbidden]
-<span class="c-cyan">https://fleet.tesla.com</span> [200] [Go-http-client, Envoy] [Fleet Management Portal]
-<span class="c-green">✓</span> Live HTTP services: <span class="c-bold">412 hosts</span>
-
-<span class="c-bold c-cyan">━━━ [3/7] Secret & Token Hunting ━━━</span>
-<span class="c-green">[+]</span> Running trufflehog git scanner on associated public repos...
-<span class="c-green">✓</span> Verified secrets leaked: <span class="c-green">0</span>
-
-<span class="c-bold c-cyan">━━━ [4/7] Vulnerability Scanning with Nuclei ━━━</span>
-<span class="c-green">[+]</span> Executing high-severity community templates...
-<span class="c-green">✓</span> Scan finished. Full report saved to: <span class="c-yellow">tesla.com_recon_report.html</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 6: Usages & Decision Matrix -->
+      <!-- VIEW 6: Usages & Decision Matrix (The Comprehensive Tool Toggle Center) -->
       <section id="view-matrix" class="view-pane">
         <div class="hero-banner">
           <div class="hero-info">
-            <h2>📊 Customize Your Terminal Profile</h2>
-            <p>Select what fits your day-to-day workflow. Whether you're doing pure software development, agentic AI pair programming, or full-spectrum security auditing, toggle modules below to generate your tailored installation command.</p>
+            <h2>📊 Assessment Tool Matrix & Command Builder</h2>
+            <p>Select the exact modules required for your assessment domains. Use the quick presets below or individually toggle tools to automatically compile your tailored installation command.</p>
           </div>
         </div>
 
+        <!-- Presets Bar -->
+        <div class="preset-bar">
+          <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Assessment Presets:</span>
+          <button class="preset-pill active" onclick="applyPreset('all')">🛡️ Full Assessment Suite (All)</button>
+          <button class="preset-pill" onclick="applyPreset('ad')">🏢 Active Directory & Pivoting</button>
+          <button class="preset-pill" onclick="applyPreset('web')">🌐 Web & API Security</button>
+          <button class="preset-pill" onclick="applyPreset('devsec')">☁️ Cloud & DevSecOps</button>
+          <button class="preset-pill" onclick="applyPreset('mobile')">📱 Mobile & Reverse Eng</button>
+          <button class="preset-pill" onclick="applyPreset('ai')">🤖 Agentic AI & Dev Stack</button>
+          <button class="preset-pill" onclick="applyPreset('minimal')">⚡ Minimal Daily Driver</button>
+        </div>
+
         <div class="cards-grid">
-          <!-- Card 1: Core Shell -->
+          <!-- Card 1: Core Shell & Terminal Ergonomics -->
           <div class="feature-card">
             <div class="card-head">
               <span class="card-title">🐚 Core Shell & Ergonomics</span>
               <span class="card-badge badge-core">Essential</span>
             </div>
-            <p class="card-desc">The foundation for modern typing speed, directory navigation, and history safety.</p>
+            <p class="card-desc">Sub-millisecond shell prompt, fuzzy directory jumping, and encrypted history with automatic token scrubbing.</p>
             <ul class="card-list">
-              <li><code>zsh + Starship</code> Ultra-fast cross-shell prompt</li>
-              <li><code>atuin</code> Encrypted SQLite history + secret scrub</li>
-              <li><code>direnv</code> Directory-specific isolated environments</li>
+              <li><code>zsh + Starship</code> Fast cross-shell prompt</li>
+              <li><code>atuin</code> SQLite encrypted history + secret scrub</li>
+              <li><code>direnv</code> Directory environment isolation (.envrc)</li>
               <li><code>zoxide + fzf</code> Jump anywhere in 2 keystrokes</li>
             </ul>
             <div class="card-footer">
-              <span class="c-muted">Included by default</span>
+              <span class="c-muted">Included in all setups</span>
               <label class="toggle-wrap">
                 <input type="checkbox" id="chk-core" class="toggle-checkbox" checked onchange="updateCommand()">
                 <span>Enable</span>
@@ -1023,21 +1133,21 @@ return config
             </div>
           </div>
 
-          <!-- Card 2: Modern Fonts -->
+          <!-- Card 2: Modern Hacker Fonts -->
           <div class="feature-card">
             <div class="card-head">
               <span class="card-title">🔤 Modern Nerd Fonts</span>
               <span class="card-badge badge-core">Recommended</span>
             </div>
-            <p class="card-desc">Crisp developer fonts with full symbol support, git glyphs, and ligatures (<code>!=</code>, <code>=&gt;</code>, <code>===</code>).</p>
+            <p class="card-desc">High-legibility programming fonts with full glyph, git branch, and ligature support.</p>
             <ul class="card-list">
-              <li><code>JetBrains Mono</code> Clean, legible programming font</li>
-              <li><code>Fira Code</code> Pioneering ligature support</li>
-              <li><code>MesloLGS</code> Standard Powerlevel10k glyph font</li>
-              <li><code>Cascadia Code & Hack</code> Microsoft & Open-source standards</li>
+              <li><code>JetBrains Mono NF</code> Clean developer typography</li>
+              <li><code>Fira Code NF</code> Ligature pioneer (<code>!=</code>, <code>===</code>, <code>=&gt;</code>)</li>
+              <li><code>MesloLGS NF</code> Standard Powerlevel10k glyph font</li>
+              <li><code>Cascadia Code & Hack</code> Open-source coding standards</li>
             </ul>
             <div class="card-footer">
-              <span class="c-muted">Auto-installed to OS</span>
+              <span class="c-muted">Auto-installed to OS fonts</span>
               <label class="toggle-wrap">
                 <input type="checkbox" id="chk-fonts" class="toggle-checkbox" checked onchange="updateCommand()">
                 <span>Enable</span>
@@ -1045,21 +1155,21 @@ return config
             </div>
           </div>
 
-          <!-- Card 3: Node & Claude Code -->
+          <!-- Card 3: Developer & Agentic AI Stack -->
           <div class="feature-card">
             <div class="card-head">
               <span class="card-title">🤖 Claude Code & Dev Stack</span>
               <span class="card-badge badge-mcp">AI Agent</span>
             </div>
-            <p class="card-desc">Node.js LTS with user-level npm prefix (no root needed), Claude Code CLI, and VS Code.</p>
+            <p class="card-desc">Node.js LTS with safe non-root global directory (`~/.npm-global`), Claude Code CLI, and VS Code integration.</p>
             <ul class="card-list">
-              <li><code>Node.js LTS</code> Modern runtime & package manager</li>
+              <li><code>Node.js LTS</code> Modern runtime & safe npm prefix</li>
               <li><code>@anthropic-ai/claude-code</code> Terminal pair programmer</li>
-              <li><code>VS Code (code CLI)</code> Editor command-line integration</li>
-              <li><code>uv / uvx</code> Astral 10-100x Python tool runner</li>
+              <li><code>VS Code ('code' CLI)</code> Command line editor launch</li>
+              <li><code>Astral uv / uvx</code> 10-100x faster Python tool runner</li>
             </ul>
             <div class="card-footer">
-              <span class="c-muted">Daily Dev / AI</span>
+              <span class="c-muted">Daily Dev / AI Pair</span>
               <label class="toggle-wrap">
                 <input type="checkbox" id="chk-dev" class="toggle-checkbox" checked onchange="updateCommand()">
                 <span>Enable</span>
@@ -1067,21 +1177,21 @@ return config
             </div>
           </div>
 
-          <!-- Card 4: Preconfigured MCP Suite -->
+          <!-- Card 4: Preconfigured MCP Server Suite -->
           <div class="feature-card">
             <div class="card-head">
               <span class="card-title">🔌 Preconfigured MCP Suite</span>
               <span class="card-badge badge-mcp">Agent Tools</span>
             </div>
-            <p class="card-desc">Model Context Protocol tools for Claude Code and Claude Desktop with strict directory sandboxing.</p>
+            <p class="card-desc">Model Context Protocol tools for Claude Code and Desktop with strict directory sandboxing.</p>
             <ul class="card-list">
-              <li><code>Filesystem MCP</code> Scoped to safe project folders</li>
-              <li><code>GitHub MCP</code> Inspect PRs, issues, and codebases</li>
+              <li><code>Filesystem MCP</code> Scoped to safe project folders only</li>
+              <li><code>GitHub MCP</code> Review PRs, codebases, and issues</li>
               <li><code>Brave Search / Fetch</code> Real-time web retrieval</li>
-              <li><code>Memory & SQLite</code> Persistent context between sessions</li>
+              <li><code>sec-mcp CLI</code> Manage and inspect active MCP servers</li>
             </ul>
             <div class="card-footer">
-              <span class="c-muted">Zero-exposure sandbox</span>
+              <span class="c-muted">Zero credential exposure</span>
               <label class="toggle-wrap">
                 <input type="checkbox" id="chk-mcp" class="toggle-checkbox" checked onchange="updateCommand()">
                 <span>Enable</span>
@@ -1089,18 +1199,18 @@ return config
             </div>
           </div>
 
-          <!-- Card 5: GPU Terminal Emulators -->
+          <!-- Card 5: GPU Terminal Emulators & Cockpit -->
           <div class="feature-card">
             <div class="card-head">
-              <span class="card-title">🖥️ GPU Terminals & Themes</span>
-              <span class="card-badge badge-gpu">Hardware Accel</span>
+              <span class="card-title">🖥️ GPU Terminals & Cockpit</span>
+              <span class="card-badge badge-api">Hardware Accel</span>
             </div>
-            <p class="card-desc">Install Ghostty, WezTerm, Kitty, or Alacritty with pre-tuned Tokyo Night / Catppuccin Mocha configs.</p>
+            <p class="card-desc">Install Ghostty, WezTerm, or Kitty with pre-tuned Catppuccin Mocha configs, plus Fastfetch welcome cockpit.</p>
             <ul class="card-list">
-              <li><code>Ghostty</code> Metal-native macOS tabs & transparency</li>
+              <li><code>Ghostty</code> Metal native macOS tabs & transparency</li>
               <li><code>WezTerm</code> Lua scriptable terminal multiplexer</li>
-              <li><code>Kitty</code> Fast OpenGL tiling terminal emulator</li>
-              <li><code>Catppuccin Mocha</code> Aesthetic unified theme</li>
+              <li><code>Fastfetch</code> Sub-10ms system dashboard</li>
+              <li><code>Welcome Cockpit</code> Network, VPN & proxy status at launch</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">Config deployed to ~/.config</span>
@@ -1111,23 +1221,116 @@ return config
             </div>
           </div>
 
-          <!-- Card 6: Pentest & Bug Bounty -->
+          <!-- Card 6: Active Directory & Pivoting Suite -->
           <div class="feature-card">
             <div class="card-head">
-              <span class="card-title">🛡️ Pentest & Recon Suite</span>
-              <span class="card-badge badge-sec">Security</span>
+              <span class="card-title">🏢 Active Directory & Pivoting</span>
+              <span class="card-badge badge-ad">AD Assessment</span>
             </div>
-            <p class="card-desc">Industry-standard security toolchains for network auditing, web fuzzing, and bug bounty hunting.</p>
+            <p class="card-desc">State-of-the-art Layer 3 kernel routing, Active Directory attack path mapping, and credential spraying.</p>
             <ul class="card-list">
-              <li><code>nmap, masscan, sqlmap</code> Network & DB penetration</li>
-              <li><code>subfinder, httpx, nuclei</code> Fast attack surface recon</li>
-              <li><code>trufflehog, gitleaks</code> Secret token detection</li>
-              <li><code>bbrecon, quickrecon</code> One-liner automated pipelines</li>
+              <li><code>ligolo-ng</code> TUN-based IP routing (no proxychains)</li>
+              <li><code>chisel</code> Fast TCP/UDP tunnel over WebSockets</li>
+              <li><code>netexec (nxc)</code> Modern multi-protocol CME successor</li>
+              <li><code>certipy</code> Active Directory Certificate Services (AD CS)</li>
+              <li><code>bloodhound-python</code> Graph attack-path collector</li>
+              <li><code>responder</code> LLMNR / NBT-NS / mDNS poisoner</li>
             </ul>
             <div class="card-footer">
-              <span class="c-muted">For security practitioners</span>
+              <span class="c-muted">For internal & red team ops</span>
               <label class="toggle-wrap">
-                <input type="checkbox" id="chk-sec" class="toggle-checkbox" onchange="updateCommand()">
+                <input type="checkbox" id="chk-ad-pivot" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 7: Web Application & API Security -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🌐 Web & API Security</span>
+              <span class="card-badge badge-api">API Testing</span>
+            </div>
+            <p class="card-desc">Contract-driven automated API property fuzzing, endpoint discovery, and lightweight interception proxying.</p>
+            <ul class="card-list">
+              <li><code>schemathesis</code> Property fuzzer for OpenAPI & GraphQL</li>
+              <li><code>kiterunner (kr)</code> Context-aware API route discovery</li>
+              <li><code>caido-cli</code> Modern high-speed Rust proxy daemon</li>
+              <li><code>arjun</code> HTTP parameter discovery engine</li>
+              <li><code>ffuf & feroxbuster</code> Multi-threaded fuzzers</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">For modern REST/GraphQL APIs</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-web-api" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 8: Cloud, Container & DevSecOps -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">☁️ Cloud, Container & DevSecOps</span>
+              <span class="card-badge badge-devsec">DevSecOps</span>
+            </div>
+            <p class="card-desc">Unified vulnerability scanning, Software Bill of Materials (SBOM) generation, IaC static analysis, and Kubernetes auditing.</p>
+            <ul class="card-list">
+              <li><code>trivy</code> Container, filesystem & IaC CVE scanner</li>
+              <li><code>syft & grype</code> Anchore SBOM creator & CVE matcher</li>
+              <li><code>checkov</code> Terraform & CloudFormation SAST scanner</li>
+              <li><code>kube-hunter</code> Live Kubernetes penetration testing</li>
+              <li><code>awscli & prowler</code> AWS CIS compliance audit</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">For cloud & pipeline security</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-devsecops" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 9: Mobile & Binary Reverse Engineering -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">📱 Mobile & Reverse Engineering</span>
+              <span class="card-badge badge-sec">Reverse Eng</span>
+            </div>
+            <p class="card-desc">Android DEX/APK decompilation, source code analysis, smali extraction, and security modification.</p>
+            <ul class="card-list">
+              <li><code>jadx & jadx-gui</code> DEX to readable Java decompiler</li>
+              <li><code>apktool</code> Decompile APK resources & rebuild Smali</li>
+              <li><code>jwt_tool</code> Full JWT token analysis & attack suite</li>
+              <li><code>hashit</code> Instant MD5 / SHA1 / SHA256 checksums</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">For mobile application testing</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-mobile" class="toggle-checkbox" checked onchange="updateCommand()">
+                <span>Enable</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Card 10: Bug Bounty & Web Recon Pipeline -->
+          <div class="feature-card">
+            <div class="card-head">
+              <span class="card-title">🛡️ Bug Bounty & Recon Pipeline</span>
+              <span class="card-badge badge-sec">Recon</span>
+            </div>
+            <p class="card-desc">Autonomous passive/active attack surface discovery, asset mapping, and vulnerability template scanning.</p>
+            <ul class="card-list">
+              <li><code>subfinder & amass</code> Passive subdomain enumeration</li>
+              <li><code>httpx & katana</code> Live service probing & crawling</li>
+              <li><code>nuclei v3</code> Community vulnerability templates</li>
+              <li><code>bbrecon</code> One-liner automated pipeline function</li>
+              <li><code>trufflehog</code> Secret & token detector with validation</li>
+            </ul>
+            <div class="card-footer">
+              <span class="c-muted">For perimeter recon</span>
+              <label class="toggle-wrap">
+                <input type="checkbox" id="chk-recon" class="toggle-checkbox" checked onchange="updateCommand()">
                 <span>Enable</span>
               </label>
             </div>
@@ -1136,15 +1339,15 @@ return config
 
         <!-- Dynamic Command Generator Bar -->
         <div class="export-bar" id="export">
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Your Customized Execution Command:</span>
-            <div class="export-cmd" id="install-command">./ter.sh --core --fonts --dev --mcp --terminals</div>
+          <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+            <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Your Tailored Installation Command:</span>
+            <div class="export-cmd" id="install-command">./ter.sh --core --fonts --dev --mcp --terminals --ad-pivot --web-api --devsecops --mobile --bugbounty --dashboard</div>
           </div>
           <button class="copy-btn" onclick="copyInstallCmd()">📋 Copy Command</button>
         </div>
       </section>
 
-      <!-- VIEW 7: Architecture -->
+      <!-- VIEW 7: Modular Architecture -->
       <section id="view-architecture" class="view-pane">
         <div class="hero-banner">
           <div class="hero-info">
@@ -1170,11 +1373,16 @@ Hackers-terminal-setup/
 │   ├── <span class="c-cyan">dev.sh</span>            <span class="c-muted"># Node.js LTS, Claude Code, VS Code CLI</span>
 │   ├── <span class="c-cyan">terminals.sh</span>      <span class="c-muted"># Ghostty, WezTerm, Kitty + aesthetic configs</span>
 │   ├── <span class="c-cyan">shell_tools.sh</span>    <span class="c-muted"># Atuin, direnv, uv, btop, yazi, delta, Starship</span>
+│   ├── <span class="c-cyan">ad_pivoting.sh</span>    <span class="c-muted"># Ligolo-ng, Chisel, NetExec, BloodHound, Certipy</span>
+│   ├── <span class="c-cyan">web_api.sh</span>        <span class="c-muted"># Schemathesis, Kiterunner, Caido, Arjun, FFUF</span>
+│   ├── <span class="c-cyan">cloud_devsec.sh</span>   <span class="c-muted"># Trivy, Syft, Grype, Checkov, Kube-hunter</span>
+│   ├── <span class="c-cyan">mobile_re.sh</span>      <span class="c-muted"># Jadx, Apktool (DEX/APK decompilation & analysis)</span>
 │   ├── <span class="c-cyan">pentest.sh</span>        <span class="c-muted"># Core offensive security auditing suite</span>
 │   ├── <span class="c-cyan">bugbounty.sh</span>      <span class="c-muted"># Web recon, discovery & nuclei automation</span>
 │   ├── <span class="c-cyan">cloud.sh</span>          <span class="c-muted"># Cloud & container security testing tools</span>
 │   ├── <span class="c-cyan">ai_mcp.sh</span>         <span class="c-muted"># Preconfigured safe MCP suite & Claude config</span>
 │   ├── <span class="c-cyan">workflow.sh</span>       <span class="c-muted"># Tmux, aliases, custom helper functions</span>
+│   ├── <span class="c-cyan">dashboard.sh</span>      <span class="c-muted"># Fastfetch & Tactical Security Welcome Cockpit</span>
 │   ├── <span class="c-cyan">doctor.sh</span>         <span class="c-muted"># sec_doctor automated health dashboard</span>
 │   ├── <span class="c-cyan">configs.sh</span>        <span class="c-muted"># Dotfile generators (.zshrc, .tmux.conf, configs)</span>
 │   └── <span class="c-cyan">menu.sh</span>           <span class="c-muted"># Interactive ASCII menu & CLI argument parser</span>
@@ -1185,20 +1393,16 @@ Hackers-terminal-setup/
             <span class="c-purple c-bold">Key Architectural Principles:</span>
             <ul class="card-list" style="margin-top:12px; gap:12px;">
               <li>
-                <span class="c-green">✓ Clean Single-Responsibility Modules</span><br>
-                <span class="c-muted">Each file in <code>lib/</code> handles one domain. Adding a new tool is as simple as adding 4 lines to the relevant module.</span>
-              </li>
-              <li>
                 <span class="c-green">✓ Dual-Mode Execution</span><br>
-                <span class="c-muted">If cloned locally, <code>ter.sh</code> dynamically sources <code>lib/*.sh</code> for fast live iteration. If bundled, <code>bundle.sh</code> outputs a single 0-dependency script for <code>curl -fsSL ... | bash</code>.</span>
+                <span class="c-muted">Edit any file in <code>lib/*.sh</code> and run <code>./ter.sh</code> directly to test changes immediately. Run <code>./bundle.sh</code> to compile the single-file distribution.</span>
               </li>
               <li>
-                <span class="c-green">✓ Non-Root Safety</span><br>
-                <span class="c-muted">NPM global packages use <code>~/.npm-global</code>, pip tools use <code>uv</code>/<code>pipx</code>, and Go binaries use <code>~/go/bin</code>, eliminating <code>sudo npm</code> hazards.</span>
+                <span class="c-green">✓ Clean Domain Isolation</span><br>
+                <span class="c-muted">Every domain (Active Directory, Web APIs, Containers, Mobile, AI) has its own module, dependencies, and doctor checks.</span>
               </li>
               <li>
-                <span class="c-green">✓ Sandboxed Agent Tooling</span><br>
-                <span class="c-muted">Filesystem MCP servers are never configured to expose <code>$HOME</code> or root, preventing credential leaks to LLMs.</span>
+                <span class="c-green">✓ Sub-15ms Terminal Startup</span><br>
+                <span class="c-muted">The modernized welcome cockpit avoids synchronous web queries and provides immediate, actionable telemetry at launch.</span>
               </li>
             </ul>
           </div>
@@ -1209,36 +1413,207 @@ Hackers-terminal-setup/
   </div>
 
   <script>
+    let vpnActive = true;
+    let proxyActive = true;
+    const tipsList = [
+      "Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!",
+      "Run 'nxc smb <subnet> -u user -p pass' for high-speed AD credential auditing.",
+      "Use 'schematest <spec.json>' to property-fuzz APIs with Schemathesis.",
+      "Use 'ligolo_start' to scaffold kernel TUN pivoting instead of proxychains.",
+      "Run 'trivy fs .' to audit container, filesystem, and IaC vulnerabilities.",
+      "Run 'sbom_audit <image>' to generate Syft SBOM and cross-scan with Grype.",
+      "Run 'bbrecon <domain>' for a full automated recon pipeline.",
+      "Run 'sec-mcp list' to verify that all AI MCP servers are sandboxed."
+    ];
+    let tipIndex = 0;
+
     function switchTab(viewId) {
-      // Update sidebar
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
       const activeNav = Array.from(document.querySelectorAll('.nav-item')).find(el => {
         const text = el.textContent.toLowerCase();
+        if (viewId === 'welcome-cockpit' && text.includes('welcome')) return true;
         if (viewId === 'daily-shell' && text.includes('daily')) return true;
         if (viewId === 'claude-ai' && text.includes('claude')) return true;
         if (viewId === 'gpu-terms' && text.includes('gpu')) return true;
-        if (viewId === 'power-tools' && text.includes('rust')) return true;
         if (viewId === 'security-ops' && text.includes('pentest')) return true;
-        if (viewId === 'matrix' && text.includes('usages')) return true;
+        if (viewId === 'power-tools' && text.includes('rust')) return true;
+        if (viewId === 'matrix' && text.includes('assessment')) return true;
         if (viewId === 'architecture' && text.includes('modular')) return true;
         return false;
       });
       if (activeNav) activeNav.classList.add('active');
 
-      // Update panes
       document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
       const targetPane = document.getElementById('view-' + viewId);
       if (targetPane) targetPane.classList.add('active');
     }
 
+    function toggleCockpitVPN() {
+      vpnActive = !vpnActive;
+      const el = document.getElementById('cockpit-vpn-status');
+      if (vpnActive) {
+        el.innerHTML = '<span class="c-green">● ACTIVE</span> <span class="c-muted">(tun0: 10.10.14.8 / ligolo)</span>';
+      } else {
+        el.innerHTML = '<span class="c-yellow">○ INACTIVE</span> <span class="c-muted">(direct internet connection)</span>';
+      }
+    }
+
+    function toggleCockpitProxy() {
+      proxyActive = !proxyActive;
+      const el = document.getElementById('cockpit-proxy-status');
+      if (proxyActive) {
+        el.innerHTML = '<span class="c-green">● ON</span> <span class="c-muted">(127.0.0.1:8080 - Caido/Burp)</span>';
+      } else {
+        el.innerHTML = '<span class="c-muted">○ OFF (use \'proxyon\')</span>';
+      }
+    }
+
+    function cycleCockpitTip() {
+      tipIndex = (tipIndex + 1) % tipsList.length;
+      document.getElementById('cockpit-tip-text').textContent = tipsList[tipIndex];
+    }
+
+    function runFastfetchDemo() {
+      const body = document.getElementById('cockpit-sim-body');
+      body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">fastfetch</span>
+ <span class="c-blue">████████</span>   <span class="c-cyan c-bold">krack</span><span class="c-muted">@</span><span class="c-blue c-bold">MacBook-Pro</span>
+ <span class="c-blue">████████</span>   <span class="c-muted">----------------------</span>
+ <span class="c-blue">████████</span>   <span class="c-blue">OS:</span> macOS Sequoia 15.3 (Darwin 24.3.0) arm64
+ <span class="c-blue">████████</span>   <span class="c-blue">Host:</span> MacBookPro18,1 (Apple M1 Pro)
+            <span class="c-green">Uptime:</span> 2 days, 14 hours, 22 mins
+            <span class="c-green">Packages:</span> 214 (brew)
+            <span class="c-yellow">Shell:</span> zsh 5.9 with Starship
+            <span class="c-magenta">Terminal:</span> Ghostty 1.1.2 (Metal GPU)
+            <span class="c-cyan">Memory:</span> 11.2 GiB / 32.0 GiB (35%)
+            <span class="c-peach">Disk (/):</span> 494 GiB free (68%)`;
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function resetCockpit() {
+      const body = document.getElementById('cockpit-sim-body');
+      body.innerHTML = `<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────╮</span>
+<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>  <span class="c-cyan c-bold">│</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+  <span class="c-bold">NETWORK & TUNNELS</span>                    <span class="c-bold">SYSTEM & TELEMETRY</span>
+  <span class="c-muted">├─ Local IP :</span> <span class="c-cyan">192.168.1.45</span> (en0)       <span class="c-muted">├─ Uptime :</span> 2 days 14h 22m
+  <span class="c-muted">├─ Tunnel   :</span> <span id="cockpit-vpn-status"><span class="c-green">● ACTIVE</span> <span class="c-muted">(tun0: 10.10.14.8 / ligolo)</span></span>   <span class="c-muted">├─ Memory :</span> 11.2G / 32.0G (35%)
+  <span class="c-muted">└─ Proxy    :</span> <span id="cockpit-proxy-status"><span class="c-green">● ON</span> <span class="c-muted">(127.0.0.1:8080 - Caido/Burp)</span></span>   <span class="c-muted">└─ Shell  :</span> zsh 5.9 (arm64)
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+  <span class="c-bold">SECURITY & AGENTIC WORKSPACE</span>
+  <span class="c-muted">├─ Active Dir :</span> <span class="c-purple">~/pentest/2026-10-17_acme_corp/</span> <span class="c-muted">(Scaffolded via 'mkeng')</span>
+  <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(cc)</span> • <span class="c-cyan">5 Sandboxed MCPs</span> <span class="c-muted">(sec-mcp)</span>
+  <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">cheat</span> <span class="c-muted">(or ?)</span> • <span class="c-yellow">doctor</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+  <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!</span>
+<span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span> <span class="p-seg p-git"> engagement-active</span> <span class="p-seg p-time"> 00:58:34</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="blinking-cursor"></span>`;
+    }
+
+    function applyPreset(preset) {
+      document.querySelectorAll('.preset-pill').forEach(el => el.classList.remove('active'));
+      event.target.classList.add('active');
+
+      const setCheck = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = val;
+      };
+
+      if (preset === 'all') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', true);
+        setCheck('chk-mcp', true);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', true);
+        setCheck('chk-web-api', true);
+        setCheck('chk-devsecops', true);
+        setCheck('chk-mobile', true);
+        setCheck('chk-recon', true);
+      } else if (preset === 'ad') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', false);
+        setCheck('chk-mcp', false);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', true);
+        setCheck('chk-web-api', false);
+        setCheck('chk-devsecops', false);
+        setCheck('chk-mobile', false);
+        setCheck('chk-recon', true);
+      } else if (preset === 'web') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', true);
+        setCheck('chk-mcp', true);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', false);
+        setCheck('chk-web-api', true);
+        setCheck('chk-devsecops', false);
+        setCheck('chk-mobile', false);
+        setCheck('chk-recon', true);
+      } else if (preset === 'devsec') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', true);
+        setCheck('chk-mcp', true);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', false);
+        setCheck('chk-web-api', true);
+        setCheck('chk-devsecops', true);
+        setCheck('chk-mobile', false);
+        setCheck('chk-recon', false);
+      } else if (preset === 'mobile') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', true);
+        setCheck('chk-mcp', false);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', false);
+        setCheck('chk-web-api', false);
+        setCheck('chk-devsecops', false);
+        setCheck('chk-mobile', true);
+        setCheck('chk-recon', false);
+      } else if (preset === 'ai') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', true);
+        setCheck('chk-mcp', true);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', false);
+        setCheck('chk-web-api', false);
+        setCheck('chk-devsecops', false);
+        setCheck('chk-mobile', false);
+        setCheck('chk-recon', false);
+      } else if (preset === 'minimal') {
+        setCheck('chk-core', true);
+        setCheck('chk-fonts', true);
+        setCheck('chk-dev', false);
+        setCheck('chk-mcp', false);
+        setCheck('chk-terminals', true);
+        setCheck('chk-ad-pivot', false);
+        setCheck('chk-web-api', false);
+        setCheck('chk-devsecops', false);
+        setCheck('chk-mobile', false);
+        setCheck('chk-recon', false);
+      }
+      updateCommand();
+    }
+
     function updateCommand() {
       const parts = ['./ter.sh'];
-      if (document.getElementById('chk-core').checked) parts.push('--core');
+      if (document.getElementById('chk-core').checked) parts.push('--core', '--shell-tools');
       if (document.getElementById('chk-fonts').checked) parts.push('--fonts');
       if (document.getElementById('chk-dev').checked) parts.push('--dev');
       if (document.getElementById('chk-mcp').checked) parts.push('--mcp');
-      if (document.getElementById('chk-terminals').checked) parts.push('--terminals');
-      if (document.getElementById('chk-sec').checked) parts.push('--pentest', '--bugbounty');
+      if (document.getElementById('chk-terminals').checked) parts.push('--terminals', '--dashboard');
+      if (document.getElementById('chk-ad-pivot') && document.getElementById('chk-ad-pivot').checked) parts.push('--ad-pivot');
+      if (document.getElementById('chk-web-api') && document.getElementById('chk-web-api').checked) parts.push('--web-api');
+      if (document.getElementById('chk-devsecops') && document.getElementById('chk-devsecops').checked) parts.push('--devsecops');
+      if (document.getElementById('chk-mobile') && document.getElementById('chk-mobile').checked) parts.push('--mobile');
+      if (document.getElementById('chk-recon') && document.getElementById('chk-recon').checked) parts.push('--bugbounty', '--pentest');
 
       const cmdEl = document.getElementById('install-command');
       cmdEl.textContent = parts.join(' ');
@@ -1256,6 +1631,62 @@ Hackers-terminal-setup/
           btn.style.background = '#89b4fa';
         }, 1800);
       });
+    }
+
+    function simulateSecDemo(tool) {
+      const body = document.getElementById('sec-pipeline-body');
+      const title = document.getElementById('sec-tab-title');
+      if (tool === 'nxc') {
+        title.textContent = 'nxc smb 10.10.10.0/24';
+        body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/internal</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">nxc smb 10.10.10.0/24 -u 'svc_backup' -p 'Backup2026!' --shares</span>
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [*] Windows Server 2022 Build 20348 (name:DC01) (domain:CORP)
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             <span class="c-green">[+] CORP\\svc_backup:Backup2026! (Pwn3d!)</span>
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             <span class="c-yellow">[+] Enumerated Shares:</span>
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [+]   ADMIN$       (READ, WRITE)
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [+]   C$           (READ, WRITE)
+<span class="c-blue">SMB</span>         <span class="c-green">10.10.10.10</span>     445    DC01             [+]   SYSVOL       (READ)`;
+      } else if (tool === 'schemathesis') {
+        title.textContent = 'schemathesis run https://api.corp.internal/openapi.json';
+        body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/api</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">schemathesis run https://api.corp.internal/openapi.json --checks all</span>
+<span class="c-bold c-cyan">Schemathesis 3.39.0</span>
+════════════════════════════════════════════════════════════════════════════════
+Hypothesis: 240 examples tested across 18 operations
+<span class="c-green">[+] GET /v1/users</span> ............................................ <span class="c-green">PASSED</span>
+<span class="c-green">[+] POST /v1/auth/login</span> ...................................... <span class="c-green">PASSED</span>
+<span class="c-red">[-] POST /v1/orders/{id}/refund</span> .............................. <span class="c-red">FAILED (500 Internal Error)</span>
+    <span class="c-yellow">Finding: Server Unhandled Exception when refund amount is negative (-99999)</span>
+    <span class="c-yellow">Trace: DivisionByZero in payments/ledger.py:84</span>
+════════════════════════════════════════════════════════════════════════════════
+<span class="c-red">FAILED</span>: 1 critical flaw identified in API boundary validation.`;
+      } else if (tool === 'trivy') {
+        title.textContent = 'trivy image corp-backend:latest';
+        body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/cloud</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">trivy image --severity HIGH,CRITICAL corp-backend:latest</span>
+<span class="c-bold c-cyan">corp-backend:latest (alpine 3.19.1)</span>
+====================================
+Total: 2 (CRITICAL: 1, HIGH: 1)
+
+┌────────────┬────────────────┬──────────┬──────────────┬────────────────┬────────────────────────────┐
+│ <span class="c-bold">Library</span>    │ <span class="c-bold">Vulnerability</span>  │ <span class="c-bold">Severity</span> │ <span class="c-bold">Installed</span>    │ <span class="c-bold">Fixed Version</span>  │ <span class="c-bold">Title</span>                      │
+├────────────┼────────────────┼──────────┼──────────────┼────────────────┼────────────────────────────┤
+│ <span class="c-red">openssl</span>    │ CVE-2024-2511  │ <span class="c-red c-bold">CRITICAL</span> │ 3.1.4-r1     │ 3.1.4-r6       │ TLS Session renegotiation  │
+│ <span class="c-yellow">busybox</span>    │ CVE-2023-42363 │ <span class="c-yellow c-bold">HIGH</span>     │ 1.36.1-r15   │ 1.36.1-r19     │ Heap-buffer overflow       │
+└────────────┴────────────────┴──────────┴──────────────┴────────────────┴────────────────────────────┘`;
+      } else if (tool === 'bbrecon') {
+        title.textContent = 'bbrecon acme.com';
+        body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/recon</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">bbrecon acme.com</span>
+<span class="c-green">━━━ [1/5] Subdomain Enum ━━━</span>
+<span class="c-green">[+]</span> subfinder + amass returned 412 subdomains.
+<span class="c-green">━━━ [2/5] Probing Alive Hosts ━━━</span>
+<span class="c-cyan">https://api.acme.com</span> [200] [Express, Node.js]
+<span class="c-cyan">https://vpn.acme.com</span> [200] [Fortinet SSL-VPN]
+<span class="c-green">━━━ [3/5] Nuclei Scanning ━━━</span>
+<span class="c-green">[+]</span> High/Critical results: 0. Recon report saved.`;
+      }
+      body.scrollTop = body.scrollHeight;
     }
 
     function simulateShell(action) {
@@ -1277,17 +1708,16 @@ Hackers-terminal-setup/
         body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">atuin stats</span>
 <span class="c-cyan">Total commands:</span> 4,821
-<span class="c-cyan">Most used:</span> git (34%), claude (18%), eza (12%), uv (8%)
+<span class="c-cyan">Most used:</span> git (34%), claude (18%), eza (12%), nxc (8%)
 <span class="c-green">Privacy filter active:</span> 14 tokens scrubbed automatically`;
       } else if (action === 'doctor') {
         body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">sec_doctor</span>
 <span class="c-green">━━━ Security & Shell Doctor Audit ━━━</span>
-<span class="c-green">✓</span> Shell: zsh 5.9
-<span class="c-green">✓</span> Prompt: Starship 1.22.1 (0.8ms latency)
-<span class="c-green">✓</span> History: Atuin SQLite v18.3.0 (encrypted)
+<span class="c-green">✓</span> Shell: zsh 5.9 with Starship
+<span class="c-green">✓</span> History: Atuin SQLite v18.3.0 (encrypted & scrubbed)
 <span class="c-green">✓</span> AI Agent: Claude Code CLI v0.2.32
-<span class="c-green">✓</span> MCP Servers: 5 active & sandboxed
+<span class="c-green">✓</span> Assessment Tools: Ligolo-ng, NetExec, Schemathesis, Trivy, Jadx
 <span class="c-green">✓</span> All systems optimal!`;
       }
       body.scrollTop = body.scrollHeight;
@@ -1298,8 +1728,8 @@ Hackers-terminal-setup/
       if (action === 'mcp-list') {
         body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">/mcp</span>
 <span class="c-purple">Configured MCP Servers:</span>
-  • <span class="c-green">filesystem</span> (Scoped: ~/workspace/)
-  • <span class="c-green">github</span> (User: @krack)
+  • <span class="c-green">filesystem</span> (Sandboxed: ~/workspace/ & ~/pentest/)
+  • <span class="c-green">github</span> (Repo & PR inspector)
   • <span class="c-green">brave-search</span> (Online search)
   • <span class="c-green">memory</span> (Persistent graph)
   • <span class="c-green">semgrep</span> (Code security auditor)`;
