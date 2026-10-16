@@ -858,13 +858,40 @@ install_alacritty() {
 
 write_ghostty_config() {
   local cfg_dir="$HOME/.config/ghostty"
-  mkdir -p "$cfg_dir"
+  mkdir -p "$cfg_dir/themes"
+
+  # Write fallback catppuccin-mocha theme file so both casing styles work seamlessly
+  cat > "$cfg_dir/themes/catppuccin-mocha" << 'MOCHA_THEME'
+palette = 0=#45475a
+palette = 1=#f38ba8
+palette = 2=#a6e3a1
+palette = 3=#f9e2af
+palette = 4=#89b4fa
+palette = 5=#f5c2e7
+palette = 6=#94e2d5
+palette = 7=#a6adc8
+palette = 8=#585b70
+palette = 9=#f37799
+palette = 10=#89d88b
+palette = 11=#ebd391
+palette = 12=#74a8fc
+palette = 13=#f2aede
+palette = 14=#6bd7ca
+palette = 15=#bac2de
+background = #1e1e2e
+foreground = #cdd6f4
+cursor-color = #f5e0dc
+cursor-text = #1e1e2e
+selection-background = #585b70
+selection-foreground = #cdd6f4
+MOCHA_THEME
+
   log "Writing Ghostty aesthetic configuration ($cfg_dir/config)..."
   cat > "$cfg_dir/config" << 'GHOSTTY_CFG'
 # =============================================================================
 # Ghostty Terminal Configuration — Catppuccin Mocha & Hacker Ergonomics
 # =============================================================================
-theme = "catppuccin-mocha"
+theme = "Catppuccin Mocha"
 font-family = "JetBrainsMono Nerd Font"
 font-family = "MesloLGS NF"
 font-size = 14
@@ -2293,9 +2320,23 @@ sec_doctor() {
     local name=$1
     local cmd=$2
     local ver_cmd=${3:-}
+    local is_installed=false
+    local app_path=""
+
     if command -v "$cmd" &>/dev/null; then
+      is_installed=true
+    elif [[ -d "/Applications/$cmd.app" ]]; then
+      is_installed=true
+      app_path="/Applications/$cmd.app"
+    elif [[ -d "/Applications/${name}.app" ]]; then
+      is_installed=true
+      app_path="/Applications/${name}.app"
+    fi
+
+    if $is_installed; then
       local ver=""
       [[ -n "$ver_cmd" ]] && ver=$(eval "$ver_cmd" 2>/dev/null | head -1)
+      [[ -z "$ver" && -n "$app_path" ]] && ver="$app_path"
       printf "  ${GREEN}[✓]${RESET} %-26s ${DIM}%s${RESET}\n" "$name" "$ver"
     else
       printf "  ${RED}[✗]${RESET} %-26s ${YELLOW}not installed${RESET}\n" "$name"

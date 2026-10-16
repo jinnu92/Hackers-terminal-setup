@@ -15,9 +15,23 @@ sec_doctor() {
     local name=$1
     local cmd=$2
     local ver_cmd=${3:-}
+    local is_installed=false
+    local app_path=""
+
     if command -v "$cmd" &>/dev/null; then
+      is_installed=true
+    elif [[ -d "/Applications/$cmd.app" ]]; then
+      is_installed=true
+      app_path="/Applications/$cmd.app"
+    elif [[ -d "/Applications/${name}.app" ]]; then
+      is_installed=true
+      app_path="/Applications/${name}.app"
+    fi
+
+    if $is_installed; then
       local ver=""
       [[ -n "$ver_cmd" ]] && ver=$(eval "$ver_cmd" 2>/dev/null | head -1)
+      [[ -z "$ver" && -n "$app_path" ]] && ver="$app_path"
       printf "  ${GREEN}[✓]${RESET} %-26s ${DIM}%s${RESET}\n" "$name" "$ver"
     else
       printf "  ${RED}[✗]${RESET} %-26s ${YELLOW}not installed${RESET}\n" "$name"
