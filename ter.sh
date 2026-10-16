@@ -127,6 +127,13 @@ resolve_pkg() {
         bat)          echo "bat" ;;
         fd)           echo "fd" ;;
         netcat)       echo "netcat" ;;
+        node)         echo "node" ;;
+        npm)          echo "node" ;;
+        golang|go)    echo "go" ;;
+        fontconfig)   echo "fontconfig" ;;
+        xz)           echo "xz" ;;
+        unzip)        echo "unzip" ;;
+        tar)          echo "gnu-tar" ;;
         *)            echo "$pkg" ;;
       esac ;;
     apt)
@@ -156,6 +163,8 @@ resolve_pkg() {
         gpg)          echo "gnupg" ;;
         python3)      echo "python3" ;;
         pipx)         echo "pipx" ;;
+        python3-venv) echo "python3-venv" ;;
+        python3-pip)  echo "python3-pip" ;;
         wget)         echo "wget" ;;
         curl)         echo "curl" ;;
         mitmproxy)    echo "mitmproxy" ;;
@@ -177,6 +186,11 @@ resolve_pkg() {
         awscli)       echo "awscli" ;;
         node)         echo "nodejs" ;;
         npm)          echo "npm" ;;
+        golang|go)    echo "golang-go" ;;
+        fontconfig)   echo "fontconfig" ;;
+        xz)           echo "xz-utils" ;;
+        unzip)        echo "unzip" ;;
+        tar)          echo "tar" ;;
         yazi)         echo "" ;;          # install via cargo
         xh)           echo "" ;;          # install via cargo
         john)         echo "john" ;;
@@ -193,6 +207,12 @@ resolve_pkg() {
         gpg)          echo "gnupg2" ;;
         awscli)       echo "awscli" ;;
         node)         echo "nodejs" ;;
+        npm)          echo "npm" ;;
+        golang|go)    echo "golang" ;;
+        fontconfig)   echo "fontconfig" ;;
+        xz)           echo "xz" ;;
+        unzip)        echo "unzip" ;;
+        tar)          echo "tar" ;;
         *)            echo "$pkg" ;;
       esac ;;
     pacman)
@@ -203,10 +223,44 @@ resolve_pkg() {
         fd)           echo "fd" ;;
         node)         echo "nodejs" ;;
         npm)          echo "npm" ;;
+        golang|go)    echo "go" ;;
+        fontconfig)   echo "fontconfig" ;;
+        xz)           echo "xz" ;;
+        unzip)        echo "unzip" ;;
+        tar)          echo "tar" ;;
+        *)            echo "$pkg" ;;
+      esac ;;
+    zypper)
+      case "$pkg" in
+        golang|go)    echo "go" ;;
+        node)         echo "nodejs" ;;
+        npm)          echo "npm" ;;
+        fontconfig)   echo "fontconfig" ;;
+        xz)           echo "xz" ;;
+        unzip)        echo "unzip" ;;
+        tar)          echo "tar" ;;
         *)            echo "$pkg" ;;
       esac ;;
     *)            echo "$pkg" ;;
   esac
+}
+
+install_golang() {
+  if command -v go &>/dev/null; then
+    ok "Go already installed: $(go version)"
+  else
+    log "Installing Go programming language..."
+    case "$PKG_MGR" in
+      brew)   brew install go || warn "brew install go failed" ;;
+      apt)    sudo apt-get install -y golang-go || warn "apt install golang-go failed" ;;
+      dnf)    sudo dnf install -y golang || warn "dnf install golang failed" ;;
+      yum)    sudo yum install -y golang || warn "yum install golang failed" ;;
+      pacman) sudo pacman -S --noconfirm --needed go || warn "pacman install go failed" ;;
+      zypper) sudo zypper install -y go || warn "zypper install go failed" ;;
+    esac
+  fi
+  export GOPATH="$HOME/go"
+  export PATH="$HOME/go/bin:$PATH"
 }
 
 pipx_install() {
@@ -222,6 +276,9 @@ pipx_install() {
 
 npm_global_install() {
   local pkg=$1
+  mkdir -p "$HOME/.npm-global"
+  npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
+  export PATH="$HOME/.npm-global/bin:$PATH"
   if npm list -g "$pkg" &>/dev/null 2>&1; then
     info "$pkg already installed via npm"
   else
@@ -233,9 +290,14 @@ npm_global_install() {
 go_install() {
   local pkg=$1   # full go import path e.g. github.com/foo/bar@latest
   local name=$2  # binary name to check
+  export GOPATH="$HOME/go"
+  export PATH="$HOME/go/bin:$PATH"
   if command -v "$name" &>/dev/null; then
     info "$name already installed"
   else
+    if ! command -v go &>/dev/null; then
+      install_golang
+    fi
     if command -v go &>/dev/null; then
       log "go install $pkg..."
       go install "$pkg" || warn "go install $pkg failed"
@@ -351,8 +413,20 @@ preflight() {
   mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
   ok "~/.ssh ready"
 
+  # ── 7. Prerequisites: Python3, pipx, and Go ─────────────────────────────
+  if ! command -v pipx &>/dev/null; then
+    log "Checking pipx..."
+    pkg_install pipx python3-venv python3-pip
+    pipx ensurepath 2>/dev/null || true
+  fi
+
+  if ! command -v go &>/dev/null; then
+    install_golang
+  fi
+
   export ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-  export PATH="$HOME/.local/bin:$HOME/go/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+  export GOPATH="$HOME/go"
+  export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
 }
 
 # =============================================================================
@@ -374,26 +448,8 @@ install_core() {
 
   linux_fixups
 
-  # Nerd Font
-  if [[ "$OS" == "Darwin" ]]; then
-    pkg_install_cask "font-meslo-lg-nerd-font"
-    ok "Meslo Nerd Font installed — set 'MesloLGS NF' in terminal preferences"
-  else
-    local font_dir="$HOME/.local/share/fonts"
-    mkdir -p "$font_dir"
-    if ! fc-list | grep -qi "MesloLGS"; then
-      log "Downloading Meslo Nerd Font..."
-      local base="https://github.com/romkatv/powerlevel10k-media/raw/master"
-      for f in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
-                "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
-        curl -fsSL "$base/${f// /%20}" -o "$font_dir/$f" 2>/dev/null || true
-      done
-      fc-cache -f "$font_dir" 2>/dev/null || true
-      ok "Meslo Nerd Font installed"
-    else
-      info "Meslo Nerd Font already installed"
-    fi
-  fi
+  # Ensure Meslo Nerd Font is installed (required for Powerlevel10k)
+  install_fonts "meslo"
 
   # External OMZ plugins
   _clone_plugin() {
@@ -422,6 +478,272 @@ install_core() {
   fi
 
   ok "Core terminal done"
+}
+
+# =============================================================================
+# 2 — HACKER & DEVELOPER NERD FONTS
+# =============================================================================
+install_fonts() {
+  local target_font="${1:-all}"
+  step "Hacker & Developer Nerd Fonts ($target_font)"
+
+  if [[ "$OS" == "Darwin" ]]; then
+    log "Installing Nerd Fonts on macOS..."
+    # Meslo Nerd Font is always installed for Powerlevel10k compatibility
+    pkg_install_cask "font-meslo-lg-nerd-font"
+
+    if [[ "$target_font" == "all" || "$target_font" == *"jetbrains"* ]]; then
+      pkg_install_cask "font-jetbrains-mono-nerd-font"
+    fi
+    if [[ "$target_font" == "all" || "$target_font" == *"fira"* ]]; then
+      pkg_install_cask "font-fira-code-nerd-font"
+    fi
+    if [[ "$target_font" == "all" || "$target_font" == *"hack"* ]]; then
+      pkg_install_cask "font-hack-nerd-font"
+    fi
+    if [[ "$target_font" == "all" || "$target_font" == *"cascadia"* ]]; then
+      pkg_install_cask "font-caskaydia-cove-nerd-font"
+    fi
+
+    # Fallback: copy romkatv MesloLGS NF TTFs directly to ~/Library/Fonts
+    local mac_font_dir="$HOME/Library/Fonts"
+    mkdir -p "$mac_font_dir"
+    if [[ ! -f "$mac_font_dir/MesloLGS NF Regular.ttf" ]]; then
+      log "Ensuring MesloLGS NF TTFs in ~/Library/Fonts..."
+      local base="https://github.com/romkatv/powerlevel10k-media/raw/master"
+      for f in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
+                "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
+        curl -fsSL "$base/${f// /%20}" -o "$mac_font_dir/$f" 2>/dev/null || true
+      done
+    fi
+    ok "macOS Nerd Fonts installed"
+  else
+    # Linux installation into ~/.local/share/fonts/NerdFonts
+    local font_dir="$HOME/.local/share/fonts/NerdFonts"
+    mkdir -p "$font_dir"
+
+    if ! command -v fc-cache &>/dev/null; then
+      pkg_install fontconfig
+    fi
+
+    # 1. MesloLGS NF (P10k recommended)
+    log "Downloading MesloLGS NF..."
+    local base="https://github.com/romkatv/powerlevel10k-media/raw/master"
+    for f in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
+              "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
+      curl -fsSL "$base/${f// /%20}" -o "$font_dir/$f" 2>/dev/null || true
+    done
+
+    # Helper to download and extract tar.xz from official Nerd Fonts release
+    _download_nf_archive() {
+      local name=$1
+      local archive_name=$2
+      log "Downloading $name Nerd Font..."
+      local tmp_archive="/tmp/${archive_name}.tar.xz"
+      local url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${archive_name}.tar.xz"
+      if curl -fsSL "$url" -o "$tmp_archive" 2>/dev/null; then
+        tar -xf "$tmp_archive" -C "$font_dir" 2>/dev/null || true
+        rm -f "$tmp_archive"
+        ok "$name Nerd Font installed"
+      else
+        warn "Could not download $name Nerd Font archive"
+      fi
+    }
+
+    if [[ "$target_font" == "all" || "$target_font" == *"jetbrains"* ]]; then
+      _download_nf_archive "JetBrains Mono" "JetBrainsMono"
+    fi
+    if [[ "$target_font" == "all" || "$target_font" == *"fira"* ]]; then
+      _download_nf_archive "Fira Code" "FiraCode"
+    fi
+    if [[ "$target_font" == "all" || "$target_font" == *"hack"* ]]; then
+      _download_nf_archive "Hack" "Hack"
+    fi
+    if [[ "$target_font" == "all" || "$target_font" == *"cascadia"* ]]; then
+      _download_nf_archive "Cascadia Code" "CascadiaCode"
+    fi
+
+    fc-cache -f "$HOME/.local/share/fonts" 2>/dev/null || true
+    ok "Linux font cache updated (~/.local/share/fonts)"
+  fi
+
+  ok "Nerd Fonts ready"
+  info "Available terminal fonts: 'MesloLGS NF', 'JetBrainsMono Nerd Font', 'FiraCode Nerd Font', 'Hack Nerd Font'"
+}
+
+# =============================================================================
+# 3 — NODE.JS & NPM
+# =============================================================================
+install_node() {
+  step "Node.js & npm setup"
+  local min_version=18
+  local current_version=0
+
+  if command -v node &>/dev/null; then
+    current_version=$(node -v | sed 's/v//' | cut -d. -f1)
+  fi
+
+  if [[ "$current_version" -ge "$min_version" ]]; then
+    ok "Node.js already installed: $(node -v) (npm $(npm -v 2>/dev/null || echo 'N/A'))"
+  else
+    log "Installing/upgrading Node.js LTS (>= v${min_version})..."
+    case "$PKG_MGR" in
+      brew)
+        brew install node || warn "brew install node failed"
+        ;;
+      apt)
+        log "Setting up NodeSource LTS repository for Debian/Ubuntu..."
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - 2>/dev/null || warn "NodeSource setup failed"
+        sudo apt-get update -qq && sudo apt-get install -y nodejs || warn "apt install nodejs failed"
+        ;;
+      dnf)
+        log "Setting up NodeSource LTS repository for Fedora..."
+        curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - 2>/dev/null || warn "NodeSource setup failed"
+        sudo dnf install -y nodejs || warn "dnf install nodejs failed"
+        ;;
+      yum)
+        curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - 2>/dev/null || warn "NodeSource setup failed"
+        sudo yum install -y nodejs || warn "yum install nodejs failed"
+        ;;
+      pacman)
+        sudo pacman -S --noconfirm --needed nodejs npm || warn "pacman install nodejs failed"
+        ;;
+      zypper)
+        sudo zypper install -y nodejs npm || warn "zypper install nodejs failed"
+        ;;
+    esac
+  fi
+
+  # Configure npm global directory without sudo
+  if command -v npm &>/dev/null; then
+    mkdir -p "$HOME/.npm-global"
+    npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
+    export PATH="$HOME/.npm-global/bin:$PATH"
+    ok "Configured npm global prefix to ~/.npm-global (no sudo required for global npm packages)"
+  fi
+
+  if command -v node &>/dev/null; then
+    ok "Node.js: $(node -v) | npm: $(npm -v 2>/dev/null || echo 'N/A')"
+  else
+    warn "Node.js installation check failed"
+  fi
+}
+
+# =============================================================================
+# 4 — CLAUDE CODE CLI (@anthropic-ai/claude-code)
+# =============================================================================
+install_claude() {
+  step "Claude Code CLI (@anthropic-ai/claude-code)"
+
+  if ! command -v node &>/dev/null; then
+    log "Node.js is required for Claude Code. Installing Node.js..."
+    install_node || { err "Node.js installation failed; cannot install Claude Code"; return 1; }
+  fi
+
+  mkdir -p "$HOME/.npm-global"
+  npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
+  export PATH="$HOME/.npm-global/bin:$PATH"
+
+  if command -v claude &>/dev/null; then
+    info "Claude Code is already installed: $(claude --version 2>/dev/null || echo 'installed')"
+    log "Checking for Claude Code updates..."
+    npm install -g @anthropic-ai/claude-code || warn "Failed to update @anthropic-ai/claude-code"
+  else
+    log "Installing @anthropic-ai/claude-code via npm..."
+    npm install -g @anthropic-ai/claude-code || warn "Failed to install @anthropic-ai/claude-code"
+  fi
+
+  if command -v claude &>/dev/null; then
+    ok "Claude Code installed: $(claude --version 2>/dev/null || echo 'ready')"
+    info "Run Claude Code with: ${BOLD}claude${RESET} (or shortcut ${BOLD}cc${RESET})"
+    info "Authentication: set ${BOLD}export ANTHROPIC_API_KEY='your-key'${RESET} or run ${BOLD}claude${RESET} to log in"
+  else
+    warn "Claude Code installed, but 'claude' command not found in PATH yet. Ensure ~/.npm-global/bin is in PATH."
+  fi
+}
+
+# =============================================================================
+# 5 — VISUAL STUDIO CODE & 'code' CLI
+# =============================================================================
+install_code() {
+  step "Visual Studio Code & 'code' CLI"
+
+  if command -v code &>/dev/null; then
+    ok "VS Code ('code' CLI) is already installed: $(code --version 2>/dev/null | head -1)"
+    return 0
+  fi
+
+  case "$OS" in
+    Darwin)
+      if [[ -d "/Applications/Visual Studio Code.app" ]]; then
+        info "Visual Studio Code.app detected in /Applications — linking 'code' CLI..."
+        mkdir -p "$HOME/.local/bin"
+        ln -sf "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
+        export PATH="$HOME/.local/bin:$PATH"
+      else
+        log "Installing Visual Studio Code via Homebrew Cask..."
+        pkg_install_cask visual-studio-code
+        if [[ -d "/Applications/Visual Studio Code.app" ]] && ! command -v code &>/dev/null; then
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
+          export PATH="$HOME/.local/bin:$PATH"
+        fi
+      fi
+      ;;
+    Linux)
+      case "$PKG_MGR" in
+        apt)
+          log "Installing Visual Studio Code via Microsoft APT repository..."
+          sudo apt-get install -y wget gpg apt-transport-https 2>/dev/null || true
+          local key_url="https://packages.microsoft.com/keys/microsoft.asc"
+          local gpg_file="/tmp/packages.microsoft.gpg"
+          curl -fsSL "$key_url" | gpg --dearmor -o "$gpg_file" 2>/dev/null || true
+          if [[ -f "$gpg_file" ]]; then
+            sudo install -D -o root -g root -m 644 "$gpg_file" /etc/apt/keyrings/packages.microsoft.gpg 2>/dev/null || true
+            sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
+            rm -f "$gpg_file"
+            sudo apt-get update -qq && sudo apt-get install -y code || warn "apt install code failed"
+          else
+            warn "Could not download Microsoft GPG key for VS Code"
+          fi
+          ;;
+        dnf|yum)
+          log "Installing Visual Studio Code via Microsoft RPM repository..."
+          sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null || true
+          sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
+          if [[ "$PKG_MGR" == "dnf" ]]; then
+            sudo dnf check-update -q || true
+            sudo dnf install -y code || warn "dnf install code failed"
+          else
+            sudo yum check-update -q || true
+            sudo yum install -y code || warn "yum install code failed"
+          fi
+          ;;
+        pacman)
+          sudo pacman -S --noconfirm --needed code || warn "pacman install code failed"
+          ;;
+        zypper)
+          sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null || true
+          sudo zypper addrepo https://packages.microsoft.com/yumrepos/vscode vscode 2>/dev/null || true
+          sudo zypper refresh -q && sudo zypper install -y code || warn "zypper install code failed"
+          ;;
+      esac
+      ;;
+  esac
+
+  if command -v code &>/dev/null; then
+    ok "Visual Studio Code ready: $(code --version 2>/dev/null | head -1)"
+  else
+    warn "VS Code installed, but 'code' binary not yet in PATH. Restart your shell."
+  fi
+}
+
+install_dev() {
+  step "Developer & Agentic AI Stack (Node.js + Claude Code + VS Code)"
+  install_node
+  install_claude
+  install_code
+  ok "Developer & Agentic AI stack complete"
 }
 
 # =============================================================================
@@ -479,7 +801,7 @@ install_bugbounty() {
   go_install "github.com/lc/gau/v2/cmd/gau@latest"                               gau
   go_install "github.com/hakluke/hakrawler@latest"                                hakrawler
   go_install "github.com/tomnomnom/waybackurls@latest"                            waybackurls
-  go_install "github.com/OWASP/Amass/v4/...@latest"                              amass
+  go_install "github.com/owasp-amass/amass/v4/...@latest"                         amass
   go_install "github.com/hahwul/dalfox/v2@latest"                                dalfox
 
   # macOS cask tools
@@ -560,8 +882,8 @@ install_ai_llm() {
     pipx_install "$tool"
   done
 
-  # npm tools
-  command -v npm &>/dev/null || pkg_install node npm
+  # Node & npm tools
+  command -v node &>/dev/null || install_node
   npm_global_install promptfoo
 
   # Ollama — local LLM runtime
@@ -585,7 +907,7 @@ install_ai_llm() {
 install_mcp() {
   step "MCP / Agent security tools"
 
-  command -v npm &>/dev/null || pkg_install node npm
+  command -v node &>/dev/null || install_node
   npm_global_install @modelcontextprotocol/inspector
 
   pipx_install semgrep   2>/dev/null || pkg_install semgrep
@@ -669,7 +991,95 @@ install_workflow() {
 }
 
 # =============================================================================
-# 8 — WRITE CONFIG FILES
+# SYSTEM DOCTOR & ENVIRONMENT AUDIT
+# =============================================================================
+sec_doctor() {
+  step "Security Terminal Doctor & Diagnostic Audit"
+  echo ""
+  echo -e "${BOLD}${CYAN}  ╔══════════════════════════════════════════════════════════════════╗${RESET}"
+  echo -e "${BOLD}${CYAN}  ║           SECURITY TERMINAL ENVIRONMENT AUDIT                    ║${RESET}"
+  echo -e "${BOLD}${CYAN}  ╚══════════════════════════════════════════════════════════════════╝${RESET}"
+  echo ""
+
+  _doc_item() {
+    local name=$1
+    local cmd=$2
+    local ver_cmd=${3:-}
+    if command -v "$cmd" &>/dev/null; then
+      local ver=""
+      [[ -n "$ver_cmd" ]] && ver=$(eval "$ver_cmd" 2>/dev/null | head -1)
+      printf "  ${GREEN}[✓]${RESET} %-26s ${DIM}%s${RESET}\n" "$name" "$ver"
+    else
+      printf "  ${RED}[✗]${RESET} %-26s ${YELLOW}not installed${RESET}\n" "$name"
+    fi
+  }
+
+  echo -e "${BOLD}${YELLOW}Core Shell & Terminal:${RESET}"
+  _doc_item "Zsh Shell" "zsh" "zsh --version"
+  _doc_item "tmux" "tmux" "tmux -V"
+  _doc_item "fzf (Fuzzy Finder)" "fzf" "fzf --version"
+  _doc_item "bat (Cat with wings)" "bat" "bat --version"
+  _doc_item "eza (Modern ls)" "eza" "eza --version"
+  _doc_item "zoxide (Smart cd)" "zoxide" "zoxide --version"
+  _doc_item "ripgrep (rg)" "rg" "rg --version"
+  _doc_item "fd (Modern find)" "fd" "fd --version"
+  _doc_item "git-delta (Git diff)" "delta" "delta --version"
+
+  echo -e "\n${BOLD}${YELLOW}Developer & Agentic AI Stack:${RESET}"
+  _doc_item "Node.js" "node" "node -v"
+  _doc_item "npm" "npm" "npm -v"
+  _doc_item "Claude Code CLI" "claude" "claude --version"
+  _doc_item "Visual Studio Code" "code" "code --version"
+  _doc_item "Go (Golang)" "go" "go version"
+  _doc_item "Python 3" "python3" "python3 --version"
+  _doc_item "pipx" "pipx" "pipx --version"
+
+  echo -e "\n${BOLD}${YELLOW}Offensive Security & Bug Bounty:${RESET}"
+  _doc_item "nmap" "nmap" "nmap --version"
+  _doc_item "nuclei" "nuclei" "nuclei -version"
+  _doc_item "subfinder" "subfinder" "subfinder -version"
+  _doc_item "httpx" "httpx" "httpx -version"
+  _doc_item "katana" "katana" "katana -version"
+  _doc_item "dnsx" "dnsx" "dnsx -version"
+  _doc_item "ffuf" "ffuf" "ffuf -V"
+  _doc_item "sqlmap" "sqlmap" "sqlmap --version"
+  _doc_item "hydra" "hydra" "hydra -h 2>&1 | head -1"
+  _doc_item "gobuster" "gobuster" "gobuster version"
+  _doc_item "mitmproxy" "mitmproxy" "mitmproxy --version"
+
+  echo -e "\n${BOLD}${YELLOW}Cloud & AI Security:${RESET}"
+  _doc_item "AWS CLI" "aws" "aws --version"
+  _doc_item "Azure CLI" "az" "az --version"
+  _doc_item "Google Cloud SDK" "gcloud" "gcloud --version"
+  _doc_item "trufflehog" "trufflehog" "trufflehog --version"
+  _doc_item "gitleaks" "gitleaks" "gitleaks version"
+  _doc_item "prowler" "prowler" "prowler -v"
+  _doc_item "Ollama" "ollama" "ollama --version"
+  _doc_item "Promptfoo" "promptfoo" "promptfoo --version"
+  _doc_item "MCP Inspector" "npx" "command -v npx &>/dev/null && echo 'ready via npx' || false"
+
+  echo -e "\n${BOLD}${YELLOW}Workflow & Config Files:${RESET}"
+  _doc_item "lazygit" "lazygit" "lazygit --version"
+  _doc_item "jq" "jq" "jq --version"
+  _doc_item "yq" "yq" "yq --version"
+  _doc_item "GitHub CLI (gh)" "gh" "gh --version"
+
+  # Dotfiles audit
+  echo ""
+  for cfg in "$HOME/.zshrc" "$HOME/.tmux.conf" "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/pentest.zsh" "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/welcome.zsh"; do
+    if [[ -f "$cfg" ]]; then
+      printf "  ${GREEN}[✓]${RESET} %-26s ${DIM}found (${cfg})${RESET}\n" "$(basename "$cfg")"
+    else
+      printf "  ${RED}[✗]${RESET} %-26s ${YELLOW}missing${RESET}\n" "$(basename "$cfg")"
+    fi
+  done
+
+  echo ""
+  echo -e "${BOLD}${CYAN}  ════════════════════════════════════════════════════════════════════${RESET}"
+}
+
+# =============================================================================
+# CONFIG FILES WRITER
 # =============================================================================
 write_configs() {
   step "Writing config files"
@@ -680,18 +1090,15 @@ write_configs() {
   local MACOS_PLUGIN=""
   local LOCAL_IP_CMD=""
   local VPN_CHECK_CMD=""
-  local BREW_PATH=""
 
   if [[ "$OS" == "Darwin" ]]; then
     MACOS_PLUGIN="macos"
     LOCAL_IP_CMD='ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "N/A"'
     VPN_IFACE="utun1"
-    BREW_PATH="export PATH=\"\$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH\""
   else
     MACOS_PLUGIN=""
     LOCAL_IP_CMD='hostname -I 2>/dev/null | awk "{print \$1}" || ip -4 addr show | grep -oP "(?<=inet\\s)\\d+(\\.\\d+){3}" | grep -v 127 | head -1'
     VPN_IFACE="tun0"
-    BREW_PATH="export PATH=\"\$HOME/.local/bin:\$HOME/go/bin:\$PATH\""
   fi
 
   # ─────────────────────────────────────────────────────────────────────────
@@ -754,6 +1161,8 @@ plugins=(
   python
   pip
   virtualenv
+  node
+  npm
   ssh-agent
   gpg-agent
   nmap
@@ -769,9 +1178,33 @@ plugins=(
 source \$ZSH/oh-my-zsh.sh
 
 # =============================================================================
-# PATH
+# Universal PATH & Environment Setup
 # =============================================================================
-${BREW_PATH}
+# 1. Homebrew (detect Apple Silicon / Intel / Linuxbrew)
+if [[ -d "/opt/homebrew/bin" ]]; then
+  export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH"
+elif [[ -d "/usr/local/bin" ]]; then
+  export PATH="/usr/local/bin:/usr/local/sbin:\$PATH"
+elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
+  export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:\$PATH"
+fi
+
+# 2. Local user binaries (pipx, yq, manual binaries)
+export PATH="\$HOME/.local/bin:\$PATH"
+
+# 3. Go language binaries
+export GOPATH="\$HOME/go"
+export PATH="\$HOME/go/bin:\$PATH"
+
+# 4. Cargo / Rust binaries
+export PATH="\$HOME/.cargo/bin:\$PATH"
+
+# 5. Node.js & npm global prefix (Claude Code, promptfoo, MCP inspector)
+export PATH="\$HOME/.npm-global/bin:\$PATH"
+if command -v npm &>/dev/null; then
+  _NPM_BIN="\$(npm config get prefix 2>/dev/null)/bin"
+  [[ -n "\$_NPM_BIN" && -d "\$_NPM_BIN" && ":\$PATH:" != *":\$_NPM_BIN:"* ]] && export PATH="\$_NPM_BIN:\$PATH"
+fi
 
 # =============================================================================
 # Key bindings
@@ -895,6 +1328,15 @@ alias yaml2json='yq -o json .'
 alias json2yaml='yq -P .'
 alias http='xh'
 
+# ─── Developer & Agentic AI ───────────────────────────────────────────────────
+alias cc='claude'
+alias claude-yolo='claude --dangerously-skip-permissions'
+alias c='code'
+alias c.='code .'
+alias nr='npm run'
+alias ni='npm install'
+alias doctor='sec-doctor'
+
 # =============================================================================
 # Functions
 # =============================================================================
@@ -1010,6 +1452,47 @@ subdomains() {
   done
   [[ -z "$wl" ]] && { echo "[-] SecLists not found"; return 1; }
   gobuster dns -d "$domain" -w "$wl" -t 50
+}
+
+sec-doctor() {
+  echo ""
+  echo "  ╔══ Security Terminal Health & Environment Audit ════════════╗"
+  _doc() {
+    local label=$1 cmd=$2
+    if command -v "$cmd" &>/dev/null; then
+      printf "  ║  \033[0;32m[✓]\033[0m %-22s \033[2m%s\033[0m\n" "$label" "$($cmd --version 2>/dev/null | head -1 | cut -c1-30)"
+    else
+      printf "  ║  \033[0;31m[✗]\033[0m %-22s \033[1;33mnot found\033[0m\n" "$label"
+    fi
+  }
+  _doc "Node.js" "node"
+  _doc "npm" "npm"
+  _doc "Claude Code" "claude"
+  _doc "VS Code" "code"
+  _doc "Go" "go"
+  _doc "Python 3" "python3"
+  _doc "pipx" "pipx"
+  _doc "nmap" "nmap"
+  _doc "nuclei" "nuclei"
+  _doc "subfinder" "subfinder"
+  _doc "httpx" "httpx"
+  _doc "ffuf" "ffuf"
+  _doc "sqlmap" "sqlmap"
+  _doc "AWS CLI" "aws"
+  _doc "Azure CLI" "az"
+  _doc "gcloud" "gcloud"
+  _doc "trufflehog" "trufflehog"
+  _doc "gitleaks" "gitleaks"
+  _doc "Ollama" "ollama"
+  _doc "lazygit" "lazygit"
+  _doc "tmux" "tmux"
+  _doc "fzf" "fzf"
+  _doc "bat" "bat"
+  _doc "eza" "eza"
+  _doc "zoxide" "zoxide"
+  _doc "ripgrep" "rg"
+  echo "  ╚════════════════════════════════════════════════════════════╝"
+  echo ""
 }
 PENTEST
   ok "pentest.zsh written"
@@ -1290,6 +1773,11 @@ _PENTEST_TIPS=(
   "Use 'garak' to run automated LLM vulnerability scans."
   "Run 'prowler' for cloud security posture assessment (AWS/Azure/GCP)."
   "Use 'direnv' — drop a .envrc in engagement folder for auto env load."
+  "Run 'claude' (or 'cc') to start Claude Code for terminal agentic coding."
+  "Use 'c .' to open the current directory in Visual Studio Code."
+  "Run 'doctor' (or 'sec-doctor') to audit all installed security & dev tools."
+  "Set terminal font to 'MesloLGS NF' or 'JetBrainsMono Nerd Font' for icons."
+  "Use 'claude-yolo' to run Claude Code with auto-approved permissions."
 )
 
 _random_tip() {
@@ -1334,6 +1822,15 @@ cheat() {
     "nmap_quick / nmap_full        —quick or full port scan" \
     "nmap_vuln <target>            —vuln script scan" \
     "scan <target>                 —full nmap → ./scans/<target>/"
+
+  _sec "DEV, CODING & AGENTIC AI" \
+    "claude (or cc)               —Claude Code agentic coding CLI" \
+    "claude-yolo                  —Claude Code without permission prompts" \
+    "code [path] / c.             —open VS Code in current/given path" \
+    "node -v / npm -v             —Node.js & npm runtime" \
+    "doctor (or sec-doctor)       —run system health check & audit" \
+    "mcpinspect                   —MCP inspector tool" \
+    "llmscan / llmchat            —garak LLM vuln scanner / ollama chat"
 
   _sec "WEB TESTING" \
     "proxyon / proxyoff            —toggle Burp proxy (:8080)" \
@@ -1390,7 +1887,7 @@ cheat() {
     "z <path>                      —zoxide smart jump"
 
   echo ""
-  echo -e "  ${_W_DIM}Filter: cheat <keyword>   e.g. cheat cloud | cheat jwt | cheat recon${_W_RESET}"
+  echo -e "  ${_W_DIM}Filter: cheat <keyword>   e.g. cheat cloud | cheat jwt | cheat dev | cheat recon${_W_RESET}"
   echo ""
 }
 
@@ -1447,7 +1944,7 @@ _show_welcome() {
   printf "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_DIM}%-18s${_W_RESET} ${_W_DIM}%-44s${_W_BOLD}${_W_CYAN}║${_W_RESET}\n" "AWS Profile:" "$aws_profile"
   echo -e "${_W_BOLD}${_W_CYAN}  ╠══════════════════════════════════════════════════════════════════╣${_W_RESET}"
   echo -e "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_BOLD}Quick ref:${_W_RESET} ${_W_GREEN}cheat${_W_RESET} or ${_W_GREEN}?${_W_RESET}        ${_W_BOLD}Filter:${_W_RESET} ${_W_GREEN}cheat <keyword>${_W_RESET}"
-  echo -e "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_BOLD}Categories:${_W_RESET} ${_W_YELLOW}recon  web  cloud  ai  mcp  shells  workflow${_W_RESET}"
+  echo -e "  ${_W_BOLD}${_W_CYAN}║${_W_RESET}  ${_W_BOLD}Categories:${_W_RESET} ${_W_YELLOW}recon  web  cloud  ai  mcp  dev  shells  workflow${_W_RESET}"
   echo -e "${_W_BOLD}${_W_CYAN}  ╠══════════════════════════════════════════════════════════════════╣${_W_RESET}"
   local tip_wrapped
   tip_wrapped=$(echo "$tip_text" | fold -s -w 64)
@@ -1548,82 +2045,163 @@ TMUXCONF
 show_menu() {
   clear
   echo ""
-  echo -e "${BOLD}${CYAN}  ╔═══════════════════════════════════════════════════════╗${RESET}"
-  echo -e "${BOLD}${CYAN}  ║        SECURITY TERMINAL SETUP                       ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ║        macOS / Linux — Unified Installer             ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ╠═══════════════════════════════════════════════════════╣${RESET}"
+  echo -e "${BOLD}${CYAN}  ╔═══════════════════════════════════════════════════════════════════╗${RESET}"
+  echo -e "${BOLD}${CYAN}  ║        SECURITY TERMINAL SETUP — ENHANCED EDITION                 ║${RESET}"
+  echo -e "${BOLD}${CYAN}  ║        macOS / Linux — Unified Hacker Environment Installer       ║${RESET}"
+  echo -e "${BOLD}${CYAN}  ╠═══════════════════════════════════════════════════════════════════╣${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  Detected: ${BOLD}$DISTRO${RESET} ($ARCH) — pkg: ${BOLD}$PKG_MGR${RESET}"
-  echo -e "${BOLD}${CYAN}  ╠═══════════════════════════════════════════════════════╣${RESET}"
+  echo -e "${BOLD}${CYAN}  ╠═══════════════════════════════════════════════════════════════════╣${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Select components to install:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}1${RESET}  Core terminal     ${DIM}OMZ plugins, p10k, fzf, bat, eza, tmux${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}2${RESET}  Pentest tools     ${DIM}nmap, sqlmap, hydra, john, gobuster...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}  Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}4${RESET}  Cloud security    ${DIM}awscli, azure, gcloud, prowler, gitleaks...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}5${RESET}  AI / LLM sec      ${DIM}garak, promptfoo, jwt_tool, ollama...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}6${RESET}  MCP / Agent sec   ${DIM}mcp-inspector, semgrep, detect-secrets${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}7${RESET}  Workflow tools    ${DIM}lazygit, jq, yq, gh, pandoc, obsidian...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}8${RESET}  Config files      ${DIM}.zshrc, pentest.zsh, welcome.zsh, .tmux.conf${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}1${RESET}   Core terminal     ${DIM}OMZ plugins, p10k, fzf, bat, eza, tmux${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}2${RESET}   Hacker Fonts      ${DIM}MesloLGS, JetBrains Mono, Fira Code, Hack...${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}   Node.js & npm     ${DIM}Modern LTS Node.js + safe non-root npm prefix${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}4${RESET}   Claude Code CLI   ${DIM}Anthropic Claude Code agentic coding CLI tool${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}5${RESET}   VS Code & CLI     ${DIM}Visual Studio Code editor & 'code' CLI${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}6${RESET}   Pentest tools     ${DIM}nmap, sqlmap, hydra, john, gobuster, SecLists${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}7${RESET}   Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf, katana${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}8${RESET}   Cloud security    ${DIM}awscli, azure, gcloud, prowler, gitleaks...${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}9${RESET}   AI / LLM sec      ${DIM}garak, promptfoo, jwt_tool, ollama...${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}10${RESET}  MCP / Agent sec   ${DIM}mcp-inspector, semgrep, detect-secrets${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Workflow tools    ${DIM}lazygit, jq, yq, gh, pandoc, obsidian...${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  Config files      ${DIM}.zshrc, pentest.zsh, welcome.zsh, .tmux.conf${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  System Doctor     ${DIM}Audit and verify all installed tools${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET}  Install everything"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}  Quit"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${YELLOW}A${RESET}   Install everything (Recommended for new setup)"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${CYAN}D${RESET}   Run System Doctor only"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${RED}Q${RESET}   Quit"
   echo -e "${BOLD}${CYAN}  ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ╚═══════════════════════════════════════════════════════╝${RESET}"
+  echo -e "${BOLD}${CYAN}  ╚═══════════════════════════════════════════════════════════════════╝${RESET}"
   echo ""
-  echo -e "  ${DIM}Enter choices separated by spaces  (e.g: 1 2 8)  or A for all:${RESET}"
+  echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 3 4 5 12) or A for all:${RESET}"
   echo -ne "  ${BOLD}> ${RESET}"
   read -r choices
 }
 
 run_selections() {
-  local input="${1:-}"
+  local input="$*"
+  [[ -z "$input" ]] && { echo "No components selected. Exiting."; exit 0; }
+
   local upper
   upper=$(echo "$input" | tr '[:lower:]' '[:upper:]')
 
-  if [[ "$upper" == *"Q"* && "$upper" != *[1-8A]* ]]; then
-    echo "Bye."; exit 0
-  fi
+  for token in $upper; do
+    if [[ "$token" == "Q" || "$token" == "QUIT" || "$token" == "EXIT" ]]; then
+      echo "Exiting."; exit 0
+    fi
+  done
 
-  [[ "$upper" == *"Q"* ]] && { echo "Exiting."; exit 0; }
+  for token in $upper; do
+    if [[ "$token" == "D" || "$token" == "DOC" || "$token" == "DOCTOR" || "$token" == "--DOCTOR" ]]; then
+      sec_doctor
+      exit 0
+    fi
+  done
 
   preflight
 
-  if [[ "$upper" == "A" || "$upper" == *"ALL"* ]]; then
-    install_core
-    install_pentest
-    install_bugbounty
-    install_cloud
-    install_ai_llm
-    install_mcp
-    install_workflow
-    write_configs
-  else
-    [[ "$upper" == *"1"* ]] && install_core
-    [[ "$upper" == *"2"* ]] && install_pentest
-    [[ "$upper" == *"3"* ]] && install_bugbounty
-    [[ "$upper" == *"4"* ]] && install_cloud
-    [[ "$upper" == *"5"* ]] && install_ai_llm
-    [[ "$upper" == *"6"* ]] && install_mcp
-    [[ "$upper" == *"7"* ]] && install_workflow
-    [[ "$upper" == *"8"* ]] && write_configs
-  fi
+  for token in $upper; do
+    if [[ "$token" == "A" || "$token" == "ALL" || "$token" == "--ALL" || "$token" == "-A" ]]; then
+      install_core
+      install_fonts "all"
+      install_node
+      install_claude
+      install_code
+      install_pentest
+      install_bugbounty
+      install_cloud
+      install_ai_llm
+      install_mcp
+      install_workflow
+      write_configs
+      sec_doctor
+      return
+    fi
+  done
+
+  # Process individual items
+  for item in $input; do
+    case "$item" in
+      1|--core)          install_core ;;
+      2|--fonts)         install_fonts "all" ;;
+      3|--node)          install_node ;;
+      4|--claude)        install_claude ;;
+      5|--code)          install_code ;;
+      dev|--dev)         install_dev ;;
+      6|--pentest)       install_pentest ;;
+      7|--bugbounty)     install_bugbounty ;;
+      8|--cloud)         install_cloud ;;
+      9|--ai)            install_ai_llm ;;
+      10|--mcp)          install_mcp ;;
+      11|--workflow)     install_workflow ;;
+      12|--config|--configs) write_configs ;;
+      13|d|D|--doctor)   sec_doctor ;;
+      *) warn "Unknown option: '$item' — skipping" ;;
+    esac
+  done
 }
 
 # =============================================================================
 # ENTRY POINT
 # =============================================================================
 detect_os
-show_menu
-run_selections "$choices"
+
+if [[ $# -gt 0 ]]; then
+  case "$1" in
+    -h|--help|help)
+      echo ""
+      echo -e "${BOLD}${CYAN}Hackers Terminal Setup — CLI Options${RESET}"
+      echo ""
+      echo "Usage: ./ter.sh [OPTIONS] [NUMBERS...]"
+      echo ""
+      echo "Options:"
+      echo "  -a, --all        Install all components"
+      echo "  --core           Install core terminal tools (OMZ, p10k, fzf, bat, etc.)"
+      echo "  --fonts          Install Hacker & Developer Nerd Fonts"
+      echo "  --node           Install Node.js LTS and configure safe npm prefix"
+      echo "  --claude         Install Claude Code CLI (@anthropic-ai/claude-code)"
+      echo "  --code           Install Visual Studio Code & 'code' CLI"
+      echo "  --dev            Install complete dev stack (Node + Claude Code + VS Code)"
+      echo "  --pentest        Install pentest tools"
+      echo "  --bugbounty      Install bug bounty tools"
+      echo "  --cloud          Install cloud security tools"
+      echo "  --ai             Install AI / LLM security tools"
+      echo "  --mcp            Install MCP / agent security tools"
+      echo "  --workflow       Install workflow tools"
+      echo "  --config         Write configuration files (.zshrc, pentest.zsh, etc.)"
+      echo "  -d, --doctor     Run system diagnostic audit"
+      echo "  -h, --help       Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  ./ter.sh                     # Launch interactive menu"
+      echo "  ./ter.sh --all               # Install complete hacker terminal"
+      echo "  ./ter.sh --fonts --dev       # Install fonts, Node, Claude Code, VS Code"
+      echo "  ./ter.sh 1 2 3 4 5 12        # Install specific numbered components"
+      echo "  ./ter.sh --doctor            # Audit current environment & tools"
+      echo ""
+      exit 0
+      ;;
+    *)
+      run_selections "$@"
+      ;;
+  esac
+else
+  show_menu
+  run_selections "$choices"
+fi
 
 # ─── Post-install summary ─────────────────────────────────────────────────────
 echo ""
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${RESET}"
-echo -e "${BOLD}${GREEN}  Done!${RESET}"
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${RESET}"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
+echo -e "${BOLD}${GREEN}  Setup Complete!${RESET}"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${CYAN}Next steps:${RESET}"
-echo -e "  1. ${YELLOW}Set font in terminal:${RESET} MesloLGS NF"
-echo -e "  2. ${YELLOW}Reload shell:${RESET}          ${BOLD}exec zsh${RESET}"
-echo -e "  3. ${YELLOW}Configure prompt:${RESET}      ${BOLD}p10k configure${RESET}"
-echo -e "  4. ${YELLOW}Open cheat sheet:${RESET}      ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
+echo -e "  1. ${YELLOW}Set terminal font:${RESET}  'MesloLGS NF' (p10k) or 'JetBrainsMono Nerd Font'"
+echo -e "  2. ${YELLOW}Reload shell:${RESET}       ${BOLD}exec zsh${RESET}"
+echo -e "  3. ${YELLOW}Configure prompt:${RESET}   ${BOLD}p10k configure${RESET}"
+echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}cc${RESET})"
+echo -e "  5. ${YELLOW}Open VS Code:${RESET}       ${BOLD}code .${RESET} (or ${BOLD}c .${RESET})"
+echo -e "  6. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
+echo -e "  7. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
+echo ""
