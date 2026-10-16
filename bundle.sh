@@ -102,6 +102,7 @@ if [[ $# -gt 0 ]]; then
       echo "  --shell-tools    Install Atuin (SQLite history), direnv, uv, btop, yazi, Starship"
       echo "  --mcp            Install preconfigured safe MCP Server Suite & sec-mcp CLI"
       echo "  --pentest        Install pentest tools (nmap, sqlmap, hydra, john, SecLists)"
+      echo "  --seclists       Download SecLists directly from GitHub to ~/pentest/wordlists"
       echo "  --bugbounty      Install bug bounty tools (subfinder, httpx, nuclei, ffuf, katana)"
       echo "  --ad-pivot       Install Active Directory & Pivoting tools (Ligolo-ng, Chisel, NetExec)"
       echo "  --web-api        Install Web & API security tools (Schemathesis, Kiterunner, Caido, Arjun)"

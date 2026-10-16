@@ -129,6 +129,7 @@ run_selections() {
       7|--shell-tools|--history)         install_shell_tools ;;
       8|--mcp)                           setup_mcp_suite ;;
       9|--pentest)                       install_pentest ;;
+      --seclists|--wordlists)            install_seclists ;;
       10|--bugbounty)                    install_bugbounty ;;
       11|--ad-pivot|--ad|--pivoting)     install_ad_pivoting ;;
       12|--web-api|--api-sec|--api)      install_web_api ;;

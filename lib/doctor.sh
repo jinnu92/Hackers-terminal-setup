@@ -70,6 +70,7 @@ sec_doctor() {
   _doc_item "hydra" "hydra" "hydra -h 2>&1 | head -1"
   _doc_item "gobuster" "gobuster" "gobuster version"
   _doc_item "mitmproxy" "mitmproxy" "mitmproxy --version"
+  _doc_item "SecLists Wordlists" "seclists" "[[ -d \"$HOME/pentest/wordlists/seclists/Discovery\" || -d /opt/seclists/Discovery || -d /usr/share/seclists/Discovery ]] && echo 'installed' || false"
 
   echo -e "\n${BOLD}${YELLOW}Active Directory & Pivoting:${RESET}"
   _doc_item "Ligolo-ng" "ligolo" "echo 'ready'"

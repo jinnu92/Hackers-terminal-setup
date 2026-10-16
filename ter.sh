@@ -1575,23 +1575,68 @@ install_mobile_re() {
 #  lib/pentest.sh — Core Offensive Security & Penetration Testing Tools
 # =============================================================================
 
+install_seclists() {
+  step "SecLists Wordlists (danielmiessler/SecLists)"
+
+  local target_dir=""
+  for d in "$HOME/pentest/wordlists/seclists" "/opt/seclists" "/usr/share/seclists" "/opt/homebrew/share/seclists"; do
+    if [[ -d "$d/Discovery" ]]; then
+      target_dir="$d"
+      break
+    fi
+  done
+
+  if [[ -n "$target_dir" ]]; then
+    ok "SecLists already installed at: $target_dir"
+  else
+    local seclists_dir="$HOME/pentest/wordlists/seclists"
+    mkdir -p "$HOME/pentest/wordlists"
+
+    log "Cloning danielmiessler/SecLists from GitHub (shallow --depth=1)..."
+    if git clone --depth=1 https://github.com/danielmiessler/SecLists.git "$seclists_dir"; then
+      ok "SecLists cloned successfully into $seclists_dir"
+    else
+      warn "git clone failed. Falling back to curl tarball download..."
+      mkdir -p "$seclists_dir"
+      if curl -fsSL https://codeload.github.com/danielmiessler/SecLists/tar.gz/refs/heads/master | tar -xz -C "$seclists_dir" --strip-components=1; then
+        ok "SecLists downloaded and unpacked into $seclists_dir"
+      else
+        warn "Could not download SecLists. Clone manually: git clone --depth=1 https://github.com/danielmiessler/SecLists.git $seclists_dir"
+      fi
+    fi
+  fi
+
+  # Setup standard symlink /opt/seclists if accessible without blocking
+  if [[ -d "$HOME/pentest/wordlists/seclists" && ! -e "/opt/seclists" ]]; then
+    if [[ -w "/opt" ]]; then
+      ln -sfn "$HOME/pentest/wordlists/seclists" /opt/seclists 2>/dev/null || true
+    elif sudo -n true 2>/dev/null; then
+      sudo ln -sfn "$HOME/pentest/wordlists/seclists" /opt/seclists 2>/dev/null || true
+    fi
+  fi
+
+  # Expose $SECLISTS in current session
+  if [[ -d "$HOME/pentest/wordlists/seclists/Discovery" ]]; then
+    export SECLISTS="$HOME/pentest/wordlists/seclists"
+    export WORDLISTS="$HOME/pentest/wordlists/seclists"
+  elif [[ -d "/opt/seclists/Discovery" ]]; then
+    export SECLISTS="/opt/seclists"
+    export WORDLISTS="/opt/seclists"
+  fi
+}
+
 install_pentest() {
   step "Pentest tools"
 
   for pkg in nmap netcat wget curl httpie gobuster hydra sqlmap \
-             masscan tcpdump openssl gpg python3 pipx seclists john; do
+             masscan tcpdump openssl gpg python3 pipx john; do
     pkg_install "$pkg"
   done
 
   if [[ "$OS" == "Linux" ]]; then
     pkg_install hashcat wireshark-cli
-    if [[ ! -d "/opt/seclists" ]]; then
-      log "Cloning SecLists to /opt/seclists..."
-      sudo git clone --depth=1 https://github.com/danielmiessler/SecLists.git /opt/seclists 2>/dev/null || \
-        warn "SecLists clone failed — clone manually to /opt/seclists"
-    else
-      info "SecLists already at /opt/seclists"
-    fi
+  elif [[ "$OS" == "Darwin" ]]; then
+    pkg_install hashcat
   fi
 
   # Python pentest tools
@@ -1601,6 +1646,9 @@ install_pentest() {
     pipx_install "$tool"
   done
   pipx list 2>/dev/null | grep -qE "crackmapexec|netexec" || pipx_install netexec || true
+
+  # Download SecLists directly from GitHub (not available in brew)
+  install_seclists
 
   ok "Pentest tools done"
 }
@@ -2300,6 +2348,7 @@ sec_doctor() {
   _doc_item "hydra" "hydra" "hydra -h 2>&1 | head -1"
   _doc_item "gobuster" "gobuster" "gobuster version"
   _doc_item "mitmproxy" "mitmproxy" "mitmproxy --version"
+  _doc_item "SecLists Wordlists" "seclists" "[[ -d \"$HOME/pentest/wordlists/seclists/Discovery\" || -d /opt/seclists/Discovery || -d /usr/share/seclists/Discovery ]] && echo 'installed' || false"
 
   echo -e "\n${BOLD}${YELLOW}Active Directory & Pivoting:${RESET}"
   _doc_item "Ligolo-ng" "ligolo" "echo 'ready'"
@@ -2582,6 +2631,17 @@ else
   alias listening='ss -tulnp'
   alias connections='ss -tnp state established'
 fi
+
+# ─── Wordlists & SecLists Path Auto-Discovery ────────────────────────────────
+for _d in "$HOME/pentest/wordlists/seclists" /opt/seclists /usr/share/seclists /opt/homebrew/share/seclists "$HOME/.local/share/seclists"; do
+  if [[ -d "$_d/Discovery" ]]; then
+    export SECLISTS="$_d"
+    export SEC_LISTS="$_d"
+    export WORDLISTS="$_d"
+    break
+  fi
+done
+
 alias myip='curl -s https://ipinfo.io/json | python3 -m json.tool'
 alias ports='netstat -tulnp 2>/dev/null || ss -tulnp 2>/dev/null'
 
@@ -2728,11 +2788,11 @@ webfuzz() {
   local url=$1
   [[ -z "$url" ]] && { echo "Usage: webfuzz <url>"; return 1; }
   local wl
-  for d in /opt/homebrew/share/seclists /opt/seclists /usr/share/seclists; do
-    [[ -f "$d/Discovery/Web-Content/directory-list-2.3-medium.txt" ]] && \
+  for d in "$SECLISTS" "$HOME/pentest/wordlists/seclists" /opt/seclists /usr/share/seclists /opt/homebrew/share/seclists; do
+    [[ -n "$d" && -f "$d/Discovery/Web-Content/directory-list-2.3-medium.txt" ]] && \
       wl="$d/Discovery/Web-Content/directory-list-2.3-medium.txt" && break
   done
-  [[ -z "$wl" ]] && { echo "[-] SecLists not found"; return 1; }
+  [[ -z "$wl" ]] && { echo "[-] SecLists not found. Run './ter.sh --seclists' to download it."; return 1; }
   ffuf -u "$url/FUZZ" -w "$wl" -mc 200,301,302,403 -o "ffuf_$(date +%H%M%S).json" -of json
 }
 
@@ -2740,11 +2800,11 @@ subdomains() {
   local domain=$1
   [[ -z "$domain" ]] && { echo "Usage: subdomains <domain>"; return 1; }
   local wl
-  for d in /opt/homebrew/share/seclists /opt/seclists /usr/share/seclists; do
-    [[ -f "$d/Discovery/DNS/subdomains-top1million-5000.txt" ]] && \
+  for d in "$SECLISTS" "$HOME/pentest/wordlists/seclists" /opt/seclists /usr/share/seclists /opt/homebrew/share/seclists; do
+    [[ -n "$d" && -f "$d/Discovery/DNS/subdomains-top1million-5000.txt" ]] && \
       wl="$d/Discovery/DNS/subdomains-top1million-5000.txt" && break
   done
-  [[ -z "$wl" ]] && { echo "[-] SecLists not found"; return 1; }
+  [[ -z "$wl" ]] && { echo "[-] SecLists not found. Run './ter.sh --seclists' to download it."; return 1; }
   gobuster dns -d "$domain" -w "$wl" -t 50
 }
 
@@ -3086,10 +3146,13 @@ TMUXCONF
   # ─── Workspace ────────────────────────────────────────────────────────────
   mkdir -p "$HOME/pentest/"{bb,cloud,ai_sec,mcp_sec,reports,tools,wordlists}
   mkdir -p "$HOME/workspace"
-  [[ "$OS" == "Darwin" ]] && \
-    ln -sf /opt/homebrew/share/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
-  [[ "$OS" == "Linux" ]] && [[ -d /opt/seclists ]] && \
+  if [[ -d "$HOME/pentest/wordlists/seclists" ]]; then
+    ok "SecLists found in $HOME/pentest/wordlists/seclists"
+  elif [[ -d /opt/seclists ]]; then
     ln -sf /opt/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
+  elif [[ -d /usr/share/seclists ]]; then
+    ln -sf /usr/share/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
+  fi
   ok "~/pentest/ & ~/workspace/ directories ready"
 
   ok "All config files written"
@@ -3228,6 +3291,7 @@ run_selections() {
       7|--shell-tools|--history)         install_shell_tools ;;
       8|--mcp)                           setup_mcp_suite ;;
       9|--pentest)                       install_pentest ;;
+      --seclists|--wordlists)            install_seclists ;;
       10|--bugbounty)                    install_bugbounty ;;
       11|--ad-pivot|--ad|--pivoting)     install_ad_pivoting ;;
       12|--web-api|--api-sec|--api)      install_web_api ;;
@@ -3274,6 +3338,7 @@ if [[ $# -gt 0 ]]; then
       echo "  --shell-tools    Install Atuin (SQLite history), direnv, uv, btop, yazi, Starship"
       echo "  --mcp            Install preconfigured safe MCP Server Suite & sec-mcp CLI"
       echo "  --pentest        Install pentest tools (nmap, sqlmap, hydra, john, SecLists)"
+      echo "  --seclists       Download SecLists directly from GitHub to ~/pentest/wordlists"
       echo "  --bugbounty      Install bug bounty tools (subfinder, httpx, nuclei, ffuf, katana)"
       echo "  --ad-pivot       Install Active Directory & Pivoting tools (Ligolo-ng, Chisel, NetExec)"
       echo "  --web-api        Install Web & API security tools (Schemathesis, Kiterunner, Caido, Arjun)"

@@ -209,6 +209,17 @@ else
   alias listening='ss -tulnp'
   alias connections='ss -tnp state established'
 fi
+
+# ─── Wordlists & SecLists Path Auto-Discovery ────────────────────────────────
+for _d in "$HOME/pentest/wordlists/seclists" /opt/seclists /usr/share/seclists /opt/homebrew/share/seclists "$HOME/.local/share/seclists"; do
+  if [[ -d "$_d/Discovery" ]]; then
+    export SECLISTS="$_d"
+    export SEC_LISTS="$_d"
+    export WORDLISTS="$_d"
+    break
+  fi
+done
+
 alias myip='curl -s https://ipinfo.io/json | python3 -m json.tool'
 alias ports='netstat -tulnp 2>/dev/null || ss -tulnp 2>/dev/null'
 
@@ -355,11 +366,11 @@ webfuzz() {
   local url=$1
   [[ -z "$url" ]] && { echo "Usage: webfuzz <url>"; return 1; }
   local wl
-  for d in /opt/homebrew/share/seclists /opt/seclists /usr/share/seclists; do
-    [[ -f "$d/Discovery/Web-Content/directory-list-2.3-medium.txt" ]] && \
+  for d in "$SECLISTS" "$HOME/pentest/wordlists/seclists" /opt/seclists /usr/share/seclists /opt/homebrew/share/seclists; do
+    [[ -n "$d" && -f "$d/Discovery/Web-Content/directory-list-2.3-medium.txt" ]] && \
       wl="$d/Discovery/Web-Content/directory-list-2.3-medium.txt" && break
   done
-  [[ -z "$wl" ]] && { echo "[-] SecLists not found"; return 1; }
+  [[ -z "$wl" ]] && { echo "[-] SecLists not found. Run './ter.sh --seclists' to download it."; return 1; }
   ffuf -u "$url/FUZZ" -w "$wl" -mc 200,301,302,403 -o "ffuf_$(date +%H%M%S).json" -of json
 }
 
@@ -367,11 +378,11 @@ subdomains() {
   local domain=$1
   [[ -z "$domain" ]] && { echo "Usage: subdomains <domain>"; return 1; }
   local wl
-  for d in /opt/homebrew/share/seclists /opt/seclists /usr/share/seclists; do
-    [[ -f "$d/Discovery/DNS/subdomains-top1million-5000.txt" ]] && \
+  for d in "$SECLISTS" "$HOME/pentest/wordlists/seclists" /opt/seclists /usr/share/seclists /opt/homebrew/share/seclists; do
+    [[ -n "$d" && -f "$d/Discovery/DNS/subdomains-top1million-5000.txt" ]] && \
       wl="$d/Discovery/DNS/subdomains-top1million-5000.txt" && break
   done
-  [[ -z "$wl" ]] && { echo "[-] SecLists not found"; return 1; }
+  [[ -z "$wl" ]] && { echo "[-] SecLists not found. Run './ter.sh --seclists' to download it."; return 1; }
   gobuster dns -d "$domain" -w "$wl" -t 50
 }
 
@@ -713,10 +724,13 @@ TMUXCONF
   # ─── Workspace ────────────────────────────────────────────────────────────
   mkdir -p "$HOME/pentest/"{bb,cloud,ai_sec,mcp_sec,reports,tools,wordlists}
   mkdir -p "$HOME/workspace"
-  [[ "$OS" == "Darwin" ]] && \
-    ln -sf /opt/homebrew/share/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
-  [[ "$OS" == "Linux" ]] && [[ -d /opt/seclists ]] && \
+  if [[ -d "$HOME/pentest/wordlists/seclists" ]]; then
+    ok "SecLists found in $HOME/pentest/wordlists/seclists"
+  elif [[ -d /opt/seclists ]]; then
     ln -sf /opt/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
+  elif [[ -d /usr/share/seclists ]]; then
+    ln -sf /usr/share/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
+  fi
   ok "~/pentest/ & ~/workspace/ directories ready"
 
   ok "All config files written"
