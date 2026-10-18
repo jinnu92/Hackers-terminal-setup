@@ -8,7 +8,11 @@ Featuring modular architecture (`lib/`), an interactive visual simulator (`termi
 
 ## 🎨 Interactive Visual Terminal Preview
 
-Before installing, you can explore the look, feel, prompt themes, GPU configs, and capabilities in your browser:
+Before installing, you can explore the look, feel, prompt themes, GPU configs, and capabilities in your browser.
+
+**▶ Live demo: https://jinnu92.github.io/Hackers-terminal-setup/**
+
+Or open it locally:
 
 ```bash
 # Open in default browser
@@ -64,6 +68,7 @@ Hackers-terminal-setup/
 ├── ter.sh                # Universal entrypoint (dual-mode: sources lib/ or runs bundled)
 ├── bundle.sh             # Compiler: joins lib/*.sh into a standalone curl-pipeable script
 ├── terminal_preview.html # Interactive visual showcase and profile builder
+├── index.html            # GitHub Pages entry (redirects to terminal_preview.html)
 └── lib/
     ├── common.sh         # Colors, logging, banners, OS detection
     ├── pkg_mgr.sh        # Brew, apt, dnf, pacman unified wrapper & resolution
