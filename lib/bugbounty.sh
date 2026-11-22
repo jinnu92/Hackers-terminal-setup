@@ -69,7 +69,14 @@ install_bugbounty() {
 
   # Python tools (unpinned, latest from PyPI)
   _sec_py_tool arjun arjun || fail=1   # upstream last pushed Feb 2025; still installs from PyPI
-  _sec_py_tool bbot bbot   || fail=1   # BBOT recon framework
+  # BBOT is optional: some of its native dependencies ship no prebuilt package
+  # for every platform (macOS arm64 at the time of writing), and then it cannot
+  # be built without a full Rust and OpenSSL toolchain. Report that as skipped.
+  local bbot_skipped=0
+  if ! _sec_py_tool bbot bbot; then
+    bbot_skipped=1
+    warn "bbot could not be installed on this platform (no prebuilt packages for its dependencies); skipping it"
+  fi
 
   # Update nuclei templates
   if _sec_have nuclei; then
@@ -94,7 +101,11 @@ install_bugbounty() {
   _sec_verify "dalfox"          dalfox || fail=1
   _sec_verify "Caido CLI"       caido-cli || fail=1
   _sec_verify "arjun"           arjun || fail=1
-  _sec_verify "bbot"            bbot || fail=1
+  if [[ "$bbot_skipped" -eq 1 ]]; then
+    hts_result skip "bbot" "no prebuilt packages for this platform"
+  else
+    _sec_verify "bbot"            bbot || fail=1
+  fi
 
   if [[ $fail -ne 0 ]]; then
     warn "Bug bounty suite finished with failures (see warnings above)"
