@@ -15,7 +15,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   _HTS_PIPED=0
   _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ -d "$_HTS_ROOT/lib" ]]; then
-    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs lifecycle menu; do
+    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow hts_cli dashboard doctor doctor_hygiene configs_pentest configs_advanced configs_misc configs lifecycle menu; do
       [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
     done
   fi
@@ -600,6 +600,8 @@ resolve_pkg() {
         wireshark-cli)  name="wireshark" ;;
         python3-venv|python3-pip) name="python" ;;
         python3)        name="python" ;;
+        # 'chisel' on Homebrew is an unrelated LLDB tool; ligolo-ng has no formula
+        chisel|ligolo-ng) name="" ;;
         *)              name="$pkg" ;;
       esac ;;
     apt)
@@ -629,7 +631,7 @@ resolve_pkg() {
         # Not in the stock Fedora/RHEL repos
         lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
         semgrep|gitleaks|trufflehog|yazi|xh|seclists|responder|chisel) name="" ;;
-        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner)  name="" ;;
+        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner|apktool)  name="" ;;
         *)              name="$pkg" ;;
       esac ;;
     pacman)
@@ -661,7 +663,7 @@ resolve_pkg() {
         pipx)           name="python3-pipx" ;;
         lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
         semgrep|gitleaks|trufflehog|yazi|xh|seclists|responder|chisel) name="" ;;
-        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner)  name="" ;;
+        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner|apktool)  name="" ;;
         *)              name="$pkg" ;;
       esac ;;
     *)                  name="$pkg" ;;
@@ -815,10 +817,31 @@ install_golang() {
   return "$rc"
 }
 
+# _pipx_pkg_name <spec> — distribution name from a pipx spec (name, name==1.2,
+# name[extra], git+https://host/user/repo.git@ref), lower-cased with _ as -.
+_pipx_pkg_name() {
+  local n=$1
+  case "$n" in
+    *://*) n="${n##*/}"; n="${n%%@*}"; n="${n%.git}" ;;
+    *)     n="${n%%[=<>~!@[ ;]*}" ;;
+  esac
+  printf '%s' "$n" | tr '[:upper:]_' '[:lower:]-'
+}
+
+# _pipx_has <spec> — succeeds when pipx already manages that package. pipx prints
+# lines such as "   package NAME 1.2.3, installed using Python 3.12".
+_pipx_has() {
+  local want
+  want="$(_pipx_pkg_name "$1")"
+  [[ -n "$want" ]] || return 1
+  pipx list 2>/dev/null | sed -n 's/^[[:space:]]*package \([^ ,]*\).*/\1/p' \
+    | tr '[:upper:]_' '[:lower:]-' | grep -qxF -- "$want"
+}
+
 pipx_install() {
   local pkg=$1
   export PATH="$HOME/.local/bin:$PATH"
-  if pipx list 2>/dev/null | grep -q "^  $pkg"; then
+  if _pipx_has "$pkg"; then
     info "$pkg already installed via pipx"
   else
     log "Installing $pkg via pipx..."
@@ -872,8 +895,10 @@ npm_global_install() {
 }
 
 go_install() {
-  local pkg=$1   # full go import path e.g. github.com/foo/bar@latest
+  local pkg=$1   # go import path, optionally pinned: github.com/foo/bar@v1.2.3
   local name=$2  # binary name to check
+  # A pin from the caller is kept as is; without one the owner wants the latest.
+  [[ "$pkg" == *@* ]] || pkg="${pkg}@latest"
   export GOPATH="$HOME/go"
   export PATH="$HOME/go/bin:$PATH"
   if command -v "$name" &>/dev/null; then
@@ -1005,11 +1030,11 @@ ensure_zsh() {
     warn "zsh not found — installing..."
     case "$PKG_MGR" in
       brew)   brew install zsh ;;
-      apt)    sudo apt-get install -y zsh ;;
-      dnf)    sudo dnf install -y zsh ;;
-      yum)    sudo yum install -y zsh ;;
-      pacman) sudo pacman -S --noconfirm zsh ;;
-      zypper) sudo zypper install -y zsh ;;
+      apt)    _sudo apt-get install -y zsh ;;
+      dnf)    _sudo dnf install -y zsh ;;
+      yum)    _sudo yum install -y zsh ;;
+      pacman) _sudo pacman -S --noconfirm zsh ;;
+      zypper) _sudo zypper install -y zsh ;;
     esac
     command -v zsh &>/dev/null || { err "zsh install failed"; return 1; }
     ok "zsh installed: $(zsh --version)"
@@ -1021,7 +1046,7 @@ ensure_zsh() {
   zsh_path=$(command -v zsh)
   if [[ "${SHELL:-}" != "$zsh_path" ]]; then
     warn "Default shell is ${SHELL:-unknown} — changing to zsh..."
-    grep -qF "$zsh_path" /etc/shells || echo "$zsh_path" | sudo tee -a /etc/shells
+    grep -qF "$zsh_path" /etc/shells || echo "$zsh_path" | _sudo tee -a /etc/shells
     chsh -s "$zsh_path" || warn "chsh failed — run manually: chsh -s $zsh_path"
     ok "Default shell set to $zsh_path — takes effect on next login"
   else
@@ -1252,7 +1277,12 @@ install_node() {
     local interp=""
     case "$PKG_MGR" in
       brew)
-        pkg_install node || warn "brew install node failed"
+        if [[ "$current_version" -gt 0 ]] && brew list node &>/dev/null; then
+          # pkg_install would skip a formula that is "already installed"
+          brew upgrade node || warn "brew upgrade node failed"
+        else
+          pkg_install node || warn "brew install node failed"
+        fi
         ;;
       apt)
         log "Setting up NodeSource LTS repository for Debian/Ubuntu..."
@@ -1274,6 +1304,11 @@ install_node() {
         ;;
     esac
     hash -r 2>/dev/null || true
+    if command -v node &>/dev/null; then
+      current_version=$(node -v | sed 's/v//' | cut -d. -f1)
+      [[ "$current_version" -ge "$min_version" ]] || \
+        warn "Node.js $(node -v) on PATH is still below v${min_version} (another install or version manager may shadow it)"
+    fi
   fi
 
   # Configure npm global directory without sudo
@@ -3929,6 +3964,340 @@ install_workflow() {
 
 # ─── End: lib/workflow.sh ────────────────────────────────────────────
 
+# ─── Begin: lib/hts_cli.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/hts_cli.sh — Runtime settings file + the `hts` command
+#    ~/.config/hts/config            user settings (never overwritten, never tracked)
+#    ~/.local/bin/hts                the command (bash 3.2 compatible)
+#    ~/.local/share/hts/ter.sh       installer copy that `hts doctor|update|...` runs
+# =============================================================================
+
+HTS_SETTING_KEYS="welcome welcome_ip tips prompt"
+
+# hts_config_file — path of the settings file
+hts_config_file() {
+  printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/hts/config"
+}
+
+# hts_setting_default <key> — default value of a setting
+hts_setting_default() {
+  case "$1" in
+    welcome)    echo "full" ;;
+    welcome_ip) echo "show" ;;
+    tips)       echo "on" ;;
+    prompt)     _hts_prompt_choice ;;
+  esac
+}
+
+# hts_setting_valid <key> <value> — succeed when value is allowed for key
+hts_setting_valid() {
+  case "$1=$2" in
+    welcome=full|welcome=compact|welcome=off) return 0 ;;
+    welcome_ip=show|welcome_ip=hide) return 0 ;;
+    tips=on|tips=off) return 0 ;;
+    prompt=p10k|prompt=starship) return 0 ;;
+  esac
+  return 1
+}
+
+# hts_setting_get <key> — effective value (last valid line wins, else default).
+# Reads line by line; the file is never sourced or evaluated.
+hts_setting_get() {
+  local key=$1 file line val=""
+  file="$(hts_config_file)"
+  if [[ -r "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      case "$line" in
+        "$key"=*) hts_setting_valid "$key" "${line#*=}" && val="${line#*=}" ;;
+      esac
+    done < "$file"
+  fi
+  [[ -n "$val" ]] || val="$(hts_setting_default "$key")"
+  printf '%s\n' "$val"
+}
+
+# hts_settings_init — create the settings file with defaults on first install;
+# on later runs only append keys that are missing. Existing values, comments and
+# unknown lines are kept byte for byte. Never backed up, never tracked.
+hts_settings_init() {
+  local file dir key line found
+  file="$(hts_config_file)"
+  dir="$(dirname "$file")"
+  mkdir -p "$dir" || { warn "Cannot create $dir"; return 1; }
+  if [[ ! -f "$file" ]]; then
+    {
+      echo "# Hackers Terminal Setup settings — change with: hts config <key> <value>"
+      echo "# Plain key=value lines; read at shell start, never executed."
+      echo "# Allowed: welcome=full|compact|off  welcome_ip=show|hide  tips=on|off  prompt=p10k|starship"
+    } > "$file" || { warn "Cannot write $file"; return 1; }
+  fi
+  for key in $HTS_SETTING_KEYS; do
+    found=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      case "$line" in "$key"=*) found=1; break ;; esac
+    done < "$file"
+    [[ $found -eq 1 ]] || printf '%s=%s\n' "$key" "$(hts_setting_default "$key")" >> "$file"
+  done
+  return 0
+}
+
+# _hts_cli_script_source — print the installer file this run was started from,
+# or nothing when the script arrived on stdin (curl | bash).
+#   _HTS_PIPED and _HTS_ROOT are set by the bundle header at top level.
+#   live-development mode (lib/ next to ter.sh): <root>/ter.sh
+#   bundled single file: <root>/<name of the running script>
+_hts_cli_script_source() {
+  [[ "${_HTS_PIPED:-1}" == "0" && -n "${_HTS_ROOT:-}" ]] || return 1
+  local cand
+  if [[ -d "$_HTS_ROOT/lib" ]]; then
+    cand="$_HTS_ROOT/ter.sh"
+  else
+    cand="$_HTS_ROOT/$(basename "$0")"
+  fi
+  [[ -f "$cand" && -s "$cand" ]] || return 1
+  printf '%s\n' "$cand"
+}
+
+# _hts_cli_install_copy — place the installer copy at ~/.local/share/hts/ter.sh
+_hts_cli_install_copy() {
+  local share="$HOME/.local/share/hts" dest src tmp url
+  dest="$share/ter.sh"
+  mkdir -p "$share" || return 1
+  if src="$(_hts_cli_script_source)"; then
+    if [[ "$src" -ef "$dest" ]]; then
+      :
+    else
+      tmp="$dest.part.$$"
+      if cp "$src" "$tmp" && chmod 755 "$tmp" && mv -f "$tmp" "$dest"; then
+        ok "Installer copy for 'hts' commands: $dest"
+      else
+        rm -f "$tmp"; warn "Could not copy the installer to $dest"; return 1
+      fi
+    fi
+  else
+    # Piped run: no file on disk. Reuse an existing copy of the same version.
+    if [[ -f "$dest" ]] && grep -q "^HTS_VERSION=\"${HTS_VERSION}\"" "$dest" 2>/dev/null; then
+      ok "Installer copy already present: $dest"
+    else
+      url="https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/v${HTS_VERSION}/ter.sh"
+      tmp="$dest.dl.$$"
+      if hts_fetch "$url" "$tmp" && grep -q "^HTS_VERSION=" "$tmp" 2>/dev/null && chmod 755 "$tmp" && mv -f "$tmp" "$dest"; then
+        ok "Installer copy for 'hts' commands downloaded: $dest"
+      else
+        rm -f "$tmp"
+        warn "Could not download $url — 'hts doctor|update|...' will explain how to reinstall"
+        return 1
+      fi
+    fi
+  fi
+  hts_track_file "$dest"
+  return 0
+}
+
+# install_hts_cli — settings file, ~/.local/bin/hts and the installer copy. Idempotent
+# (runs its work once per installer run; later calls return immediately).
+install_hts_cli() {
+  [[ "${_HTS_CLI_DONE:-0}" == "1" ]] && return 0
+  _HTS_CLI_DONE=1
+  local bin="$HOME/.local/bin/hts" body defprompt rc=0
+  hts_settings_init || rc=1
+  mkdir -p "$HOME/.local/bin" || return 1
+  defprompt="$(_hts_prompt_choice)"
+  body="$(_hts_cli_body)"
+  body="${body//@@VERSION@@/$HTS_VERSION}"
+  body="${body//@@DEFPROMPT@@/$defprompt}"
+  backup_file "$bin"
+  if printf '%s\n' "$body" > "$bin.part.$$" && chmod 755 "$bin.part.$$" && mv -f "$bin.part.$$" "$bin"; then
+    hts_track_file "$bin"
+    ok "hts command installed: $bin"
+  else
+    rm -f "$bin.part.$$"; warn "Could not write $bin"; return 1
+  fi
+  _hts_cli_install_copy || true
+  return $rc
+}
+
+_hts_cli_body() {
+  cat << 'HTS_CLI_SCRIPT'
+# hts — manage Hackers Terminal Setup (generated by the installer, v@@VERSION@@)
+HTS_CLI_VERSION="@@VERSION@@"
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}/hts/config"
+TER_SH="${HTS_TER_SH:-$HOME/.local/share/hts/ter.sh}"
+KEYS="welcome welcome_ip tips prompt"
+INSTALL_CMD="curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash"
+
+allowed() {
+  case "$1" in
+    welcome)    echo "full compact off" ;;
+    welcome_ip) echo "show hide" ;;
+    tips)       echo "on off" ;;
+    prompt)     echo "p10k starship" ;;
+    *) return 1 ;;
+  esac
+}
+default_of() {
+  case "$1" in
+    welcome) echo full ;; welcome_ip) echo show ;; tips) echo on ;; prompt) echo "@@DEFPROMPT@@" ;;
+  esac
+}
+describe() {
+  case "$1" in
+    welcome)    echo "welcome screen in each new tab: full box, compact (1-2 lines) or off" ;;
+    welcome_ip) echo "hide masks IP addresses in the welcome screen" ;;
+    tips)       echo "rotating tip in the welcome screen" ;;
+    prompt)     echo "shell prompt: Powerlevel10k or Starship" ;;
+  esac
+}
+valid() { # key value
+  local v
+  for v in $(allowed "$1"); do [ "$v" = "$2" ] && return 0; done
+  return 1
+}
+# value of a key: last valid line wins, else default. The file is only read, never executed.
+current() {
+  local key=$1 val="" line
+  if [ -r "$CFG" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in "$key"=*) valid "$key" "${line#*=}" && val="${line#*=}" ;; esac
+    done < "$CFG"
+  fi
+  [ -n "$val" ] || val="$(default_of "$key")"
+  printf '%s\n' "$val"
+}
+write_defaults() {
+  local k
+  mkdir -p "$(dirname "$CFG")" || return 1
+  {
+    echo "# Hackers Terminal Setup settings — change with: hts config <key> <value>"
+    echo "# Plain key=value lines; read at shell start, never executed."
+    echo "# Allowed: welcome=full|compact|off  welcome_ip=show|hide  tips=on|off  prompt=p10k|starship"
+    for k in $KEYS; do printf '%s=%s\n' "$k" "$(default_of "$k")"; done
+  } > "$CFG"
+}
+set_value() { # key value — replace the line (keep everything else), append if missing
+  local key=$1 val=$2 line done_=0 tmp
+  [ -f "$CFG" ] || write_defaults || return 1
+  tmp="$CFG.tmp.$$"
+  : > "$tmp" || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "$key"=*) if [ $done_ -eq 0 ]; then printf '%s=%s\n' "$key" "$val" >> "$tmp"; done_=1; fi ;;
+      *) printf '%s\n' "$line" >> "$tmp" ;;
+    esac
+  done < "$CFG"
+  [ $done_ -eq 1 ] || printf '%s=%s\n' "$key" "$val" >> "$tmp"
+  mv -f "$tmp" "$CFG"
+}
+when_applies() {
+  echo "Takes effect in the next terminal tab (or run: exec zsh). No reinstall needed."
+}
+bad_key() {
+  echo "hts: unknown setting '$1'. Valid settings: $KEYS" >&2
+  exit 2
+}
+bad_value() {
+  echo "hts: invalid value '$2' for '$1'. Allowed: $(allowed "$1")" >&2
+  exit 2
+}
+
+cmd_config() {
+  local key val k
+  case "${1:-}" in
+    "")
+      echo "Settings file: $CFG"
+      for k in $KEYS; do
+        printf '  %-11s = %-9s allowed: %-17s default: %s\n' "$k" "$(current "$k")" "$(allowed "$k" | tr ' ' '|')" "$(default_of "$k")"
+        printf '  %-11s   %s\n' "" "$(describe "$k")"
+      done
+      echo
+      echo "Change:  hts config <key> <value>     Reset: hts config reset"
+      echo "Anything else: put it in ~/.zshrc.local (sourced last; the installer never touches it)."
+      ;;
+    reset)
+      write_defaults || { echo "hts: cannot write $CFG" >&2; exit 1; }
+      echo "Settings reset to defaults in $CFG"
+      when_applies
+      ;;
+    *)
+      key=$1
+      allowed "$key" >/dev/null || bad_key "$key"
+      if [ $# -eq 1 ]; then current "$key"; return 0; fi
+      [ $# -le 2 ] || { echo "hts: too many arguments. Usage: hts config <key> <value>" >&2; exit 2; }
+      val=$2
+      valid "$key" "$val" || bad_value "$key" "$val"
+      set_value "$key" "$val" || { echo "hts: cannot write $CFG" >&2; exit 1; }
+      echo "$key = $val"
+      when_applies
+      ;;
+  esac
+}
+
+delegate() { # installer-flag [args...]
+  if [ ! -f "$TER_SH" ]; then
+    echo "hts: the installer copy was not found at $TER_SH" >&2
+    echo "Reinstall to restore it:" >&2
+    echo "  $INSTALL_CMD" >&2
+    exit 1
+  fi
+  exec bash "$TER_SH" "$@"
+}
+
+usage() {
+  cat << EOF
+hts $HTS_CLI_VERSION — Hackers Terminal Setup
+
+Usage: hts <command> [args]
+
+Settings (take effect in the next terminal tab, no reinstall):
+  hts config                   Show current settings and allowed values
+  hts config <key> <value>     Change one setting
+  hts config reset             Restore defaults
+    welcome     full | compact | off     welcome screen (default full)
+    welcome_ip  show | hide              mask IP addresses in it (default show)
+    tips        on | off                 rotating tip (default on)
+    prompt      p10k | starship          shell prompt (default: install-time HTS_PROMPT, else p10k)
+
+Installer commands (run the installed copy of ter.sh):
+  hts doctor                   Audit the environment          (ter.sh --doctor)
+  hts status                   Show installed components      (--status)
+  hts update                   Check for a newer release      (--update)
+  hts uninstall                Restore backups / remove files (--uninstall)
+  hts restore [TS]             Restore backed-up files        (--restore)
+  hts list                     List components                (--list)
+  hts version                  Print the version              (--version)
+  hts dry-run <options>        Preview an install             (--dry-run ...)
+  hts help                     This help
+
+Files:
+  Settings        $CFG
+  Your overrides  ~/.zshrc.local (sourced last; never touched by the installer)
+  Installer copy  $TER_SH
+Uninstalling leaves the settings file in place (it is your data); delete it with:
+  rm -r "$(dirname "$CFG")"
+EOF
+}
+
+case "${1:-}" in
+  "")                usage ;;
+  help|-h|--help)    usage ;;
+  config)            shift; cmd_config "$@" ;;
+  doctor)            shift; delegate --doctor "$@" ;;
+  status)            shift; delegate --status "$@" ;;
+  update)            shift; delegate --update "$@" ;;
+  uninstall)         shift; delegate --uninstall "$@" ;;
+  restore)           shift; delegate --restore "$@" ;;
+  list)              shift; delegate --list "$@" ;;
+  dry-run)           shift; delegate --dry-run "$@" ;;
+  version|-V|--version)
+    if [ -f "$TER_SH" ]; then exec bash "$TER_SH" --version; fi
+    echo "hts $HTS_CLI_VERSION (installer copy not found at $TER_SH)" ;;
+  *) echo "hts: unknown command '$1'. Run 'hts help'." >&2; exit 2 ;;
+esac
+HTS_CLI_SCRIPT
+}
+
+# ─── End: lib/hts_cli.sh ────────────────────────────────────────────
+
 # ─── Begin: lib/dashboard.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/dashboard.sh — Modern Terminal Welcome Cockpit & Fastfetch Dashboard
@@ -4002,7 +4371,10 @@ FF_CFG
   hts_track_file "$ff_dir/config.jsonc"
   ok "Fastfetch configuration deployed"
 
-  # 3. Deploy modern welcome.zsh script
+  # 3. Settings file + `hts` command (the welcome script reads ~/.config/hts/config)
+  install_hts_cli || warn "hts command install had problems (see above)"
+
+  # 4. Deploy modern welcome.zsh script
   write_modern_welcome
   ok "Tactical Security Welcome Cockpit deployed to ~/.oh-my-zsh/custom/welcome.zsh"
 }
@@ -4017,6 +4389,23 @@ write_modern_welcome() {
 # =============================================================================
 # Modern Tactical Security Cockpit — High Performance (<15ms), Zero-Lag Welcome
 # =============================================================================
+
+# Settings: welcome=full|compact|off  welcome_ip=show|hide  tips=on|off
+# Read line by line from ~/.config/hts/config; never sourced or eval'd. Only exact
+# known key=value pairs are accepted, anything else keeps the default.
+# Change with: hts config <key> <value>
+_W_MODE=full; _W_IPMODE=show; _W_TIPS=on
+if [[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/hts/config" ]]; then
+  while IFS= read -r _hts_l || [[ -n $_hts_l ]]; do
+    case $_hts_l in
+      welcome=full|welcome=compact|welcome=off) _W_MODE=${_hts_l#welcome=} ;;
+      welcome_ip=show|welcome_ip=hide)          _W_IPMODE=${_hts_l#welcome_ip=} ;;
+      tips=on|tips=off)                         _W_TIPS=${_hts_l#tips=} ;;
+    esac
+  done < "${XDG_CONFIG_HOME:-$HOME/.config}/hts/config"
+  unset _hts_l
+fi
+[[ $_W_MODE == off ]] && return 0
 
 _W_RED='\033[38;5;203m';    _W_GREEN='\033[38;5;120m';  _W_YELLOW='\033[38;5;221m'
 _W_CYAN='\033[38;5;117m';   _W_BLUE='\033[38;5;111m';   _W_MAGENTA='\033[38;5;183m'
@@ -4047,6 +4436,7 @@ _PENTEST_TIPS=(
   "Use 'yazi' for lightning-fast async terminal file management with image previews."
   "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
   "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
+  "Run 'hts config' to switch the welcome screen (full/compact/off) or the prompt."
 )
 
 _random_tip() {
@@ -4068,6 +4458,7 @@ _get_vpn_info() {
     if ifconfig "$iface" 2>/dev/null | grep -q "inet "; then
       local vpn_ip
       vpn_ip=$(ifconfig "$iface" 2>/dev/null | grep "inet " | awk '{print $2}' | head -1)
+      [[ $_W_IPMODE == hide ]] && vpn_ip="x.x.x.x"
       echo -e "${_W_GREEN}● ACTIVE${_W_RESET} ${_W_DIM}(${iface}: ${vpn_ip})${_W_RESET}"
       return
     fi
@@ -4109,14 +4500,30 @@ _show_welcome() {
   [[ $- != *i* ]] && return
   [[ -n "$VSCODE_INJECTION" ]] && return
 
+  setopt localoptions extendedglob
   local local_ip vpn_info proxy_info ram_info uptime_str the_date tip_text os_label arch_label
-  local_ip=$(_get_local_ip)
+  if [[ $_W_IPMODE == hide ]]; then
+    local_ip="x.x.x.x"
+  else
+    local_ip=$(_get_local_ip)
+  fi
   vpn_info=$(_get_vpn_info)
   proxy_info=$(_get_proxy_info)
+  if [[ $_W_IPMODE == hide ]]; then   # mask any IPv4 address (tunnel, proxy URL)
+    vpn_info=${vpn_info//[0-9]##.[0-9]##.[0-9]##.[0-9]##/x.x.x.x}
+    proxy_info=${proxy_info//[0-9]##.[0-9]##.[0-9]##.[0-9]##/x.x.x.x}
+  fi
+  if [[ $_W_MODE == compact ]]; then
+    local c_tip=""
+    [[ $_W_TIPS == on ]] && c_tip=$(_random_tip)
+    echo -e "${_W_BOLD}${_W_PURPLE}⚡ HTS${_W_RESET} ${_W_DIM}IP${_W_RESET} ${local_ip} ${_W_DIM}• Tunnel${_W_RESET} ${vpn_info} ${_W_DIM}• Proxy${_W_RESET} ${proxy_info}"
+    [[ -n $c_tip ]] && echo -e "${_W_MAGENTA}💡${_W_RESET} ${_W_YELLOW}${c_tip}${_W_RESET}"
+    return 0
+  fi
   ram_info=$(_get_ram_info)
   uptime_str=$(_get_uptime_clean)
   the_date=$(date "+%a %d %b %H:%M")
-  tip_text=$(_random_tip)
+  [[ $_W_TIPS == on ]] && tip_text=$(_random_tip)
   os_label="$(uname -s)"
   arch_label="$(uname -m)"
 
@@ -4132,20 +4539,22 @@ _show_welcome() {
   printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
   printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
   printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
-  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}nxc${_W_RESET}\n"
-  echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
-  
-  local tip_wrapped
-  tip_wrapped=$(echo "$tip_text" | fold -s -w 67)
-  local first=1
-  while IFS= read -r line; do
-    if [[ $first -eq 1 ]]; then
-      printf "  ${_W_MAGENTA}${_W_BOLD}💡 TIP:${_W_RESET} ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
-      first=0
-    else
-      printf "         ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
-    fi
-  done <<< "$tip_wrapped"
+  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}hts config${_W_RESET}\n"
+  if [[ $_W_TIPS == on ]]; then
+    echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
+
+    local tip_wrapped
+    tip_wrapped=$(echo "$tip_text" | fold -s -w 67)
+    local first=1
+    while IFS= read -r line; do
+      if [[ $first -eq 1 ]]; then
+        printf "  ${_W_MAGENTA}${_W_BOLD}💡 TIP:${_W_RESET} ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
+        first=0
+      else
+        printf "         ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
+      fi
+    done <<< "$tip_wrapped"
+  fi
 
   echo -e "${_W_BOLD}${_W_CYAN}╰─────────────────────────────────────────────────────────────────────────────╯${_W_RESET}"
   echo ""
@@ -4171,7 +4580,10 @@ WELCOME_SCRIPT
 #  lib/doctor.sh — Security Terminal Doctor & Diagnostic Audit
 #
 #  READ-ONLY. Only `command -v`, `--version` style probes and reads of config
-#  files happen here: no installs, no writes, no network calls.
+#  files happen here: no installs, no writes, no network calls. Tools whose
+#  version probe is known to create files or phone home are presence-only
+#  (see _DOC_NOPROBE), and the remaining probes run with telemetry and update
+#  checks switched off.
 #
 #  Environment:  HTS_DOCTOR_FORMAT=json   print one JSON document, nothing else
 #  Exit status:  0 when every required item of every installed component is
@@ -4232,13 +4644,17 @@ _doc_ver() { # binary "args" -> prints a short version string
   local out="" tmo=""
   local -a va
   [[ -z "${2:-}" || "$2" == "-" ]] && return 0
+  [[ -n "${_DOC_PROBE_HOME:-}" ]] || return 0   # no scratch HOME: presence only
+  case "$_DOC_NOPROBE" in *" ${1##*/} "*) return 0 ;; esac
   read -r -a va <<< "$2"
   command -v timeout >/dev/null 2>&1 && tmo=timeout
   [[ -z "$tmo" ]] && command -v gtimeout >/dev/null 2>&1 && tmo=gtimeout
   if [[ -n "$tmo" ]]; then
-    out="$("$tmo" 5 "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
+    out="$(env "${_DOC_PROBE_ENV[@]}" \
+      "$tmo" 5 "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
   else
-    out="$("$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
+    out="$(env "${_DOC_PROBE_ENV[@]}" \
+      "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
   fi
   printf '%s\n' "$out" | grep -m1 -oE '[0-9]+\.[0-9]+(\.[0-9A-Za-z_+-]+)*' | head -n1 | cut -c1-13
 }
@@ -4368,6 +4784,7 @@ _doc_collect_items() {
   if [[ "$_DOC_OS" == "Darwin" ]]; then claude_cfg="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
   else claude_cfg="$HOME/.config/Claude/claude_desktop_config.json"; fi
   _b mcp "sec-mcp" sec-mcp "-"
+  _b mcp "github-mcp-server" github-mcp-server "-" opt
   _b mcp "MCP Inspector" mcp-inspector "-"
   _b mcp "detect-secrets" detect-secrets "--version"
   _b mcp "semgrep" semgrep "--version" opt
@@ -4422,6 +4839,8 @@ _doc_collect_items() {
   _b ad-pivot "Chisel" chisel "--version"
   _b ad-pivot+pentest "NetExec (nxc)" "nxc|netexec" "-"
   _b ad-pivot "BloodHound.py" bloodhound-python "-"
+  _b ad-pivot "BH CE ingestor" bloodhound-ce-python "-"
+  _b ad-pivot "BloodHound CLI" bloodhound-cli "-"
   _b ad-pivot "Certipy" certipy "-"
   _b ad-pivot "Responder" responder "-"
 
@@ -4472,6 +4891,7 @@ _doc_collect_items() {
   _b workflow "lazygit" lazygit "--version"
   _b workflow "xh" xh "--version" optlinux
   _b workflow "Obsidian" "app:Obsidian.app" "-" mac
+  _b workflow "hts command" hts "-" opt
 
   # 17 Tactical cockpit
   _b dashboard "fastfetch" fastfetch "--version"
@@ -4485,7 +4905,180 @@ _doc_collect_items() {
   _f config "advanced_pentest" "$zc/advanced_pentest.zsh"
 }
 
-# ─── Hygiene checks (read-only) ───────────────────────────────────────────────
+_doc_jesc() {
+  local s=$1
+  s="$(printf '%s' "$s" | LC_ALL=C tr -d '\000-\010\013\014\016-\037')"
+  s=${s//\\/\\\\}; s=${s//\"/\\\"}
+  s=${s//$'\t'/\\t}; s=${s//$'\n'/\\n}; s=${s//$'\r'/\\r}
+  printf '%s' "$s"
+}
+
+# ─── Rendering ────────────────────────────────────────────────────────────────
+_doc_cell() { # index -> prints one fixed-width cell (no newline)
+  local i=$1 mark txt
+  case "${_DI_ST[$i]}" in
+    installed)     mark="${GREEN}[✓]${RESET}"; txt="${_DI_VER[$i]}" ;;
+    missing)
+      if _doc_active "${_DI_OWN[$i]}"; then mark="${RED}[✗]${RESET}"; else mark="${DIM}[-]${RESET}"; fi
+      txt="${_DI_NOTE[$i]}" ;;
+    not_installed) mark="${DIM}[-]${RESET}"; txt="not installed" ;;
+    *)             mark="${DIM}[~]${RESET}"; txt="n/a" ;;
+  esac
+  printf '%b %-17.17s %-13.13s' "$mark" "${_DI_NAME[$i]}" "$txt"
+}
+
+_doc_render_text() {
+  local g i n=${#_DI_G[@]} col cnt inst miss opt na fail state
+  echo ""
+  echo -e "${BOLD}${CYAN}  ╔══════════════════════════════════════════════════════════════════╗${RESET}"
+  echo -e "${BOLD}${CYAN}  ║           SECURITY TERMINAL ENVIRONMENT AUDIT                    ║${RESET}"
+  echo -e "${BOLD}${CYAN}  ╚══════════════════════════════════════════════════════════════════╝${RESET}"
+  echo -e "  ${DIM}v$HTS_VERSION  $_DOC_OS $(uname -m)   ${GREEN}[✓]${RESET}${DIM} ok  ${RED}[✗]${RESET}${DIM} missing  [-] not installed  [~] n/a${RESET}"
+  [[ -n "$_DOC_MANI_NOTE" ]] && echo -e "  ${YELLOW}Note:${RESET} $_DOC_MANI_NOTE; reporting everything informationally."
+  _T_INST=0; _T_MISS=0; _T_OPT=0; _T_NA=0; _T_FAIL=0
+  for g in $_DOC_GROUPS; do
+    inst=0; miss=0; opt=0; na=0; fail=0; cnt=0
+    for ((i = 0; i < n; i++)); do
+      [[ "${_DI_G[$i]}" == "$g" ]] || continue
+      cnt=$((cnt + 1))
+      case "${_DI_ST[$i]}" in
+        installed) inst=$((inst + 1)) ;;
+        missing) miss=$((miss + 1)); _doc_active "${_DI_OWN[$i]}" && fail=$((fail + 1)) ;;
+        not_installed) opt=$((opt + 1)) ;;
+        *) na=$((na + 1)) ;;
+      esac
+    done
+    [[ $cnt -eq 0 ]] && continue
+    _T_INST=$((_T_INST + inst)); _T_MISS=$((_T_MISS + miss)); _T_OPT=$((_T_OPT + opt))
+    _T_NA=$((_T_NA + na)); _T_FAIL=$((_T_FAIL + fail))
+    if [[ "$_DOC_MODE" != "known" ]]; then state="${DIM}informational${RESET}"
+    elif _doc_active "$g"; then state="${CYAN}installed${RESET}"
+    else state="${DIM}not selected${RESET}"; fi
+    echo ""
+    printf '%b  %-20s%b %b  %b%d ok, %d missing, %d optional, %d n/a%b\n' \
+      "${BOLD}${YELLOW}" "$(_doc_gtitle "$g")" "${RESET}" "$state" "${DIM}" "$inst" "$miss" "$opt" "$na" "${RESET}"
+    col=0
+    for ((i = 0; i < n; i++)); do
+      [[ "${_DI_G[$i]}" == "$g" ]] || continue
+      if [[ $col -eq 0 ]]; then printf '  '; _doc_cell "$i"; col=1
+      else printf '  '; _doc_cell "$i"; printf '\n'; col=0; fi
+    done
+    [[ $col -eq 1 ]] && printf '\n'
+  done
+
+  echo ""
+  _doc_render_hygiene_text
+
+  echo ""
+  echo -e "${BOLD}${YELLOW}  State${RESET}"
+  printf '  %-12s %s\n' "Version" "$HTS_VERSION"
+  printf '  %-12s %s (%s entries)\n' "Manifest" "$HTS_MANIFEST" "$_DOC_MANI_N"
+  printf '  %-12s %s\n' "Log" "$HTS_LOG"
+  printf '  %-12s %s available\n' "Backups" "$_DOC_BACKUPS"
+
+  echo ""
+  echo -e "${BOLD}${CYAN}  ════════════════════════════════════════════════════════════════════${RESET}"
+  printf '  Total: %d ok, %d missing, %d optional, %d n/a, %d warnings\n' \
+    "$_T_INST" "$_T_MISS" "$_T_OPT" "$_T_NA" "$_DOC_WARNS"
+  if [[ "$_DOC_MODE" != "known" ]]; then
+    echo -e "  ${CYAN}Informational run:${RESET} nothing to verify against; exit status 0."
+  elif [[ $_T_FAIL -eq 0 ]]; then
+    echo -e "  ${GREEN}PASS${RESET} — everything belonging to installed components is present."
+  else
+    echo -e "  ${RED}FAIL${RESET} — $_T_FAIL required item(s) missing from installed components."
+  fi
+}
+
+_doc_render_json() {
+  local g i n=${#_DI_G[@]} gfirst=1 ifirst st
+  local inst=0 miss=0 opt=0 na=0 fail=0 state
+  printf '{"version":"%s","platform":{"os":"%s","arch":"%s"},"mode":"%s",' \
+    "$(_doc_jesc "$HTS_VERSION")" "$(_doc_jesc "$_DOC_OS")" "$(_doc_jesc "$(uname -m)")" \
+    "$([[ "$_DOC_MODE" == "known" ]] && echo manifest || echo informational)"
+  printf '"components":{'
+  for g in $_DOC_GROUPS; do
+    ifirst=1
+    [[ $gfirst -eq 0 ]] && printf ','
+    gfirst=0
+    printf '"%s":[' "$g"
+    for ((i = 0; i < n; i++)); do
+      [[ "${_DI_G[$i]}" == "$g" ]] || continue
+      st="${_DI_ST[$i]}"
+      case "$st" in
+        installed) inst=$((inst + 1)) ;;
+        missing) miss=$((miss + 1)); _doc_active "${_DI_OWN[$i]}" && fail=$((fail + 1)) ;;
+        not_installed) opt=$((opt + 1)) ;;
+        *) na=$((na + 1)) ;;
+      esac
+      [[ $ifirst -eq 0 ]] && printf ','
+      ifirst=0
+      printf '{"name":"%s","status":"%s"' "$(_doc_jesc "${_DI_NAME[$i]}")" "$st"
+      [[ "$st" == "installed" && -n "${_DI_VER[$i]}" ]] && printf ',"version":"%s"' "$(_doc_jesc "${_DI_VER[$i]}")"
+      printf '}'
+    done
+    printf ']'
+  done
+  printf '},"component_state":{'
+  gfirst=1
+  for g in $_DOC_GROUPS; do
+    [[ $gfirst -eq 0 ]] && printf ','
+    gfirst=0
+    if [[ "$_DOC_MODE" != "known" ]]; then state=unknown
+    elif _doc_active "$g"; then state=installed
+    else state=not_selected; fi
+    printf '"%s":"%s"' "$g" "$state"
+  done
+  _doc_render_hygiene_json
+  printf '],"state":{"manifest":"%s","manifest_entries":%s,"log":"%s","backups":%s},' \
+    "$(_doc_jesc "$HTS_MANIFEST")" "$_DOC_MANI_N" "$(_doc_jesc "$HTS_LOG")" "$_DOC_BACKUPS"
+  printf '"totals":{"installed":%d,"missing":%d,"not_installed":%d,"na":%d,"warnings":%d,"failing":%d},' \
+    "$inst" "$miss" "$opt" "$na" "$_DOC_WARNS" "$fail"
+  printf '"ok":%s}\n' "$([[ $fail -eq 0 ]] && echo true || echo false)"
+  _T_FAIL=$fail
+}
+
+_doc_main() {
+  local json=0
+  [[ "${HTS_DOCTOR_FORMAT:-}" == "json" ]] && json=1
+  _doc_reset
+  _doc_read_manifest
+  _doc_probe_setup
+  _doc_collect_items
+  _doc_probe_cleanup
+
+  _doc_run_hygiene
+  _T_FAIL=0
+  if [[ $json -eq 1 ]]; then _doc_render_json; else _doc_render_text; fi
+  [[ ${_T_FAIL:-0} -eq 0 ]]
+}
+
+sec_doctor() {
+  local old_path="$PATH" rc=0 d
+  if ! declare -F _doc_run_hygiene >/dev/null; then
+    err "lib/doctor_hygiene.sh is not loaded"; return 1
+  fi
+  for d in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/go/bin" "$HOME/.cargo/bin" \
+           /opt/homebrew/bin /usr/local/bin; do
+    case ":$PATH:" in *":$d:"*) ;; *) [[ -d "$d" ]] && PATH="$PATH:$d" ;; esac
+  done
+  if [[ "${HTS_DOCTOR_FORMAT:-}" != "json" ]]; then
+    step "Security Terminal Doctor & Diagnostic Audit"
+  fi
+  _doc_main || rc=$?
+  PATH="$old_path"
+  return "$rc"
+}
+
+# ─── End: lib/doctor.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/doctor_hygiene.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/doctor_hygiene.sh — Doctor: config & hygiene checks (read-only)
+#
+#  Sourced after lib/doctor.sh (uses _doc_hyg). Reads config files and runs
+#  read-only probes only: no installs, no writes.
+# =============================================================================
+
 _DOC_SECRET_RE='^(ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|BSA|sk-|xox[abp]-|AKIA)[A-Za-z0-9_./+=-]{16,}$'
 
 _doc_mcp_pkg() { # file label package-token  (npm or uvx package argument)
@@ -4607,6 +5200,54 @@ _doc_scan_misc() {
   fi
 }
 
+
+# Disk encryption (read-only, no sudo). The Atuin history database is not
+# encrypted by Atuin itself, so disk encryption is what protects it at rest.
+_DOC_ENC_WHY="Atuin's history database is not encrypted; disk encryption protects it at rest"
+
+_doc_check_disk_encryption() {
+  local nm="Disk encryption" out="" src="" fst="" types=""
+  if [[ "$_DOC_OS" == "Darwin" ]]; then
+    if ! command -v fdesetup >/dev/null 2>&1; then
+      _doc_hyg unknown "$nm" "unknown: fdesetup is not available. $_DOC_ENC_WHY" ""; return 0
+    fi
+    out="$(fdesetup status 2>&1 </dev/null)" || out=""
+    case "$out" in
+      *"FileVault is On"*)  _doc_hyg ok "$nm" "FileVault is on. $_DOC_ENC_WHY" "" ;;
+      *"FileVault is Off"*) _doc_hyg warn "$nm" "FileVault is off. $_DOC_ENC_WHY" \
+                              "System Settings → Privacy & Security → FileVault" ;;
+      *) _doc_hyg unknown "$nm" "unknown: could not read FileVault status. $_DOC_ENC_WHY" "" ;;
+    esac
+    return 0
+  fi
+  if ! command -v findmnt >/dev/null 2>&1; then
+    _doc_hyg unknown "$nm" "unknown: findmnt is not available. $_DOC_ENC_WHY" ""; return 0
+  fi
+  src="$(findmnt -n -o SOURCE --target "$HOME" 2>/dev/null </dev/null | head -n1)" || src=""
+  fst="$(findmnt -n -o FSTYPE --target "$HOME" 2>/dev/null </dev/null | head -n1)" || fst=""
+  case "$fst" in
+    ecryptfs|fuse.ecryptfs|fuse.gocryptfs|fuse.encfs)
+      _doc_hyg ok "$nm" "$HOME is on $fst. $_DOC_ENC_WHY" ""; return 0 ;;
+  esac
+  src="${src%%\[*}"
+  case "$src" in
+    /dev/*) ;;
+    *) _doc_hyg unknown "$nm" "unknown: home is not on a block device (${src:-no source}). $_DOC_ENC_WHY" ""
+       return 0 ;;
+  esac
+  if ! command -v lsblk >/dev/null 2>&1; then
+    _doc_hyg unknown "$nm" "unknown: lsblk is not available. $_DOC_ENC_WHY" ""; return 0
+  fi
+  types="$(lsblk -s -n -o TYPE "$src" 2>/dev/null </dev/null)" || types=""
+  case "$types" in
+    *crypt*) _doc_hyg ok "$nm" "home is on an encrypted (dm-crypt/LUKS) device. $_DOC_ENC_WHY" "" ;;
+    "")      _doc_hyg unknown "$nm" "unknown: lsblk gave no data for $src. $_DOC_ENC_WHY" "" ;;
+    *)       _doc_hyg warn "$nm" "home is not on an encrypted device. $_DOC_ENC_WHY" \
+               "enable LUKS/dm-crypt full-disk encryption (needs reinstall or a new encrypted volume for ~)" ;;
+  esac
+  return 0
+}
+
 # ─── Manifest: which components did the user install? ─────────────────────────
 # Sets _DOC_MODE (known|info), _DOC_INST (space-padded list of group ids).
 _doc_read_manifest() {
@@ -4641,70 +5282,10 @@ _doc_active() { # owners -> 0 when any owner is an installed component
   return 1
 }
 
-_doc_jesc() {
-  local s=$1
-  s="$(printf '%s' "$s" | LC_ALL=C tr -d '\000-\010\013\014\016-\037')"
-  s=${s//\\/\\\\}; s=${s//\"/\\\"}
-  s=${s//$'\t'/\\t}; s=${s//$'\n'/\\n}; s=${s//$'\r'/\\r}
-  printf '%s' "$s"
-}
-
-# ─── Rendering ────────────────────────────────────────────────────────────────
-_doc_cell() { # index -> prints one fixed-width cell (no newline)
-  local i=$1 mark txt
-  case "${_DI_ST[$i]}" in
-    installed)     mark="${GREEN}[✓]${RESET}"; txt="${_DI_VER[$i]}" ;;
-    missing)
-      if _doc_active "${_DI_OWN[$i]}"; then mark="${RED}[✗]${RESET}"; else mark="${DIM}[-]${RESET}"; fi
-      txt="${_DI_NOTE[$i]}" ;;
-    not_installed) mark="${DIM}[-]${RESET}"; txt="not installed" ;;
-    *)             mark="${DIM}[~]${RESET}"; txt="n/a" ;;
-  esac
-  printf '%b %-17.17s %-13.13s' "$mark" "${_DI_NAME[$i]}" "$txt"
-}
-
-_doc_render_text() {
-  local g i n=${#_DI_G[@]} col cnt inst miss opt na fail state
-  echo ""
-  echo -e "${BOLD}${CYAN}  ╔══════════════════════════════════════════════════════════════════╗${RESET}"
-  echo -e "${BOLD}${CYAN}  ║           SECURITY TERMINAL ENVIRONMENT AUDIT                    ║${RESET}"
-  echo -e "${BOLD}${CYAN}  ╚══════════════════════════════════════════════════════════════════╝${RESET}"
-  echo -e "  ${DIM}v$HTS_VERSION  $_DOC_OS $(uname -m)   ${GREEN}[✓]${RESET}${DIM} ok  ${RED}[✗]${RESET}${DIM} missing  [-] not installed  [~] n/a${RESET}"
-  [[ -n "$_DOC_MANI_NOTE" ]] && echo -e "  ${YELLOW}Note:${RESET} $_DOC_MANI_NOTE; reporting everything informationally."
-  _T_INST=0; _T_MISS=0; _T_OPT=0; _T_NA=0; _T_FAIL=0
-  for g in $_DOC_GROUPS; do
-    inst=0; miss=0; opt=0; na=0; fail=0; cnt=0
-    for ((i = 0; i < n; i++)); do
-      [[ "${_DI_G[$i]}" == "$g" ]] || continue
-      cnt=$((cnt + 1))
-      case "${_DI_ST[$i]}" in
-        installed) inst=$((inst + 1)) ;;
-        missing) miss=$((miss + 1)); _doc_active "${_DI_OWN[$i]}" && fail=$((fail + 1)) ;;
-        not_installed) opt=$((opt + 1)) ;;
-        *) na=$((na + 1)) ;;
-      esac
-    done
-    [[ $cnt -eq 0 ]] && continue
-    _T_INST=$((_T_INST + inst)); _T_MISS=$((_T_MISS + miss)); _T_OPT=$((_T_OPT + opt))
-    _T_NA=$((_T_NA + na)); _T_FAIL=$((_T_FAIL + fail))
-    if [[ "$_DOC_MODE" != "known" ]]; then state="${DIM}informational${RESET}"
-    elif _doc_active "$g"; then state="${CYAN}installed${RESET}"
-    else state="${DIM}not selected${RESET}"; fi
-    echo ""
-    printf '%b  %-20s%b %b  %b%d ok, %d missing, %d optional, %d n/a%b\n' \
-      "${BOLD}${YELLOW}" "$(_doc_gtitle "$g")" "${RESET}" "$state" "${DIM}" "$inst" "$miss" "$opt" "$na" "${RESET}"
-    col=0
-    for ((i = 0; i < n; i++)); do
-      [[ "${_DI_G[$i]}" == "$g" ]] || continue
-      if [[ $col -eq 0 ]]; then printf '  '; _doc_cell "$i"; col=1
-      else printf '  '; _doc_cell "$i"; printf '\n'; col=0; fi
-    done
-    [[ $col -eq 1 ]] && printf '\n'
-  done
-
-  echo ""
+# Prints the hygiene section of the text report.
+_doc_render_hygiene_text() {
+  local i nh=${#_DH_ST[@]}
   echo -e "${BOLD}${YELLOW}  Config & hygiene${RESET}"
-  local nh=${#_DH_ST[@]}
   for ((i = 0; i < nh; i++)); do
     case "${_DH_ST[$i]}" in
       ok)   printf '  %b %-23.23s %b%s%b\n' "${GREEN}[✓]${RESET}" "${_DH_NAME[$i]}" "$DIM" "${_DH_MSG[$i]}" "$RESET" ;;
@@ -4713,89 +5294,23 @@ _doc_render_text() {
       *)    printf '  %b %-23.23s %b%s%b\n' "${DIM}[~]${RESET}" "${_DH_NAME[$i]}" "$DIM" "${_DH_MSG[$i]}" "$RESET" ;;
     esac
   done
-
-  echo ""
-  echo -e "${BOLD}${YELLOW}  State${RESET}"
-  printf '  %-12s %s\n' "Version" "$HTS_VERSION"
-  printf '  %-12s %s (%s entries)\n' "Manifest" "$HTS_MANIFEST" "$_DOC_MANI_N"
-  printf '  %-12s %s\n' "Log" "$HTS_LOG"
-  printf '  %-12s %s available\n' "Backups" "$_DOC_BACKUPS"
-
-  echo ""
-  echo -e "${BOLD}${CYAN}  ════════════════════════════════════════════════════════════════════${RESET}"
-  printf '  Total: %d ok, %d missing, %d optional, %d n/a, %d warnings\n' \
-    "$_T_INST" "$_T_MISS" "$_T_OPT" "$_T_NA" "$_DOC_WARNS"
-  if [[ "$_DOC_MODE" != "known" ]]; then
-    echo -e "  ${CYAN}Informational run:${RESET} nothing to verify against; exit status 0."
-  elif [[ $_T_FAIL -eq 0 ]]; then
-    echo -e "  ${GREEN}PASS${RESET} — everything belonging to installed components is present."
-  else
-    echo -e "  ${RED}FAIL${RESET} — $_T_FAIL required item(s) missing from installed components."
-  fi
 }
 
-_doc_render_json() {
-  local g i j n=${#_DI_G[@]} nh=${#_DH_ST[@]} first gfirst=1 ifirst st
-  local inst=0 miss=0 opt=0 na=0 fail=0 state
-  printf '{"version":"%s","platform":{"os":"%s","arch":"%s"},"mode":"%s",' \
-    "$(_doc_jesc "$HTS_VERSION")" "$(_doc_jesc "$_DOC_OS")" "$(_doc_jesc "$(uname -m)")" \
-    "$([[ "$_DOC_MODE" == "known" ]] && echo manifest || echo informational)"
-  printf '"components":{'
-  for g in $_DOC_GROUPS; do
-    ifirst=1
-    [[ $gfirst -eq 0 ]] && printf ','
-    gfirst=0
-    printf '"%s":[' "$g"
-    for ((i = 0; i < n; i++)); do
-      [[ "${_DI_G[$i]}" == "$g" ]] || continue
-      st="${_DI_ST[$i]}"
-      case "$st" in
-        installed) inst=$((inst + 1)) ;;
-        missing) miss=$((miss + 1)); _doc_active "${_DI_OWN[$i]}" && fail=$((fail + 1)) ;;
-        not_installed) opt=$((opt + 1)) ;;
-        *) na=$((na + 1)) ;;
-      esac
-      [[ $ifirst -eq 0 ]] && printf ','
-      ifirst=0
-      printf '{"name":"%s","status":"%s"' "$(_doc_jesc "${_DI_NAME[$i]}")" "$st"
-      [[ "$st" == "installed" && -n "${_DI_VER[$i]}" ]] && printf ',"version":"%s"' "$(_doc_jesc "${_DI_VER[$i]}")"
-      printf '}'
-    done
-    printf ']'
-  done
-  printf '},"component_state":{'
-  gfirst=1
-  for g in $_DOC_GROUPS; do
-    [[ $gfirst -eq 0 ]] && printf ','
-    gfirst=0
-    if [[ "$_DOC_MODE" != "known" ]]; then state=unknown
-    elif _doc_active "$g"; then state=installed
-    else state=not_selected; fi
-    printf '"%s":"%s"' "$g" "$state"
-  done
+# Prints '},"hygiene":[' and the entries (the caller closes the array).
+_doc_render_hygiene_json() {
+  local j first=1 nh=${#_DH_ST[@]}
   printf '},"hygiene":['
-  first=1
   for ((j = 0; j < nh; j++)); do
     [[ $first -eq 0 ]] && printf ','
     first=0
     printf '{"name":"%s","status":"%s","detail":"%s","fix":"%s"}' "$(_doc_jesc "${_DH_NAME[$j]}")" \
       "${_DH_ST[$j]}" "$(_doc_jesc "${_DH_MSG[$j]}")" "$(_doc_jesc "${_DH_FIX[$j]}")"
   done
-  printf '],"state":{"manifest":"%s","manifest_entries":%s,"log":"%s","backups":%s},' \
-    "$(_doc_jesc "$HTS_MANIFEST")" "$_DOC_MANI_N" "$(_doc_jesc "$HTS_LOG")" "$_DOC_BACKUPS"
-  printf '"totals":{"installed":%d,"missing":%d,"not_installed":%d,"na":%d,"warnings":%d,"failing":%d},' \
-    "$inst" "$miss" "$opt" "$na" "$_DOC_WARNS" "$fail"
-  printf '"ok":%s}\n' "$([[ $fail -eq 0 ]] && echo true || echo false)"
-  _T_FAIL=$fail
 }
 
-_doc_main() {
-  local json=0 i
-  [[ "${HTS_DOCTOR_FORMAT:-}" == "json" ]] && json=1
-  _doc_reset
-  _doc_read_manifest
-  _doc_collect_items
-
+# Runs every hygiene scan, counts warnings and gathers state facts.
+_doc_run_hygiene() {
+  local i
   if [[ "$_DOC_OS" == "Darwin" ]]; then
     _doc_scan_mcp "$HOME/Library/Application Support/Claude/claude_desktop_config.json" "MCP: Claude Desktop"
   else
@@ -4803,6 +5318,7 @@ _doc_main() {
   fi
   _doc_scan_mcp "$HOME/pentest/.mcp.json" "MCP: pentest/.mcp.json"
   _doc_scan_misc
+  _doc_check_disk_encryption
 
   _DOC_WARNS=0
   for ((i = 0; i < ${#_DH_ST[@]}; i++)); do
@@ -4812,246 +5328,38 @@ _doc_main() {
   [[ -f "$HTS_MANIFEST" ]] && _DOC_MANI_N="$(wc -l < "$HTS_MANIFEST" 2>/dev/null | tr -d ' ')"
   _DOC_BACKUPS=0
   [[ -d "$HTS_BACKUP_ROOT" ]] && _DOC_BACKUPS="$(find "$HTS_BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-
-  _T_FAIL=0
-  if [[ $json -eq 1 ]]; then _doc_render_json; else _doc_render_text; fi
-  [[ ${_T_FAIL:-0} -eq 0 ]]
 }
 
-sec_doctor() {
-  local old_path="$PATH" rc=0 d
-  for d in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/go/bin" "$HOME/.cargo/bin" \
-           /opt/homebrew/bin /usr/local/bin; do
-    case ":$PATH:" in *":$d:"*) ;; *) [[ -d "$d" ]] && PATH="$PATH:$d" ;; esac
-  done
-  if [[ "${HTS_DOCTOR_FORMAT:-}" != "json" ]]; then
-    step "Security Terminal Doctor & Diagnostic Audit"
-  fi
-  _doc_main || rc=$?
-  PATH="$old_path"
-  return "$rc"
+# ─── Read-only probe isolation (used by _doc_ver in doctor.sh) ──────────────────
+# Tools whose --version creates state under $HOME or contacts the network.
+_DOC_NOPROBE=" semgrep gh az gcloud aws claude llm garak promptfoo ollama atuin frida objection bbot checkov prowler pacu nuclei subfinder httpx katana trufflehog gitleaks "
+
+# Probes run in a throwaway HOME so tools that create cache/config files on
+# --version (starship, ffuf, ghostty, ...) cannot touch the real home directory.
+_doc_probe_setup() {
+  _DOC_PROBE_HOME="$(mktemp -d "${TMPDIR:-/tmp}/hts-doctor.XXXXXX" 2>/dev/null)" || { _DOC_PROBE_HOME=""; return 0; }
+  _DOC_PROBE_ENV=(HOME="$_DOC_PROBE_HOME" XDG_CONFIG_HOME="$_DOC_PROBE_HOME/.config"
+    XDG_CACHE_HOME="$_DOC_PROBE_HOME/.cache" XDG_DATA_HOME="$_DOC_PROBE_HOME/.local/share"
+    XDG_STATE_HOME="$_DOC_PROBE_HOME/.local/state" TMPDIR="$_DOC_PROBE_HOME"
+    DO_NOT_TRACK=1 NO_UPDATE_NOTIFIER=1 SEMGREP_ENABLE_VERSION_CHECK=0 HOMEBREW_NO_AUTO_UPDATE=1)
 }
 
-# ─── End: lib/doctor.sh ────────────────────────────────────────────
+_doc_probe_cleanup() {
+  [[ -n "${_DOC_PROBE_HOME:-}" && -d "$_DOC_PROBE_HOME" ]] && rm -rf "$_DOC_PROBE_HOME"
+  _DOC_PROBE_HOME=""
+}
 
-# ─── Begin: lib/configs.sh ──────────────────────────────────────────
+# ─── End: lib/doctor_hygiene.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/configs_pentest.sh ──────────────────────────────────────────
 # =============================================================================
-#  lib/configs.sh — Dotfile Generators (.zshrc, .tmux.conf, pentest.zsh, etc.)
+#  lib/configs_pentest.sh — Generates $ZSH_CUSTOM/pentest.zsh (aliases + core pentest helper functions)
 # =============================================================================
 
-write_configs() {
-  step "Writing config files"
-
+_hts_write_pentest_zsh() {
   local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
   mkdir -p "$ZSH_CUSTOM"
 
-  # ── Determine OS-specific values ───────────────────────────────────────────
-  local MACOS_PLUGIN=""
-  local LOCAL_IP_CMD=""
-  local VPN_CHECK_CMD=""
-
-  if [[ "$OS" == "Darwin" ]]; then
-    MACOS_PLUGIN="macos"
-    LOCAL_IP_CMD='ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "N/A"'
-    VPN_IFACE="utun1"
-  else
-    MACOS_PLUGIN=""
-    LOCAL_IP_CMD='hostname -I 2>/dev/null | awk "{print \$1}" || ip -4 addr show | grep -oP "(?<=inet\\s)\\d+(\\.\\d+){3}" | grep -v 127 | head -1'
-    VPN_IFACE="tun0"
-  fi
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # ~/.zshrc  (prompt: exactly one of Powerlevel10k / Starship, chosen by HTS_PROMPT)
-  # ─────────────────────────────────────────────────────────────────────────
-  local PROMPT_CHOICE PROMPT_TOP PROMPT_THEME PROMPT_TAIL
-  PROMPT_CHOICE="$(_hts_prompt_choice)"
-  if [[ "$PROMPT_CHOICE" == "starship" ]]; then
-    PROMPT_TOP='# Prompt: Starship (HTS_PROMPT=starship) — Powerlevel10k is not loaded'
-    PROMPT_THEME='ZSH_THEME=""'
-    read -r -d '' PROMPT_TAIL << 'TAIL_STARSHIP' || true
-# =============================================================================
-# Starship prompt (config: ~/.config/starship.toml) — keep at the end
-# =============================================================================
-if command -v starship &>/dev/null; then
-  eval "$(starship init zsh)"
-else
-  echo "starship not found in PATH — install it or rerun the installer with HTS_PROMPT=p10k" >&2
-fi
-TAIL_STARSHIP
-  else
-    read -r -d '' PROMPT_TOP << 'TOP_P10K' || true
-# =============================================================================
-# Powerlevel10k instant prompt — MUST stay at the very top
-# =============================================================================
-typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
-TOP_P10K
-    PROMPT_THEME='ZSH_THEME="powerlevel10k/powerlevel10k"'
-    read -r -d '' PROMPT_TAIL << 'TAIL_P10K' || true
-# =============================================================================
-# p10k config
-# =============================================================================
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-TAIL_P10K
-  fi
-  info "Prompt: $PROMPT_CHOICE (set HTS_PROMPT=starship|p10k to choose)"
-
-  log "Writing ~/.zshrc..."
-  backup_file "$HOME/.zshrc"
-  cat > "$HOME/.zshrc" << ZSHRC
-${PROMPT_TOP}
-
-# =============================================================================
-# Oh My Zsh core
-# =============================================================================
-export ZSH="\$HOME/.oh-my-zsh"
-${PROMPT_THEME}
-
-# =============================================================================
-# History — security-hardened
-# =============================================================================
-HISTSIZE=50000
-SAVEHIST=50000
-HISTFILE=~/.zsh_history
-setopt HIST_IGNORE_DUPS
-setopt HIST_IGNORE_SPACE     # prefix with space → NOT saved to disk
-setopt SHARE_HISTORY
-setopt EXTENDED_HISTORY
-
-# =============================================================================
-# Autosuggestions
-# =============================================================================
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#666666,bold"
-ZSH_AUTOSUGGEST_STRATEGY=(history completion)
-ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
-
-# =============================================================================
-# zsh-completions fpath (before compinit)
-# =============================================================================
-fpath+=\${ZSH_CUSTOM:-\${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
-
-# =============================================================================
-# Plugins — syntax-highlighting MUST be last
-# =============================================================================
-plugins=(
-  git
-  sudo
-  history-substring-search
-  colored-man-pages
-  colorize
-  extract
-  command-not-found
-  fzf
-  zoxide
-  z
-  web-search
-  python
-  pip
-  virtualenv
-  node
-  npm
-  ssh-agent
-  gpg-agent
-  nmap
-  eza
-  zsh-completions
-  zsh-autosuggestions
-  zsh-syntax-highlighting
-)
-
-# macOS-only plugins
-[[ "\$(uname -s)" == "Darwin" ]] && plugins+=(macos)
-
-source \$ZSH/oh-my-zsh.sh
-
-# =============================================================================
-# Universal PATH & Environment Setup
-# =============================================================================
-# 1. Homebrew (Apple Silicon / Intel / Linuxbrew)
-if [[ -d "/opt/homebrew/bin" ]]; then
-  export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH"
-elif [[ -d "/usr/local/bin" ]]; then
-  export PATH="/usr/local/bin:/usr/local/sbin:\$PATH"
-elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
-  export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:\$PATH"
-fi
-
-# 2. Local user binaries (pipx, yq, manual binaries)
-export PATH="\$HOME/.local/bin:\$PATH"
-
-# 3. Go language binaries
-export GOPATH="\$HOME/go"
-export PATH="\$HOME/go/bin:\$PATH"
-
-# 4. Cargo / Rust & Astral uv binaries
-export PATH="\$HOME/.cargo/bin:\$PATH"
-
-# 5. Node.js & npm global prefix (Claude Code, promptfoo, MCP inspector)
-export PATH="\$HOME/.npm-global/bin:\$PATH"
-if command -v npm &>/dev/null; then
-  _NPM_BIN="\$(npm config get prefix 2>/dev/null)/bin"
-  [[ -n "\$_NPM_BIN" && -d "\$_NPM_BIN" && ":\$PATH:" != *":\$_NPM_BIN:"* ]] && export PATH="\$_NPM_BIN:\$PATH"
-fi
-
-# =============================================================================
-# Ergonomics Hooks: Atuin, direnv
-# =============================================================================
-# Atuin shell history (local SQLite, secrets filtered; DB is not encrypted at rest)
-command -v atuin &>/dev/null && eval "\$(atuin init zsh)"
-
-# direnv (.envrc isolation)
-command -v direnv &>/dev/null && eval "\$(direnv hook zsh)"
-
-# =============================================================================
-# Key bindings
-# =============================================================================
-bindkey '^[[A' history-substring-search-up
-bindkey '^[[B' history-substring-search-down
-bindkey '^P'     history-substring-search-up
-bindkey '^N'     history-substring-search-down
-bindkey '^ '     autosuggest-accept
-
-# =============================================================================
-# bat & manpager
-# =============================================================================
-export BAT_THEME="TwoDark"
-export MANPAGER="sh -c 'col -bx | bat -l man -p'"
-export MANROFFOPT="-c"
-
-# =============================================================================
-# fzf
-# =============================================================================
-if command -v fd &>/dev/null; then
-  export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
-  export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
-else
-  export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/.git/*"'
-fi
-export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border --ansi --preview "bat --color=always --line-range :50 {}" --preview-window=right:50%:wrap'
-export FZF_CTRL_T_OPTS="--preview 'bat --color=always {}'"
-export FZF_ALT_C_OPTS="--preview 'eza --tree --color=always {} | head -50'"
-
-# =============================================================================
-# zoxide
-# =============================================================================
-command -v zoxide &>/dev/null && eval "\$(zoxide init zsh)"
-
-# =============================================================================
-# Editor
-# =============================================================================
-export EDITOR="vim"
-export VISUAL="vim"
-
-${PROMPT_TAIL}
-ZSHRC
-  hts_track_file "$HOME/.zshrc"
-  ok "~/.zshrc written"
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # ~/.oh-my-zsh/custom/pentest.zsh
-  # ─────────────────────────────────────────────────────────────────────────
   log "Writing pentest.zsh..."
   backup_file "$ZSH_CUSTOM/pentest.zsh"
   cat > "$ZSH_CUSTOM/pentest.zsh" << 'PENTEST'
@@ -5300,15 +5608,25 @@ sec-doctor() {
   _doc "ripgrep" "rg"
   echo "  ╚════════════════════════════════════════════════════════════╝"
   echo "  Full audit (versions, config, PATH, state): 'bash ter.sh --doctor' or 'doctor --full'"
+  echo "  Terminal settings (welcome screen, prompt): 'hts config'"
   echo ""
 }
 PENTEST
   hts_track_file "$ZSH_CUSTOM/pentest.zsh"
   ok "pentest.zsh written"
+}
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # ~/.oh-my-zsh/custom/advanced_pentest.zsh
-  # ─────────────────────────────────────────────────────────────────────────
+# ─── End: lib/configs_pentest.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/configs_advanced.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/configs_advanced.sh — Generates $ZSH_CUSTOM/advanced_pentest.zsh (bug bounty / cloud / AI / MCP helpers)
+# =============================================================================
+
+_hts_write_advanced_pentest_zsh() {
+  local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+  mkdir -p "$ZSH_CUSTOM"
+
   log "Writing advanced_pentest.zsh..."
   backup_file "$ZSH_CUSTOM/advanced_pentest.zsh"
   cat > "$ZSH_CUSTOM/advanced_pentest.zsh" << 'ADVPENTEST'
@@ -5545,19 +5863,16 @@ REPORT
 ADVPENTEST
   hts_track_file "$ZSH_CUSTOM/advanced_pentest.zsh"
   ok "advanced_pentest.zsh written"
+}
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # ~/.oh-my-zsh/custom/welcome.zsh
-  # ─────────────────────────────────────────────────────────────────────────
-  # ~/.oh-my-zsh/custom/welcome.zsh (Tactical Security Cockpit)
-  # ─────────────────────────────────────────────────────────────────────────
-  if command -v write_modern_welcome &>/dev/null; then
-    write_modern_welcome
-  fi
+# ─── End: lib/configs_advanced.sh ────────────────────────────────────────────
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # ~/.tmux.conf
-  # ─────────────────────────────────────────────────────────────────────────
+# ─── Begin: lib/configs_misc.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/configs_misc.sh — Generates ~/.tmux.conf and the ~/pentest + ~/workspace directories
+# =============================================================================
+
+_hts_write_tmux_conf() {
   log "Writing ~/.tmux.conf..."
   backup_file "$HOME/.tmux.conf"
   cat > "$HOME/.tmux.conf" << 'TMUXCONF'
@@ -5611,7 +5926,9 @@ set -g visual-activity off
 TMUXCONF
   hts_track_file "$HOME/.tmux.conf"
   ok "~/.tmux.conf written"
+}
 
+_hts_make_workspace() {
   # ─── Workspace ────────────────────────────────────────────────────────────
   mkdir -p "$HOME/pentest/"{bb,cloud,ai_sec,mcp_sec,reports,tools,wordlists}
   mkdir -p "$HOME/workspace"
@@ -5623,6 +5940,267 @@ TMUXCONF
     ln -sf /usr/share/seclists "$HOME/pentest/wordlists/seclists" 2>/dev/null || true
   fi
   ok "~/pentest/ & ~/workspace/ directories ready"
+}
+
+# ─── End: lib/configs_misc.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/configs.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/configs.sh — write_configs: ~/.zshrc and orchestration of all dotfiles
+#  Related modules: configs_pentest.sh, configs_advanced.sh, configs_misc.sh,
+#  dashboard.sh (welcome.zsh), hts_cli.sh (settings file + `hts` command)
+# =============================================================================
+
+write_configs() {
+  step "Writing config files"
+
+  local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+  mkdir -p "$ZSH_CUSTOM"
+
+  # Settings file (~/.config/hts/config, never overwritten) and the `hts` command first:
+  # the generated files read the settings, and `hts` must exist wherever they are written.
+  install_hts_cli || warn "hts command install had problems (see above)"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ~/.zshrc  (prompt: exactly one of Powerlevel10k / Starship, chosen at shell start
+  #            from the `prompt` setting; HTS_PROMPT only seeds the install-time default)
+  # ─────────────────────────────────────────────────────────────────────────
+  local PROMPT_CHOICE PROMPT_TOP PROMPT_TAIL
+  PROMPT_CHOICE="$(hts_setting_get prompt)"
+  read -r -d '' PROMPT_TOP << 'TOP_PROMPT' || true
+# =============================================================================
+# Prompt selection — setting `prompt` (p10k|starship) from ~/.config/hts/config
+# Read line by line, never sourced. Change with: hts config prompt <p10k|starship>
+# Exactly one of Powerlevel10k / Starship is activated; if the chosen one is not
+# installed, the other is used with a one-line message.
+# =============================================================================
+_hts_prompt=__HTS_DEFAULT_PROMPT__
+_hts_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/hts/config"
+if [[ -r $_hts_cfg ]]; then
+  while IFS= read -r _hts_l || [[ -n $_hts_l ]]; do
+    case $_hts_l in
+      prompt=p10k|prompt=starship) _hts_prompt=${_hts_l#prompt=} ;;
+    esac
+  done < "$_hts_cfg"
+fi
+_hts_have_starship() {
+  local d
+  for d in /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin "$HOME/.cargo/bin" "$HOME/.local/bin" $path; do
+    [[ -x $d/starship ]] && return 0
+  done
+  return 1
+}
+if [[ $_hts_prompt == starship ]] && ! _hts_have_starship; then
+  echo "hts: starship not found, using Powerlevel10k (hts config prompt p10k)" >&2
+  _hts_prompt=p10k
+elif [[ $_hts_prompt == p10k && ! -r "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k/powerlevel10k.zsh-theme" ]] && _hts_have_starship; then
+  echo "hts: Powerlevel10k not found, using Starship (hts config prompt starship)" >&2
+  _hts_prompt=starship
+fi
+unset _hts_cfg _hts_l
+unfunction _hts_have_starship
+if [[ $_hts_prompt == p10k ]]; then
+  # Powerlevel10k instant prompt — must stay above the Oh My Zsh section
+  typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
+  if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+    source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+  fi
+  ZSH_THEME="powerlevel10k/powerlevel10k"
+else
+  ZSH_THEME=""
+fi
+TOP_PROMPT
+  PROMPT_TOP="${PROMPT_TOP//__HTS_DEFAULT_PROMPT__/$PROMPT_CHOICE}"
+  read -r -d '' PROMPT_TAIL << 'TAIL_PROMPT' || true
+# =============================================================================
+# Prompt activation (p10k config or Starship, per the `prompt` setting) — keep at the end
+# =============================================================================
+if [[ $_hts_prompt == starship ]]; then
+  # Starship config: ~/.config/starship.toml
+  if command -v starship &>/dev/null; then
+    eval "$(starship init zsh)"
+  else
+    echo "hts: starship not found in PATH — run: hts config prompt p10k" >&2
+  fi
+else
+  [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+fi
+TAIL_PROMPT
+  info "Prompt setting: $PROMPT_CHOICE (change any time with: hts config prompt p10k|starship)"
+
+  log "Writing ~/.zshrc..."
+  backup_file "$HOME/.zshrc"
+  cat > "$HOME/.zshrc" << ZSHRC
+${PROMPT_TOP}
+
+# =============================================================================
+# Oh My Zsh core (ZSH_THEME is set by the prompt selection above)
+# =============================================================================
+export ZSH="\$HOME/.oh-my-zsh"
+# =============================================================================
+# History — security-hardened
+# =============================================================================
+HISTSIZE=50000
+SAVEHIST=50000
+HISTFILE=~/.zsh_history
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE     # prefix with space → NOT saved to disk
+setopt SHARE_HISTORY
+setopt EXTENDED_HISTORY
+
+# =============================================================================
+# Autosuggestions
+# =============================================================================
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#666666,bold"
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
+
+# =============================================================================
+# zsh-completions fpath (before compinit)
+# =============================================================================
+fpath+=\${ZSH_CUSTOM:-\${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
+
+# =============================================================================
+# Plugins — syntax-highlighting MUST be last
+# =============================================================================
+plugins=(
+  git
+  sudo
+  history-substring-search
+  colored-man-pages
+  colorize
+  extract
+  command-not-found
+  fzf
+  zoxide
+  z
+  web-search
+  python
+  pip
+  virtualenv
+  node
+  npm
+  ssh-agent
+  gpg-agent
+  nmap
+  eza
+  zsh-completions
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+)
+
+# macOS-only plugins
+[[ "\$(uname -s)" == "Darwin" ]] && plugins+=(macos)
+
+source \$ZSH/oh-my-zsh.sh
+
+# =============================================================================
+# Universal PATH & Environment Setup
+# =============================================================================
+# 1. Homebrew (Apple Silicon / Intel / Linuxbrew)
+if [[ -d "/opt/homebrew/bin" ]]; then
+  export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:\$PATH"
+elif [[ -d "/usr/local/bin" ]]; then
+  export PATH="/usr/local/bin:/usr/local/sbin:\$PATH"
+elif [[ -d "/home/linuxbrew/.linuxbrew/bin" ]]; then
+  export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:\$PATH"
+fi
+
+# 2. Local user binaries (pipx, yq, manual binaries)
+export PATH="\$HOME/.local/bin:\$PATH"
+
+# 3. Go language binaries
+export GOPATH="\$HOME/go"
+export PATH="\$HOME/go/bin:\$PATH"
+
+# 4. Cargo / Rust & Astral uv binaries
+export PATH="\$HOME/.cargo/bin:\$PATH"
+
+# 5. Node.js & npm global prefix (Claude Code, promptfoo, MCP inspector)
+export PATH="\$HOME/.npm-global/bin:\$PATH"
+if command -v npm &>/dev/null; then
+  _NPM_BIN="\$(npm config get prefix 2>/dev/null)/bin"
+  [[ -n "\$_NPM_BIN" && -d "\$_NPM_BIN" && ":\$PATH:" != *":\$_NPM_BIN:"* ]] && export PATH="\$_NPM_BIN:\$PATH"
+fi
+
+# =============================================================================
+# Ergonomics Hooks: Atuin, direnv
+# =============================================================================
+# Atuin shell history (local SQLite, secrets filtered; DB is not encrypted at rest)
+command -v atuin &>/dev/null && eval "\$(atuin init zsh)"
+
+# direnv (.envrc isolation)
+command -v direnv &>/dev/null && eval "\$(direnv hook zsh)"
+
+# =============================================================================
+# Key bindings
+# =============================================================================
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+bindkey '^P'     history-substring-search-up
+bindkey '^N'     history-substring-search-down
+bindkey '^ '     autosuggest-accept
+
+# =============================================================================
+# bat & manpager
+# =============================================================================
+export BAT_THEME="TwoDark"
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+export MANROFFOPT="-c"
+
+# =============================================================================
+# fzf
+# =============================================================================
+if command -v fd &>/dev/null; then
+  export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+  export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+else
+  export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/.git/*"'
+fi
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border --ansi --preview "bat --color=always --line-range :50 {}" --preview-window=right:50%:wrap'
+export FZF_CTRL_T_OPTS="--preview 'bat --color=always {}'"
+export FZF_ALT_C_OPTS="--preview 'eza --tree --color=always {} | head -50'"
+
+# =============================================================================
+# zoxide
+# =============================================================================
+command -v zoxide &>/dev/null && eval "\$(zoxide init zsh)"
+
+# =============================================================================
+# Editor
+# =============================================================================
+export EDITOR="vim"
+export VISUAL="vim"
+
+${PROMPT_TAIL}
+
+# =============================================================================
+# hts: installer copy used by 'hts doctor|update|...' and 'doctor --full'
+# =============================================================================
+export HTS_TER_SH="\$HOME/.local/share/hts/ter.sh"
+
+# =============================================================================
+# Your own overrides — never created, modified or backed up by the installer
+# =============================================================================
+if [[ -f ~/.zshrc.local ]]; then
+  source ~/.zshrc.local
+fi
+ZSHRC
+  hts_track_file "$HOME/.zshrc"
+  ok "~/.zshrc written"
+
+  _hts_write_pentest_zsh
+  _hts_write_advanced_pentest_zsh
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ~/.oh-my-zsh/custom/welcome.zsh (Tactical Security Cockpit, lib/dashboard.sh)
+  # ─────────────────────────────────────────────────────────────────────────
+  if command -v write_modern_welcome &>/dev/null; then
+    write_modern_welcome
+  fi
+
+  _hts_write_tmux_conf
+  _hts_make_workspace
 
   ok "All config files written"
 }
@@ -6147,7 +6725,7 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Core & Developer Stack:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}1${RESET}   Core terminal     ${DIM}OMZ plugins, p10k, fzf, bat, eza, tmux${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}2${RESET}   Hacker Fonts      ${DIM}MesloLGS, JetBrains Mono, Fira Code, Hack...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}   Node.js & npm     ${DIM}Modern LTS Node.js + safe non-root npm prefix${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}   Node.js & npm     ${DIM}Newest LTS Node.js (min 22) + safe non-root npm prefix${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}4${RESET}   Claude Code CLI   ${DIM}Anthropic Claude Code agentic coding CLI tool${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}5${RESET}   VS Code & CLI     ${DIM}Visual Studio Code editor & 'code' CLI${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}6${RESET}   GPU Terminals     ${DIM}Ghostty, WezTerm, Kitty + aesthetic configs${RESET}"
@@ -6156,11 +6734,11 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Security Assessment Suites:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}9${RESET}   Pentest tools     ${DIM}nmap, sqlmap, hydra, john, gobuster, SecLists${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}10${RESET}  Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf, katana${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Active Directory  ${DIM}Ligolo-ng, Chisel, NetExec, BloodHound, Certipy${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  Web & API Sec     ${DIM}Schemathesis, Kiterunner, Caido, Arjun, FFUF${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  Cloud & DevSecOps ${DIM}Trivy, Syft, Grype, Checkov, Kube-hunter, AWS${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}14${RESET}  Mobile & Reverse  ${DIM}Jadx, Apktool (DEX/APK decompilation & analysis)${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}10${RESET}  Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf, katana, bbot${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Active Directory  ${DIM}Ligolo-ng, Chisel, NetExec, BloodHound CE, Certipy${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  Web & API Sec     ${DIM}Schemathesis, Kiterunner, Caido CLI, Arjun, ffuf${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  Cloud & DevSecOps ${DIM}Trivy, Syft, Grype, Checkov, Kubescape, AWS${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}14${RESET}  Mobile & Reverse  ${DIM}Jadx, Apktool, Frida, objection (decompile & instrument)${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}15${RESET}  AI / LLM sec      ${DIM}garak, promptfoo, jwt_tool, ollama...${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}16${RESET}  Workflow tools    ${DIM}lazygit, jq, yq, gh, pandoc, obsidian...${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}17${RESET}  Tactical Cockpit  ${DIM}Fastfetch + Modern Welcome Terminal Cockpit${RESET}"
@@ -6247,7 +6825,7 @@ hts_comp_info() {
     core)
       HTS_C_NUM=1; HTS_C_FLAG="--core"; HTS_C_NAME="Core terminal"; HTS_C_CMD="install_core"
       HTS_C_DESC="OMZ plugins, p10k, fzf, bat, eza, tmux"
-      HTS_C_INSTALLS="fzf bat eza zoxide git-delta tmux fd ripgrep tldr; Meslo Nerd Font; zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions; Powerlevel10k; lazygit via Go on Linux"
+      HTS_C_INSTALLS="fzf bat eza zoxide git-delta tmux fd ripgrep tldr; lazygit (package, pinned release binary on Linux, else go install); Meslo Nerd Font; zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions; Powerlevel10k"
       HTS_C_WRITES="~/.oh-my-zsh/custom/plugins/*, ~/.oh-my-zsh/custom/themes/powerlevel10k, font files" ;;
     fonts)
       HTS_C_NUM=2; HTS_C_FLAG="--fonts"; HTS_C_NAME="Hacker Fonts"; HTS_C_CMD="install_fonts all"
@@ -6256,8 +6834,8 @@ hts_comp_info() {
       HTS_C_WRITES="font files (macOS casks / ~/Library/Fonts, Linux ~/.local/share/fonts/NerdFonts)" ;;
     node)
       HTS_C_NUM=3; HTS_C_FLAG="--node"; HTS_C_NAME="Node.js & npm"; HTS_C_CMD="install_node"
-      HTS_C_DESC="Modern LTS Node.js + safe non-root npm prefix"
-      HTS_C_INSTALLS="Node.js (18+) and npm via the system package manager"
+      HTS_C_DESC="Newest LTS Node.js (min 22) + safe non-root npm prefix"
+      HTS_C_INSTALLS="Node.js: the newest LTS, minimum v22 (Homebrew node, NodeSource LTS repo on apt/dnf/yum, distro package on pacman/zypper); an older Node is upgraded; npm"
       HTS_C_WRITES="npm global prefix ~/.npm-global (npm config), ~/.npm-global/bin" ;;
     claude)
       HTS_C_NUM=4; HTS_C_FLAG="--claude"; HTS_C_NAME="Claude Code CLI"; HTS_C_CMD="install_claude"
@@ -6267,32 +6845,32 @@ hts_comp_info() {
     code)
       HTS_C_NUM=5; HTS_C_FLAG="--code"; HTS_C_NAME="VS Code & CLI"; HTS_C_CMD="install_code"
       HTS_C_DESC="Visual Studio Code editor & 'code' CLI"
-      HTS_C_INSTALLS="Visual Studio Code (cask or distro package)"
+      HTS_C_INSTALLS="Visual Studio Code (cask on macOS; Microsoft apt/rpm repository on Linux)"
       HTS_C_WRITES="~/.local/bin/code symlink" ;;
     dev)
       HTS_C_NUM="-"; HTS_C_FLAG="--dev"; HTS_C_NAME="Developer stack"; HTS_C_CMD="install_dev"
       HTS_C_DESC="Node.js + Claude Code + VS Code"
-      HTS_C_INSTALLS="Node.js, @anthropic-ai/claude-code, Visual Studio Code"
-      HTS_C_WRITES="~/.npm-global, ~/.local/bin/code symlink" ;;
+      HTS_C_INSTALLS="Node.js (newest LTS, minimum v22), Claude Code (native installer), Visual Studio Code"
+      HTS_C_WRITES="~/.npm-global (unless nvm/fnm/Volta manages Node), ~/.local/bin/claude, ~/.local/bin/code symlink" ;;
     terminals)
       HTS_C_NUM=6; HTS_C_FLAG="--terminals"; HTS_C_NAME="GPU Terminals"; HTS_C_CMD="install_terminals"
       HTS_C_DESC="Ghostty, WezTerm, Kitty + aesthetic configs"
-      HTS_C_INSTALLS="Ghostty (macOS) or Kitty/WezTerm/Ghostty depending on distro"
-      HTS_C_WRITES="~/.config/ghostty/config and themes/catppuccin-mocha, ~/.config/wezterm/wezterm.lua, ~/.config/kitty/kitty.conf, ~/.config/alacritty/alacritty.toml" ;;
+      HTS_C_INSTALLS="Per platform. macOS: Ghostty, WezTerm, Kitty, Alacritty (casks). apt: Kitty, WezTerm (upstream repo), Alacritty when packaged, no Ghostty. dnf: Kitty, Alacritty, WezTerm (COPR), no Ghostty. pacman: all four. zypper: Kitty, Alacritty. Nothing on WSL or headless Linux"
+      HTS_C_WRITES="Config for each terminal that is installed: ~/.config/ghostty/config and themes/catppuccin-mocha, ~/.config/wezterm/wezterm.lua, ~/.config/kitty/kitty.conf, ~/.config/alacritty/alacritty.toml (existing files are backed up)" ;;
     shell-tools)
       HTS_C_NUM=7; HTS_C_FLAG="--shell-tools"; HTS_C_NAME="Shell History"; HTS_C_CMD="install_shell_tools"
       HTS_C_DESC="Atuin SQLite history, direnv, uv, btop, yazi, Starship"
-      HTS_C_INSTALLS="atuin, direnv, uv, btop, yazi, git-delta, eza, zoxide, ripgrep, fzf, bat, fd, starship"
-      HTS_C_WRITES="~/.config/atuin/config.toml, ~/.config/direnv/direnv.toml, ~/.config/starship.toml" ;;
+      HTS_C_INSTALLS="atuin, direnv, uv, btop, yazi (cargo on Linux), git-delta, eza, zoxide, ripgrep, fzf, bat, fd, starship"
+      HTS_C_WRITES="~/.config/atuin/config.toml, ~/.config/direnv/direnv.toml (trusts no directory automatically), ~/.config/starship.toml; existing files are backed up. The prompt in ~/.zshrc is chosen by HTS_PROMPT (p10k default, or starship)" ;;
     mcp)
       HTS_C_NUM=8; HTS_C_FLAG="--mcp"; HTS_C_NAME="MCP Server Suite"; HTS_C_CMD="setup_mcp_suite"
       HTS_C_DESC="Preconfigured Claude Code & Desktop MCP suite"
-      HTS_C_INSTALLS="Node.js if missing; @modelcontextprotocol/inspector (npm); semgrep and detect-secrets (pipx)"
-      HTS_C_WRITES="~/workspace and ~/pentest directories, Claude Desktop claude_desktop_config.json (macOS: ~/Library/Application Support/Claude, Linux: ~/.config/Claude), ~/pentest/.mcp.json, ~/.local/bin/sec-mcp" ;;
+      HTS_C_INSTALLS="@modelcontextprotocol/inspector (pinned, npm); semgrep, detect-secrets (pipx); uv/uvx if missing; github-mcp-server (pinned release binary, only when GITHUB_PERSONAL_ACCESS_TOKEN is set); Node.js if missing"
+      HTS_C_WRITES="Merges pinned servers into the Claude Desktop config (macOS: ~/Library/Application Support/Claude/claude_desktop_config.json, Linux: ~/.config/Claude/), ~/pentest/.mcp.json and Claude Code user scope: filesystem, memory and fetch (uvx) always; github and brave-search only when GITHUB_PERSONAL_ACCESS_TOKEN / BRAVE_API_KEY are set. Existing configs are backed up, other servers are kept, keys are never written. Also ~/workspace, ~/pentest, ~/.local/bin/sec-mcp, ~/.local/bin/github-mcp-server" ;;
     pentest)
       HTS_C_NUM=9; HTS_C_FLAG="--pentest"; HTS_C_NAME="Pentest tools"; HTS_C_CMD="install_pentest"
       HTS_C_DESC="nmap, sqlmap, hydra, john, gobuster, SecLists"
-      HTS_C_INSTALLS="nmap netcat wget curl httpie gobuster hydra sqlmap masscan tcpdump openssl gpg python3 pipx john hashcat (wireshark-cli on Linux); impacket, pwntools, scapy, netexec (pipx); SecLists"
+      HTS_C_INSTALLS="nmap netcat wget curl httpie gobuster hydra sqlmap masscan tcpdump openssl gpg python3 pipx john hashcat (tshark on Linux); impacket, pwntools, scapy (pipx/uv); NetExec (pinned git tag); SecLists"
       HTS_C_WRITES="~/pentest/wordlists/seclists" ;;
     seclists)
       HTS_C_NUM="-"; HTS_C_FLAG="--seclists"; HTS_C_NAME="SecLists"; HTS_C_CMD="install_seclists"
@@ -6301,29 +6879,29 @@ hts_comp_info() {
       HTS_C_WRITES="~/pentest/wordlists/seclists" ;;
     bugbounty)
       HTS_C_NUM=10; HTS_C_FLAG="--bugbounty"; HTS_C_NAME="Bug bounty"; HTS_C_CMD="install_bugbounty"
-      HTS_C_DESC="subfinder, httpx, nuclei, amass, ffuf, katana"
-      HTS_C_INSTALLS="subfinder httpx nuclei katana dnsx interactsh-client gau hakrawler waybackurls amass dalfox (go install); Burp Suite and Caido (macOS casks); arjun (pipx)"
-      HTS_C_WRITES="~/go/bin, nuclei templates" ;;
+      HTS_C_DESC="subfinder, httpx, nuclei, amass, ffuf, katana, bbot, Caido CLI"
+      HTS_C_INSTALLS="ffuf, feroxbuster, nikto, mitmproxy; subfinder httpx nuclei katana dnsx interactsh-client gau hakrawler waybackurls amass (pinned, go install); dalfox; Caido CLI; arjun and bbot (pipx/uv); Burp Suite (macOS cask)"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin, ~/.local/share/nikto, nuclei templates" ;;
     ad-pivot)
       HTS_C_NUM=11; HTS_C_FLAG="--ad-pivot"; HTS_C_NAME="Active Directory"; HTS_C_CMD="install_ad_pivoting"
-      HTS_C_DESC="Ligolo-ng, Chisel, NetExec, BloodHound, Certipy"
-      HTS_C_INSTALLS="Ligolo-ng, Chisel (go install), NetExec, BloodHound, Certipy (uv or pipx)"
-      HTS_C_WRITES="~/.local/bin, ~/go/bin" ;;
+      HTS_C_DESC="Ligolo-ng, Chisel, NetExec, BloodHound CE, Certipy"
+      HTS_C_INSTALLS="Ligolo-ng proxy (installed as ligolo-proxy, alias ligolo) and Chisel (pinned release downloads); NetExec, BloodHound.py, BloodHound CE ingestor (bloodhound-ce-python), Certipy (pipx/uv); BloodHound CE CLI (bloodhound-cli, launcher only, needs Docker); Responder (git clone with a wrapper)"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin, ~/.local/share/Responder" ;;
     web-api)
       HTS_C_NUM=12; HTS_C_FLAG="--web-api"; HTS_C_NAME="Web & API Sec"; HTS_C_CMD="install_web_api"
-      HTS_C_DESC="Schemathesis, Kiterunner, Caido, Arjun, FFUF"
-      HTS_C_INSTALLS="Schemathesis, Arjun (uv or pipx); Kiterunner (go install); Caido; ffuf, feroxbuster"
+      HTS_C_DESC="Schemathesis, Kiterunner, Caido CLI, Arjun, ffuf, feroxbuster"
+      HTS_C_INSTALLS="Schemathesis, Arjun (pipx/uv); Kiterunner (kr); Caido CLI (caido-cli); ffuf, feroxbuster"
       HTS_C_WRITES="~/go/bin, ~/.local/bin" ;;
     cloud)
       HTS_C_NUM=13; HTS_C_FLAG="--cloud"; HTS_C_NAME="Cloud & DevSecOps"; HTS_C_CMD="hts_install_cloud_suite"
-      HTS_C_DESC="AWS/Azure/gcloud CLIs, Trivy, Syft, Grype, Checkov, Kube-hunter, prowler"
-      HTS_C_INSTALLS="awscli, azure-cli, google-cloud-sdk; cloudfox, gitleaks, trufflehog (go install); prowler, pacu, s3scanner, checkov, kube-hunter (pipx/uv); Trivy, Syft, Grype"
-      HTS_C_WRITES="~/.local/bin, ~/go/bin" ;;
+      HTS_C_DESC="AWS/Azure/gcloud CLIs, Trivy, Syft, Grype, Checkov, Kubescape, kube-bench, prowler"
+      HTS_C_INSTALLS="AWS CLI, Azure CLI, gcloud (cask on macOS, official archive on Linux); cloudfox, gitleaks, trufflehog (go install); prowler, pacu, s3scanner, checkov (pipx/uv); Trivy, Syft, Grype; kubescape, kube-bench, osv-scanner"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin, ~/.local/share/google-cloud-sdk (Linux)" ;;
     mobile)
       HTS_C_NUM=14; HTS_C_FLAG="--mobile"; HTS_C_NAME="Mobile & Reverse"; HTS_C_CMD="install_mobile_re"
-      HTS_C_DESC="Jadx, Apktool (DEX/APK decompilation & analysis)"
-      HTS_C_INSTALLS="jadx, apktool"
-      HTS_C_WRITES="~/.local/share/jadx and ~/.local/bin links (Linux fallback only)" ;;
+      HTS_C_DESC="Jadx, Apktool, Frida, objection (decompile & instrument)"
+      HTS_C_INSTALLS="jadx, apktool (no apktool package on dnf/yum/zypper: manual install); frida-tools (frida) and objection (pipx/uv)"
+      HTS_C_WRITES="~/.local/share/jadx and ~/.local/bin links (Linux fallback only), ~/.local/bin for pipx tools" ;;
     ai)
       HTS_C_NUM=15; HTS_C_FLAG="--ai"; HTS_C_NAME="AI / LLM sec"; HTS_C_CMD="install_ai_llm"
       HTS_C_DESC="garak, promptfoo, jwt_tool, ollama..."
@@ -6502,7 +7080,7 @@ hts_print_banner() {
   echo -e "  1. ${YELLOW}Set terminal font:${RESET}  'MesloLGS NF' (p10k) or 'JetBrainsMono Nerd Font'"
   echo -e "  2. ${YELLOW}Reload shell:${RESET}       ${BOLD}exec zsh${RESET}"
   echo -e "  3. ${YELLOW}Configure prompt:${RESET}   ${BOLD}p10k configure${RESET} (or Starship: ${BOLD}starship.toml${RESET})"
-  echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}cc${RESET})"
+  echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}ccode${RESET})"
   echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
   echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
   echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
@@ -6583,9 +7161,19 @@ run_selections() {
     HTS_SHOW_BANNER=1
   fi
 
+  # After the last installing component (before the read-only doctor audit),
+  # install the small `hts` command if its module is part of this build.
+  local hts_cli_done=0
   for id in $ids; do
+    if [[ "$id" == "doctor" && "$doctor_only" -eq 0 && "$hts_cli_done" -eq 0 ]]; then
+      hts_cli_done=1
+      if declare -F install_hts_cli >/dev/null; then run_step "hts command" install_hts_cli || true; fi
+    fi
     hts_run_component "$id" || true
   done
+  if [[ "$doctor_only" -eq 0 && "$hts_cli_done" -eq 0 ]]; then
+    if declare -F install_hts_cli >/dev/null; then run_step "hts command" install_hts_cli || true; fi
+  fi
 
   hts_print_summary || HTS_RUN_RC=1
   return 0
