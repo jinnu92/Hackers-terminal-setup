@@ -2559,7 +2559,8 @@ install_web_api() {
 
 # _devsec_sha <TOOL_PREFIX> <amd64|arm64> — pinned SHA-256 from versions.sh
 _devsec_sha() {
-  local var="${1}_SHA256_LINUX_$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+  local var
+  var="${1}_SHA256_LINUX_$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
   printf '%s' "${!var:-}"
 }
 
@@ -6037,11 +6038,12 @@ hts_lc_uninstall() {
     esac
   done < "$acts"
   if [[ "$HTS_LC_PURGE" == "1" ]]; then
-    _LC_MODE=exec; _lc_tools_remove
+    _LC_MODE="exec"; _lc_tools_remove
   fi
   _lc_summary || rc=1
   if [[ "$_LC_DRY" != "1" && "$rc" -eq 0 ]]; then
-    local arch="$HTS_MANIFEST.uninstalled-$(date +%Y%m%d-%H%M%S)"
+    local arch
+    arch="$HTS_MANIFEST.uninstalled-$(date +%Y%m%d-%H%M%S)"
     if mv -- "$HTS_MANIFEST" "$arch"; then info "Manifest archived to $arch (backups kept in $HTS_BACKUP_ROOT)"
     else warn "could not archive manifest"; rc=1; fi
   elif [[ "$rc" -ne 0 ]]; then
@@ -6088,7 +6090,7 @@ hts_lc_update() {
 
   _lc_collect_tools
   if [[ ! -s "$_LC_TOOLS" ]]; then info "No tools recorded in the manifest — nothing to upgrade."; _lc_cleanup; return 0; fi
-  _LC_MODE=exec
+  _LC_MODE="exec"
   for m in brew pipx npm go apt dnf yum pacman zypper cargo; do
     names="$(_lc_names_for "$m")"; [[ -n "$names" ]] || continue
     read -r -a arr <<< "$names"

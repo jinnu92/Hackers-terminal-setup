@@ -7,7 +7,8 @@
 
 # _devsec_sha <TOOL_PREFIX> <amd64|arm64> — pinned SHA-256 from versions.sh
 _devsec_sha() {
-  local var="${1}_SHA256_LINUX_$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+  local var
+  var="${1}_SHA256_LINUX_$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
   printf '%s' "${!var:-}"
 }
 
