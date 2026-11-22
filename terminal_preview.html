@@ -316,8 +316,9 @@
       min-height: 480px;
       max-height: 600px;
       overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
+      white-space: pre;
+      overflow-x: auto;
+      word-break: normal;
     }
 
     /* Colors in Terminal */
@@ -630,6 +631,34 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #313244; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #45475a; }
+
+    /* Responsive */
+    html, body { max-width: 100%; overflow-x: hidden; }
+    .terminal-window { max-width: 100%; }
+    .command-quickbar { flex-wrap: wrap; overflow-x: visible; }
+    .quickbar-label { width: 100%; }
+    @media (max-width: 1100px) {
+      .cards-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important; }
+    }
+    @media (max-width: 900px) {
+      header { flex-wrap: wrap; gap: 8px; height: auto !important; padding: 10px 14px !important; }
+      .header-actions { flex-wrap: wrap; gap: 8px; }
+      .app-container { flex-direction: column; height: auto !important; }
+      aside { width: 100% !important; flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: none; border-bottom: 1px solid var(--card-border); padding: 6px; flex-shrink: 0; }
+      aside > * { flex-shrink: 0; }
+      aside .nav-section-title { display: none; }
+      aside .nav-item { white-space: nowrap; }
+      main { width: 100%; min-width: 0; overflow-y: visible !important; padding: 16px 14px !important; }
+    }
+    @media (max-width: 640px) {
+      .cards-grid { grid-template-columns: 1fr !important; }
+      .export-bar { flex-direction: column; align-items: stretch; padding: 14px; }
+      .export-cmd { white-space: pre-wrap; word-break: break-all; min-width: 0; }
+      .copy-btn { width: 100%; }
+      .terminal-body { padding: 14px 12px; font-size: 0.78rem; }
+      .titlebar-meta { display: none; }
+      .terminal-titlebar { flex-wrap: wrap; }
+    }
   </style>
 </head>
 <body>
@@ -727,21 +756,21 @@
           </div>
 
           <div class="terminal-body" id="cockpit-sim-body">
-<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────╮</span>
-<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>  <span class="c-cyan c-bold">│</span>
-<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────</span>
+<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">NETWORK & TUNNELS</span>                    <span class="c-bold">SYSTEM & TELEMETRY</span>
   <span class="c-muted">├─ Local IP :</span> <span class="c-cyan">192.168.1.45</span> (en0)       <span class="c-muted">├─ Uptime :</span> 2 days 14h 22m
   <span class="c-muted">├─ Tunnel   :</span> <span id="cockpit-vpn-status"><span class="c-green">● ACTIVE</span> <span class="c-muted">(tun0: 10.10.14.8 / ligolo)</span></span>   <span class="c-muted">├─ Memory :</span> 11.2G / 32.0G (35%)
   <span class="c-muted">└─ Proxy    :</span> <span id="cockpit-proxy-status"><span class="c-green">● ON</span> <span class="c-muted">(127.0.0.1:8080 - Caido/Burp)</span></span>   <span class="c-muted">└─ Shell  :</span> zsh 5.9 (arm64)
-<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">SECURITY & AGENTIC WORKSPACE</span>
   <span class="c-muted">├─ Active Dir :</span> <span class="c-purple">~/pentest/2026-10-17_acme_corp/</span> <span class="c-muted">(Scaffolded via 'mkeng')</span>
   <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(cc)</span> • <span class="c-cyan">5 Sandboxed MCPs</span> <span class="c-muted">(sec-mcp)</span>
   <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">cheat</span> <span class="c-muted">(or ?)</span> • <span class="c-yellow">doctor</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
-<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!</span>
-<span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────╯</span>
+<span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────</span>
 
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span> <span class="p-seg p-git"> engagement-active</span> <span class="p-seg p-time"> 00:58:34</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="blinking-cursor"></span>
@@ -880,11 +909,11 @@
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/secure-vault</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">claude</span>
 
-<span class="c-peach c-bold">╭────────────────────────────────────────────────────────────────────────╮</span>
+<span class="c-peach c-bold">╭────────────────────────────────────────────────────────────────────────</span>
 <span class="c-peach c-bold">│</span>  <span class="c-bold">Claude Code</span> <span class="c-muted">v0.2.32 (Anthropic Agentic CLI)</span>                           <span class="c-peach c-bold">│</span>
 <span class="c-peach c-bold">│</span>  Model: <span class="c-green">claude-sonnet-5-5</span> | Context: <span class="c-cyan">200k tokens</span>                       <span class="c-peach c-bold">│</span>
 <span class="c-peach c-bold">│</span>  MCP Protocol: <span class="c-purple">Active (Filesystem, Git, Brave-Search, Memory, Semgrep)</span> <span class="c-peach c-bold">│</span>
-<span class="c-peach c-bold">╰────────────────────────────────────────────────────────────────────────╯</span>
+<span class="c-peach c-bold">╰────────────────────────────────────────────────────────────────────────</span>
 
 <span class="c-cyan">></span> <span class="c-bold">Check this repo for hardcoded API keys and explain any vulnerabilities found.</span>
 
@@ -1502,21 +1531,21 @@ Hackers-terminal-setup/
 
     function resetCockpit() {
       const body = document.getElementById('cockpit-sim-body');
-      body.innerHTML = `<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────╮</span>
-<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>  <span class="c-cyan c-bold">│</span>
-<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+      body.innerHTML = `<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────</span>
+<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">NETWORK & TUNNELS</span>                    <span class="c-bold">SYSTEM & TELEMETRY</span>
   <span class="c-muted">├─ Local IP :</span> <span class="c-cyan">192.168.1.45</span> (en0)       <span class="c-muted">├─ Uptime :</span> 2 days 14h 22m
   <span class="c-muted">├─ Tunnel   :</span> <span id="cockpit-vpn-status"><span class="c-green">● ACTIVE</span> <span class="c-muted">(tun0: 10.10.14.8 / ligolo)</span></span>   <span class="c-muted">├─ Memory :</span> 11.2G / 32.0G (35%)
   <span class="c-muted">└─ Proxy    :</span> <span id="cockpit-proxy-status"><span class="c-green">● ON</span> <span class="c-muted">(127.0.0.1:8080 - Caido/Burp)</span></span>   <span class="c-muted">└─ Shell  :</span> zsh 5.9 (arm64)
-<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">SECURITY & AGENTIC WORKSPACE</span>
   <span class="c-muted">├─ Active Dir :</span> <span class="c-purple">~/pentest/2026-10-17_acme_corp/</span> <span class="c-muted">(Scaffolded via 'mkeng')</span>
   <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(cc)</span> • <span class="c-cyan">5 Sandboxed MCPs</span> <span class="c-muted">(sec-mcp)</span>
   <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">cheat</span> <span class="c-muted">(or ?)</span> • <span class="c-yellow">doctor</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
-<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────┤</span>
+<span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!</span>
-<span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────╯</span>
+<span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────</span>
 
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span> <span class="p-seg p-git"> engagement-active</span> <span class="p-seg p-time"> 00:58:34</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="blinking-cursor"></span>`;
