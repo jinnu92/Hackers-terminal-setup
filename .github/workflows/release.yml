@@ -3,6 +3,12 @@ name: Release integrity
 on:
   release:
     types: [published]
+  # Manual run for an existing tag, for example after a signing outage.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to (re)process, e.g. v2.1.0"
+        required: true
 
 # Each permission is the minimum for one step:
 #   contents: write      attach ter.sh and SHA256SUMS to the release (gh release upload)
@@ -20,7 +26,7 @@ jobs:
       - name: Check out the release tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: ter.sh matches the bundler output
         run: |
@@ -34,15 +40,18 @@ jobs:
       - name: Generate SHA256SUMS
         run: sha256sum ter.sh > SHA256SUMS && cat SHA256SUMS
 
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" ter.sh SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+
+      # Signing depends on the public Sigstore service. The checksums above are
+      # already attached, so a signing outage must not fail the release.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             ter.sh
             SHA256SUMS
-
-      - name: Attach to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" ter.sh SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
