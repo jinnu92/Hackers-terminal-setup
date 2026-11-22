@@ -31,7 +31,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   _HTS_PIPED=0
   _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ -d "$_HTS_ROOT/lib" ]]; then
-    for _mod in common pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
+    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
       [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
     done
   fi
@@ -45,6 +45,7 @@ EOF
 # Modules in strict dependency order
 MODULES=(
   "lib/common.sh"
+  "lib/versions.sh"
   "lib/pkg_mgr.sh"
   "lib/helpers.sh"
   "lib/preflight.sh"

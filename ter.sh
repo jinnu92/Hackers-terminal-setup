@@ -15,7 +15,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   _HTS_PIPED=0
   _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ -d "$_HTS_ROOT/lib" ]]; then
-    for _mod in common pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
+    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
       [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
     done
   fi
@@ -281,6 +281,35 @@ detect_os() {
 }
 
 # ─── End: lib/common.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/versions.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/versions.sh — Pinned versions and SHA-256 digests for direct downloads
+#
+#  Every binary the installer downloads directly (not through a package
+#  manager) is pinned here and verified with hts_download_verify.
+#  Naming: <TOOL>_VERSION, and <TOOL>_SHA256_<OS>_<ARCH> for each asset,
+#  where OS is DARWIN or LINUX and ARCH is AMD64 or ARM64.
+# =============================================================================
+
+# ─── Security tool suites (ad_pivoting, mobile_re, bugbounty, pentest, web_api) ──
+# (security-suite pins go below this line)
+
+
+
+# ─── end security tool suites ─────────────────────────────────────────────────
+
+
+
+
+# ─── Platform, workflow and cloud (workflow, dev, cloud, cloud_devsec, fonts) ──
+# (platform pins go below this line)
+
+
+
+# ─── end platform, workflow and cloud ─────────────────────────────────────────
+
+# ─── End: lib/versions.sh ────────────────────────────────────────────
 
 # ─── Begin: lib/pkg_mgr.sh ──────────────────────────────────────────
 # =============================================================================
