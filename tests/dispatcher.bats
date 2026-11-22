@@ -163,7 +163,7 @@ DRV
 
 @test "piped stdin without a terminal and no menu input does not hang or install" {
   # No arguments and no tty: must not run an install silently from a closed stdin.
-  run timeout 20 "$TEST_BASH" "$REPO_ROOT/ter.sh" --dry-run < /dev/null
+  run perl -e 'alarm 20; exec @ARGV' "$TEST_BASH" "$REPO_ROOT/ter.sh" --dry-run < /dev/null
   [ "$status" -eq 0 ]
   assert_home_untouched
 }
