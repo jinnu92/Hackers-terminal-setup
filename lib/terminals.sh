@@ -144,7 +144,11 @@ install_alacritty() {
   if ! _term_present alacritty Alacritty.app; then
     _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install_cask alacritty
+      if ! pkg_install_cask alacritty || ! _term_present alacritty Alacritty.app; then
+        warn "Alacritty: skipped — the Homebrew cask is unavailable (Homebrew disables casks that fail macOS Gatekeeper checks)"
+        hts_result skip "Alacritty" "Homebrew cask unavailable"
+        return 0
+      fi
     else
       case "$PKG_MGR" in
         apt)

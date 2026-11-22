@@ -191,6 +191,19 @@ servers = doc.get("mcpServers")
 if not isinstance(servers, dict):
     servers = {}
 servers.update(new)
+# Drop leftovers that launch packages which no longer exist or are archived.
+DEAD = ("@modelcontextprotocol/server-github",
+        "@modelcontextprotocol/server-brave-search",
+        "@modelcontextprotocol/server-fetch")
+def launches_dead(entry):
+    if not isinstance(entry, dict):
+        return False
+    for arg in entry.get("args") or []:
+        if isinstance(arg, str) and any(arg == d or arg.startswith(d + "@") for d in DEAD):
+            return True
+    return False
+for name in [n for n, e in servers.items() if n not in new and launches_dead(e)]:
+    del servers[name]
 doc["mcpServers"] = servers
 with open(out, "w") as f:
     json.dump(doc, f, indent=2)
@@ -204,7 +217,13 @@ PY
   elif command -v jq &>/dev/null; then
     local base="$cfg"
     if [[ ! -s "$cfg" ]]; then base="$tmp.empty"; echo '{}' > "$base"; fi
-    if ! jq --slurpfile new "$entries" '.mcpServers = ((.mcpServers // {}) + $new[0])' "$base" > "$tmp" 2>/dev/null; then
+    # Same rule as the python path: merge, then drop leftovers that launch dead packages
+    if ! jq --slurpfile new "$entries" '
+        def dead: ["@modelcontextprotocol/server-github", "@modelcontextprotocol/server-brave-search", "@modelcontextprotocol/server-fetch"];
+        def launches_dead: ((.args // []) | map(select(type == "string")) | any(. as $a | dead | any(. as $d | $a == $d or ($a | startswith($d + "@")))));
+        .mcpServers = (((.mcpServers // {}) + $new[0])
+          | with_entries(select((.key as $k | $new[0] | has($k)) or ((.value | launches_dead) | not))))
+      ' "$base" > "$tmp" 2>/dev/null; then
       rm -f "$tmp" "$tmp.empty"
       _mcp_side_file "$cfg" "$entries" "$side"
       return 1

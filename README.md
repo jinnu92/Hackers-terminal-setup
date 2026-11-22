@@ -115,7 +115,7 @@ Other options: `-y/--yes` (no prompts), `-a/--all`, `-n/--dry-run`, `-d/--doctor
 ```bash
 ./ter.sh --list              # the numbered component table
 ./ter.sh --dry-run --core --mcp
-./ter.sh --version           # Hackers Terminal Setup 2.1.0
+./ter.sh --version           # Hackers Terminal Setup 2.1.1
 ```
 
 `--dry-run` prints, per component, what it would install and which files it would write. It writes nothing, creates nothing and runs no package manager.
@@ -201,7 +201,7 @@ kube-hunter was dropped (unmaintained upstream); kubescape, kube-bench and osv-s
 | Ghostty | yes | skipped (no official package) | skipped (no official package) | yes | no |
 | WezTerm | yes | yes, via the upstream apt repository `apt.fury.io/wez` (added by the installer) | yes, via the upstream COPR `wezfurlong/wezterm-nightly` (nightly builds) | yes | no |
 | Kitty | yes | yes | yes | yes | yes |
-| Alacritty | yes | only if the release has the package (Debian 13+, Ubuntu 24.04+) | yes | yes | yes |
+| Alacritty | skipped while the Homebrew cask is disabled | only if the release has the package (Debian 13+, Ubuntu 24.04+) | yes | yes | yes |
 
 Other package managers: nothing is installed. On WSL and on headless Linux (no `DISPLAY` or `WAYLAND_DISPLAY`) no GUI terminal is installed at all. A terminal's config file is written only if that terminal is present.
 

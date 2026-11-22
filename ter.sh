@@ -42,7 +42,7 @@ step() { echo -e "\n${BOLD}${CYAN}━━━ $1 ━━━${RESET}"; }
 ok()   { echo -e "${GREEN}✓${RESET} $1"; }
 
 # ─── Version, State, Log, Manifest ───────────────────────────────────────────
-HTS_VERSION="2.1.0"
+HTS_VERSION="2.1.1"
 HTS_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hts"
 HTS_LOG="$HTS_STATE_DIR/install.log"
 HTS_MANIFEST="$HTS_STATE_DIR/manifest.tsv"
@@ -1644,7 +1644,11 @@ install_alacritty() {
   if ! _term_present alacritty Alacritty.app; then
     _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install_cask alacritty
+      if ! pkg_install_cask alacritty || ! _term_present alacritty Alacritty.app; then
+        warn "Alacritty: skipped — the Homebrew cask is unavailable (Homebrew disables casks that fail macOS Gatekeeper checks)"
+        hts_result skip "Alacritty" "Homebrew cask unavailable"
+        return 0
+      fi
     else
       case "$PKG_MGR" in
         apt)
@@ -3476,6 +3480,19 @@ servers = doc.get("mcpServers")
 if not isinstance(servers, dict):
     servers = {}
 servers.update(new)
+# Drop leftovers that launch packages which no longer exist or are archived.
+DEAD = ("@modelcontextprotocol/server-github",
+        "@modelcontextprotocol/server-brave-search",
+        "@modelcontextprotocol/server-fetch")
+def launches_dead(entry):
+    if not isinstance(entry, dict):
+        return False
+    for arg in entry.get("args") or []:
+        if isinstance(arg, str) and any(arg == d or arg.startswith(d + "@") for d in DEAD):
+            return True
+    return False
+for name in [n for n, e in servers.items() if n not in new and launches_dead(e)]:
+    del servers[name]
 doc["mcpServers"] = servers
 with open(out, "w") as f:
     json.dump(doc, f, indent=2)
@@ -3489,7 +3506,13 @@ PY
   elif command -v jq &>/dev/null; then
     local base="$cfg"
     if [[ ! -s "$cfg" ]]; then base="$tmp.empty"; echo '{}' > "$base"; fi
-    if ! jq --slurpfile new "$entries" '.mcpServers = ((.mcpServers // {}) + $new[0])' "$base" > "$tmp" 2>/dev/null; then
+    # Same rule as the python path: merge, then drop leftovers that launch dead packages
+    if ! jq --slurpfile new "$entries" '
+        def dead: ["@modelcontextprotocol/server-github", "@modelcontextprotocol/server-brave-search", "@modelcontextprotocol/server-fetch"];
+        def launches_dead: ((.args // []) | map(select(type == "string")) | any(. as $a | dead | any(. as $d | $a == $d or ($a | startswith($d + "@")))));
+        .mcpServers = (((.mcpServers // {}) + $new[0])
+          | with_entries(select((.key as $k | $new[0] | has($k)) or ((.value | launches_dead) | not))))
+      ' "$base" > "$tmp" 2>/dev/null; then
       rm -f "$tmp" "$tmp.empty"
       _mcp_side_file "$cfg" "$entries" "$side"
       return 1
@@ -4806,7 +4829,7 @@ _doc_collect_items() {
   _b terminals "Ghostty" "ghostty|app:Ghostty.app" "--version" optlinux
   _b terminals "WezTerm" "wezterm|app:WezTerm.app" "--version"
   _b terminals "Kitty" "kitty|app:kitty.app" "--version"
-  _b terminals "Alacritty" "alacritty|app:Alacritty.app" "--version"
+  _b terminals "Alacritty" "alacritty|app:Alacritty.app" "--version" opt
   _f terminals "ghostty/config" "$cfg/ghostty/config"
   _f terminals "wezterm.lua" "$cfg/wezterm/wezterm.lua"
   _f terminals "kitty.conf" "$cfg/kitty/kitty.conf"

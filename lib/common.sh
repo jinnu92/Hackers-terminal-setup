@@ -16,7 +16,7 @@ step() { echo -e "\n${BOLD}${CYAN}━━━ $1 ━━━${RESET}"; }
 ok()   { echo -e "${GREEN}✓${RESET} $1"; }
 
 # ─── Version, State, Log, Manifest ───────────────────────────────────────────
-HTS_VERSION="2.1.0"
+HTS_VERSION="2.1.1"
 HTS_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hts"
 HTS_LOG="$HTS_STATE_DIR/install.log"
 HTS_MANIFEST="$HTS_STATE_DIR/manifest.tsv"

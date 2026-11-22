@@ -185,7 +185,7 @@ _doc_collect_items() {
   _b terminals "Ghostty" "ghostty|app:Ghostty.app" "--version" optlinux
   _b terminals "WezTerm" "wezterm|app:WezTerm.app" "--version"
   _b terminals "Kitty" "kitty|app:kitty.app" "--version"
-  _b terminals "Alacritty" "alacritty|app:Alacritty.app" "--version"
+  _b terminals "Alacritty" "alacritty|app:Alacritty.app" "--version" opt
   _f terminals "ghostty/config" "$cfg/ghostty/config"
   _f terminals "wezterm.lua" "$cfg/wezterm/wezterm.lua"
   _f terminals "kitty.conf" "$cfg/kitty/kitty.conf"
