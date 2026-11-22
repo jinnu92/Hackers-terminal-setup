@@ -1,16 +1,20 @@
 name: Install smoke test
 
-# A real end-to-end install on a disposable GitHub-hosted runner. It is slow and
-# touches the network, so it is not part of the lint badge or the PR test matrix:
-# it runs on demand and when the installer itself changes on main.
+# Real end-to-end installs on disposable GitHub-hosted runners. They are slow and
+# depend on the network, so they are not part of the lint badge or the PR test
+# matrix: they run on demand, on ci-smoke/* branches (to gate a release before
+# it reaches main), and when the installer itself changes on main.
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "ci-smoke/**"
     paths:
       - "lib/**"
       - "bundle.sh"
       - "ter.sh"
+      - ".github/workflows/install-smoke.yml"
 
 permissions:
   contents: read
@@ -21,8 +25,20 @@ concurrency:
 
 jobs:
   install:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    name: ${{ matrix.profile.name }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        profile:
+          - name: base
+            flags: "--shell-tools --workflow --dashboard --config"
+          - name: ai
+            flags: "--claude --mcp"
+          - name: recon
+            flags: "--bugbounty"
     steps:
       - uses: actions/checkout@v4
 
@@ -38,17 +54,57 @@ jobs:
             fi
           done
 
-      - name: Real install (shell-tools, workflow, config)
-        run: ./ter.sh -y --shell-tools --workflow --config
+      - name: Dry run prints a plan and changes nothing
+        run: ./ter.sh --dry-run ${{ matrix.profile.flags }}
+
+      - name: Real install
+        run: ./ter.sh -y ${{ matrix.profile.flags }}
 
       - name: Status
+        if: always()
         run: ./ter.sh --status
 
       - name: Doctor (JSON output must be valid JSON)
+        if: always()
         run: |
-          # The doctor may exit non-zero when a tool is missing; only the JSON matters here.
-          ./ter.sh --doctor --json > "$RUNNER_TEMP/doctor.json" || echo "doctor exit code: $?"
-          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("valid JSON,", type(d).__name__)' "$RUNNER_TEMP/doctor.json"
+          # The doctor exits non-zero when a required tool of an installed
+          # component is missing; print what is missing either way.
+          rc=0
+          ./ter.sh --doctor --json > "$RUNNER_TEMP/doctor.json" || rc=$?
+          python3 - "$RUNNER_TEMP/doctor.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          print("totals:", d.get("totals"))
+          for comp, items in d.get("components", {}).items():
+              missing = [i["name"] for i in items if i.get("status") == "missing"]
+              if missing and d.get("component_state", {}).get(comp) not in (None, "not-installed", "informational"):
+                  print(f"missing in installed component {comp}: {missing}")
+          for h in d.get("hygiene", []):
+              if h.get("status") != "ok":
+                  print("hygiene:", h.get("name"), "-", h.get("status"), "-", h.get("detail"))
+          PY
+          echo "doctor exit code: $rc"
+
+      - name: hts command and settings
+        if: matrix.profile.name == 'base'
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          hts version
+          hts config
+          hts config welcome compact
+          hts config welcome_ip hide
+          grep -q '^welcome=compact$' "${XDG_CONFIG_HOME:-$HOME/.config}/hts/config"
+          if hts config welcome nonsense; then echo "invalid value was accepted"; exit 1; fi
+          hts status
+
+      - name: Generated shell files parse and the welcome screen runs
+        if: matrix.profile.name == 'base'
+        run: |
+          command -v zsh || { echo "zsh not installed by this profile; skipping"; exit 0; }
+          zsh -n "$HOME/.zshrc"
+          for f in "$HOME"/.oh-my-zsh/custom/*.zsh; do [ -e "$f" ] && zsh -n "$f"; done
+          # An interactive login must start and exit cleanly with the generated config
+          zsh -i -c 'echo shell-started' </dev/null
 
       - name: Uninstall
         run: ./ter.sh --uninstall -y
@@ -65,11 +121,50 @@ jobs:
           done
 
       - name: Upload install log
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: install-log
+          name: install-log-${{ matrix.os }}-${{ matrix.profile.name }}
           path: |
             ~/.local/state/hts/install.log
             ~/.local/state/hts/manifest.tsv*
           if-no-files-found: warn
+
+  piped:
+    name: Piped one-line install on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Piped run from a directory with a decoy lib/ (must not be sourced)
+        run: |
+          work="$RUNNER_TEMP/decoy"
+          mkdir -p "$work/lib"
+          echo 'touch "$RUNNER_TEMP/decoy-was-sourced"' > "$work/lib/common.sh"
+          cd "$work"
+          bash -s -- --version < "$GITHUB_WORKSPACE/ter.sh"
+          bash -s -- --dry-run --all < "$GITHUB_WORKSPACE/ter.sh" > /dev/null
+          if [ -e "$RUNNER_TEMP/decoy-was-sourced" ]; then echo "decoy lib/ was sourced"; exit 1; fi
+
+      - name: Piped interactive menu without a terminal must refuse, not install
+        run: |
+          cd "$RUNNER_TEMP"
+          if setsid --help >/dev/null 2>&1; then runner="setsid"; else runner=""; fi
+          set +e
+          $runner perl -e 'alarm 90; exec @ARGV' bash < "$GITHUB_WORKSPACE/ter.sh" > "$RUNNER_TEMP/menu.out" 2>&1
+          rc=$?
+          set -e
+          tail -5 "$RUNNER_TEMP/menu.out"
+          if [ "$rc" -eq 0 ]; then echo "piped menu with no terminal exited 0"; exit 1; fi
+          if [ -e "$HOME/.local/state/hts/manifest.tsv" ]; then echo "something was installed"; exit 1; fi
+
+      - name: Piped real install of one small component
+        run: |
+          cd "$RUNNER_TEMP"
+          bash -s -- -y --fonts < "$GITHUB_WORKSPACE/ter.sh"
+          bash -s -- --status < "$GITHUB_WORKSPACE/ter.sh"
