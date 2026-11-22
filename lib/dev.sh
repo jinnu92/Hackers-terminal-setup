@@ -5,7 +5,7 @@
 
 install_node() {
   step "Node.js & npm setup"
-  local min_version=18
+  local min_version="${NODE_MIN_MAJOR:-22}"
   local current_version=0
 
   if command -v node &>/dev/null; then

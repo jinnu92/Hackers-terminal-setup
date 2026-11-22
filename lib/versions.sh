@@ -74,3 +74,19 @@ MESLO_SHA256_BOLD_ITALIC="56b4131adecec052c4b324efb818dd326d586dbc316fc68f98f1ca
 
 
 # ─── end platform, workflow and cloud ─────────────────────────────────────────
+
+
+
+
+# ─── Language runtimes ────────────────────────────────────────────────────────
+# Go — official toolchain from go.dev, digests from https://go.dev/dl/?mode=json
+GO_VERSION="1.27.4"
+GO_SHA256_LINUX_AMD64="7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840"
+GO_SHA256_LINUX_ARM64="3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92"
+GO_SHA256_DARWIN_AMD64="2b799377704ef12db39bd254995d5c348c9cc8d86562ca817724390e56c38f43"
+GO_SHA256_DARWIN_ARM64="91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4"
+
+# Node.js — the installer always installs the newest LTS line; this is the
+# oldest line it leaves in place (the oldest LTS still receiving fixes).
+NODE_MIN_MAJOR=22
+# ─── end language runtimes ────────────────────────────────────────────────────
