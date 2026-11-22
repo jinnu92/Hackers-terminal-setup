@@ -28,8 +28,14 @@ pipx_install() {
     info "$pkg already installed via pipx"
   else
     log "Installing $pkg via pipx..."
-    pipx install "$pkg" || warn "pipx install $pkg failed"
+    if pipx install "$pkg"; then
+      hts_manifest_add tool "$pkg" "pipx"
+    else
+      warn "pipx install $pkg failed"
+      return 1
+    fi
   fi
+  return 0
 }
 
 # hts_node_managed — succeeds (and prints the manager name) when nvm, fnm or Volta
@@ -61,8 +67,14 @@ npm_global_install() {
     info "$pkg already installed via npm"
   else
     log "Installing $pkg via npm..."
-    npm install -g "$pkg" || warn "npm install -g $pkg failed"
+    if npm install -g "$pkg"; then
+      hts_manifest_add tool "$pkg" "npm"
+    else
+      warn "npm install -g $pkg failed"
+      return 1
+    fi
   fi
+  return 0
 }
 
 go_install() {
@@ -78,9 +90,17 @@ go_install() {
     fi
     if command -v go &>/dev/null; then
       log "go install $pkg..."
-      go install "$pkg" || warn "go install $pkg failed"
+      if go install "$pkg"; then
+        # detail records the module path so --update can run "go install <path>@latest"
+        hts_manifest_add tool "$name" "go:${pkg%@*}"
+      else
+        warn "go install $pkg failed"
+        return 1
+      fi
     else
       warn "go not found — cannot install $name. Install go first."
+      return 1
     fi
   fi
+  return 0
 }

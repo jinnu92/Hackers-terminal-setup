@@ -31,7 +31,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   _HTS_PIPED=0
   _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ -d "$_HTS_ROOT/lib" ]]; then
-    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
+    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs lifecycle menu; do
       [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
     done
   fi
@@ -65,6 +65,7 @@ MODULES=(
   "lib/dashboard.sh"
   "lib/doctor.sh"
   "lib/configs.sh"
+  "lib/lifecycle.sh"
   "lib/menu.sh"
 )
 
@@ -126,8 +127,17 @@ hts_help() {
       echo "  -d, --doctor     Run system diagnostic audit (works in any position)"
       echo "  -n, --dry-run    Show what would be installed or written, change nothing"
       echo "      --list       List all components (number, flag, name, contents) and exit"
+      echo "      --json       With --doctor: machine-readable JSON output (no banner/summary)"
       echo "  -V, --version    Print the version and exit"
       echo "  -h, --help       Show this help message"
+      echo ""
+      echo "Lifecycle (run alone; no preflight, cannot be combined with components):"
+      echo "  --status             Show installed components, tracked tools/files, backup runs, log/manifest paths"
+      echo "  --restore [TS]       Restore backed-up files (default: earliest backup of each file); -y, --dry-run"
+      echo "  --uninstall          Restore backups / remove files this tool created (tools are only listed)"
+      echo "  --purge-tools        With --uninstall: also remove manifest-recorded tools via their package manager"
+      echo "  --update             Check for a newer release; upgrade manifest-recorded tools"
+      echo "  Works piped too:     curl -fsSL <url>/ter.sh | bash -s -- --status"
       echo ""
       echo "Unknown options are an error: nothing runs until the whole selection is valid."
       echo "Each component runs independently; a results summary and log"
@@ -156,6 +166,20 @@ _hts_main() {
       --list)          hts_list_components; exit 0 ;;
     esac
   done
+
+  # Lifecycle commands (--status/--restore/--uninstall/--update) are validated first and
+  # never reach preflight or any install function. --json is consumed here.
+  hts_lifecycle_parse "$@" || exit 2
+  if [[ -n "$HTS_LC_CMD" ]]; then
+    hts_lifecycle_run
+    exit $?
+  fi
+  set -- "${HTS_PASSTHRU[@]}"
+  if [[ "${HTS_DOCTOR_FORMAT:-}" == "json" ]] && hts_doctor_only_args "$@"; then
+    detect_os >/dev/null    # JSON on stdout only: no OS lines, banner or summary
+    sec_doctor
+    exit $?
+  fi
 
   HTS_RUN_RC=0
   HTS_SHOW_BANNER=0
