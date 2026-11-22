@@ -69,42 +69,39 @@ _set_npm_prefix() {
 }
 
 install_claude() {
-  step "Claude Code CLI (@anthropic-ai/claude-code)"
+  step "Claude Code CLI (native installer)"
 
-  if ! command -v node &>/dev/null; then
-    log "Node.js is required for Claude Code. Installing Node.js..."
-    install_node || { err "Node.js installation failed; cannot install Claude Code"; return 1; }
-  fi
-
-  _set_npm_prefix
-
-  # NOTE: Anthropic's documented install method is now the native installer
-  # (curl -fsSL https://claude.ai/install.sh | bash; or "brew install --cask
-  # claude-code"). The npm package still works but needs Node.js 22+.
+  # Anthropic's documented install method is the native installer, which puts a
+  # self-updating binary in ~/.local/bin and needs neither Node.js nor sudo.
+  # (The npm package @anthropic-ai/claude-code still exists but needs Node 22+.)
   if command -v claude &>/dev/null; then
-    info "Claude Code is already installed: $(claude --version 2>/dev/null || echo 'installed')"
-    log "Checking for Claude Code updates..."
-    npm install -g @anthropic-ai/claude-code || warn "Failed to update @anthropic-ai/claude-code"
-  else
-    log "Installing @anthropic-ai/claude-code via npm..."
-    if npm install -g @anthropic-ai/claude-code; then
-      hts_manifest_add tool "@anthropic-ai/claude-code" "npm"
-    else
-      warn "Failed to install @anthropic-ai/claude-code"
-    fi
-  fi
-
-  if command -v claude &>/dev/null; then
-    ok "Claude Code installed: $(claude --version 2>/dev/null || echo 'ready')"
-    info "Run Claude Code with: ${BOLD}claude${RESET} (or shortcut ${BOLD}cc${RESET})"
-    info "Authentication: set ${BOLD}export ANTHROPIC_API_KEY='your-key'${RESET} or run ${BOLD}claude${RESET} to log in"
-  else
-    warn "Claude Code installed, but 'claude' command not found in PATH yet. Ensure ~/.npm-global/bin is in PATH."
+    ok "Claude Code is already installed: $(claude --version 2>/dev/null || echo 'installed')"
+    info "Left as is. The native build updates itself; an npm install can be moved over with: ${BOLD}claude install${RESET}"
     hts_verify_cmd "Claude Code CLI" claude
-    return 1
+    return 0
   fi
-  hts_verify_cmd "Claude Code CLI" claude
-  return 0
+
+  log "Installing Claude Code with the official native installer (stable channel)..."
+  if hts_run_remote_script "https://claude.ai/install.sh" bash stable; then
+    hts_manifest_add tool "claude-code" "native"
+  else
+    warn "Claude Code native installer failed"
+  fi
+
+  # The installer targets ~/.local/bin, which may not be on PATH in this shell yet
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+  esac
+
+  if hts_verify_cmd "Claude Code CLI" claude; then
+    ok "Claude Code installed: $(claude --version 2>/dev/null || echo 'ready')"
+    info "Run Claude Code with: ${BOLD}claude${RESET} (or shortcut ${BOLD}ccode${RESET})"
+    info "Authentication: run ${BOLD}claude${RESET} to log in, or set ${BOLD}export ANTHROPIC_API_KEY='your-key'${RESET}"
+    return 0
+  fi
+  warn "Claude Code was not found after install. Ensure ~/.local/bin is in PATH and re-run: ./ter.sh --claude"
+  return 1
 }
 
 install_code() {

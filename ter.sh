@@ -15,7 +15,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   _HTS_PIPED=0
   _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ -d "$_HTS_ROOT/lib" ]]; then
-    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
+    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs lifecycle menu; do
       [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
     done
   fi
@@ -305,6 +305,56 @@ detect_os() {
 # ─── Platform, workflow and cloud (workflow, dev, cloud, cloud_devsec, fonts) ──
 # (platform pins go below this line)
 
+# Aqua / Anchore installers: the script URL is pinned to the same tag and the
+# version is also passed to the installer's own version argument.
+TRIVY_VERSION="v0.76.2"
+SYFT_VERSION="v1.57.2"
+GRYPE_VERSION="v0.122.1"
+
+# yq (mikefarah) — single binary
+YQ_VERSION="v4.54.3"
+YQ_SHA256_LINUX_AMD64="129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973"
+YQ_SHA256_LINUX_ARM64="89f69310b61b68d1245065a1241d1fc843f7a36cd6103ffd77ad987613bd1b67"
+
+# lazygit — release tarball (asset names use the version without the "v")
+LAZYGIT_VERSION="0.66.3"
+LAZYGIT_SHA256_LINUX_AMD64="0a23f429a95f0d09db298b3c291536d818de066aa5a85c255806f0490ff6656b"
+LAZYGIT_SHA256_LINUX_ARM64="ac0b48237f3d0283813e7154ec063237e519532feb0470c0881a1793ee78fd42"
+
+# xh — musl release tarball (its own installer script floats to "latest" and prompts)
+XH_VERSION="v0.26.3"
+XH_SHA256_LINUX_AMD64="cbbf53bd76007d57d95e4bed8ba7fb3b7fcec22af4bdfc1ff119cd5de351e74f"
+XH_SHA256_LINUX_ARM64="a45d8cb6c234c6850f9fc2395fc3544ab7691fb511237f00179aedba1bcd525e"
+
+# kubescape — single binary
+KUBESCAPE_VERSION="v4.0.21"
+KUBESCAPE_SHA256_LINUX_AMD64="7a997a0d46ea37f83fa33d318e615721f569f3721b36a96f7f2c0254b6570fae"
+KUBESCAPE_SHA256_LINUX_ARM64="7a4c963e3b173380dca2788c0a24144cc8a793e731edc28b902bf26a3d98c649"
+
+# kube-bench — release tarball (binary + cfg/), asset names use no "v"
+KUBE_BENCH_VERSION="0.16.0"
+KUBE_BENCH_SHA256_LINUX_AMD64="82dbc7e598740dc9344d41f8ad0b8210d57c4c00bdb2c5f1d8a69a2b98baddcf"
+KUBE_BENCH_SHA256_LINUX_ARM64="64500561f5fcaa3f86fe951ed26bbfc28f7bbf3d2eac13843abfd2924955d10b"
+
+# osv-scanner — single binary
+OSV_SCANNER_VERSION="v2.7.1"
+OSV_SCANNER_SHA256_LINUX_AMD64="fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8"
+OSV_SCANNER_SHA256_LINUX_ARM64="983d22fbad9724514e3fcc6acc83b5fa64c5ffa6b0d9f510028f22c1b223ff81"
+
+# Nerd Fonts release archives (.tar.xz)
+NERDFONTS_VERSION="v3.5.1"
+NERDFONTS_SHA256_JETBRAINSMONO="04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf"
+NERDFONTS_SHA256_FIRACODE="68e3bd6164864b8b514605bc34e3a87ac401c8c48682fcce6478c70263340207"
+NERDFONTS_SHA256_HACK="cdd389472e10e2261520140ff1b382b4f8a226af5fd0b2735b975d31151d9c3c"
+NERDFONTS_SHA256_CASCADIACODE="ae598e9401e2846aa3ee364513715de0490b844a4b54f0768991f45f23aa8369"
+
+
+# MesloLGS NF (Powerlevel10k fonts) — pinned to a commit of powerlevel10k-media
+MESLO_MEDIA_COMMIT="145eb9fbc2f42ee408dacd9b22d8e6e0e553f83d"
+MESLO_SHA256_REGULAR="d97946186e97f8d7c0139e8983abf40a1d2d086924f2c5dbf1c29bd8f2c6e57d"
+MESLO_SHA256_BOLD="b6c0199cf7c7483c8343ea020658925e6de0aeb318b89908152fcb4d19226003"
+MESLO_SHA256_ITALIC="6f357bcbe2597704e157a915625928bca38364a89c22a4ac36e7a116dcd392ef"
+MESLO_SHA256_BOLD_ITALIC="56b4131adecec052c4b324efb818dd326d586dbc316fc68f98f1cae2eb8d1220"
 
 
 # ─── end platform, workflow and cloud ─────────────────────────────────────────
@@ -316,43 +366,113 @@ detect_os() {
 #  lib/pkg_mgr.sh — Package Manager Abstraction & Distro Resolvers
 # =============================================================================
 
+# Exit status used by resolve_pkg/pkg_install when a tool has no package on the
+# active package manager, so callers can fall back to a direct install.
+HTS_PKG_UNMAPPED=3
+_HTS_PKG_REFRESHED=0
+
+# _sudo <command...> — run privileged: directly when already root, through sudo
+# otherwise, and fail loudly when neither is possible.
+_sudo() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+  elif command -v sudo &>/dev/null; then
+    sudo "$@"
+  else
+    err "Need root privileges to run '$1' but sudo is not installed (re-run as root)"
+    return 1
+  fi
+}
+
+# _sudo_interp — print the interpreter prefix for hts_run_remote_script when the
+# script must run privileged: "bash" as root, "sudo -E bash" otherwise.
+_sudo_interp() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    echo "bash"
+  elif command -v sudo &>/dev/null; then
+    echo "sudo -E bash"
+  else
+    err "Need root privileges but sudo is not installed (re-run as root)"
+    return 1
+  fi
+}
+
+# pkg_update — refresh the package index once per run (guarded). Safe to call
+# from several places; only the first call does any work.
 pkg_update() {
+  [[ "$_HTS_PKG_REFRESHED" == "1" ]] && return 0
+  _HTS_PKG_REFRESHED=1
   case "$PKG_MGR" in
-    brew)   brew update ;;
-    apt)    sudo apt-get update -qq ;;
-    dnf)    sudo dnf check-update -q || true ;;
-    yum)    sudo yum check-update -q || true ;;
-    pacman) sudo pacman -Sy --noconfirm ;;
-    zypper) sudo zypper refresh -q ;;
+    brew)   brew update || warn "brew update failed (continuing)" ;;
+    apt)    _sudo apt-get update -qq || warn "apt-get update failed (continuing)" ;;
+    dnf)    _sudo dnf makecache -q || warn "dnf makecache failed (continuing)" ;;
+    yum)    _sudo yum makecache -q || warn "yum makecache failed (continuing)" ;;
+    pacman)
+      # -Sy alone leaves Arch in an unsupported partial-upgrade state; sync
+      # and upgrade together so later installs resolve against a coherent set.
+      warn "Arch: running a full system upgrade (pacman -Syu) so packages install safely"
+      _sudo pacman -Syu --noconfirm || warn "pacman -Syu failed (continuing)" ;;
+    zypper) _sudo zypper --non-interactive refresh -q || warn "zypper refresh failed (continuing)" ;;
+  esac
+  return 0
+}
+
+# Lazy refresh before the first install on any path.
+pkg_refresh_once() { pkg_update; }
+
+# _pkg_is_installed <resolved-name> — is it already present on this system?
+_pkg_is_installed() {
+  case "$PKG_MGR" in
+    brew)             brew list "$1" &>/dev/null ;;
+    apt)              dpkg -s "$1" &>/dev/null ;;
+    dnf|yum|zypper)   rpm -q "$1" &>/dev/null ;;
+    pacman)           pacman -Q "$1" &>/dev/null ;;
+    *)                return 1 ;;
   esac
 }
 
-pkg_install() {
-  local pkg
-  for pkg in "$@"; do
-    local resolved
-    resolved="$(resolve_pkg "$pkg")"
-    [[ -z "$resolved" ]] && { warn "No package mapping for '$pkg' on $DISTRO — skipping"; continue; }
+# _pkg_run_install <resolved-name>
+_pkg_run_install() {
+  case "$PKG_MGR" in
+    brew)   brew install "$1" ;;
+    apt)    _sudo apt-get install -y "$1" ;;
+    dnf)    _sudo dnf install -y "$1" ;;
+    yum)    _sudo yum install -y "$1" ;;
+    pacman) _sudo pacman -S --noconfirm --needed "$1" ;;
+    zypper) _sudo zypper --non-interactive install -y "$1" ;;
+    *)      return 1 ;;
+  esac
+}
 
-    case "$PKG_MGR" in
-      brew)
-        if brew list "$resolved" &>/dev/null; then
-          info "$resolved already installed"
-        else
-          brew install "$resolved" || warn "brew install $resolved failed"
-        fi ;;
-      apt)
-        if dpkg -s "$resolved" &>/dev/null 2>&1; then
-          info "$resolved already installed"
-        else
-          sudo apt-get install -y "$resolved" || warn "apt install $resolved failed"
-        fi ;;
-      dnf)    sudo dnf install -y "$resolved" || warn "dnf install $resolved failed" ;;
-      yum)    sudo yum install -y "$resolved" || warn "yum install $resolved failed" ;;
-      pacman) sudo pacman -S --noconfirm --needed "$resolved" || warn "pacman install $resolved failed" ;;
-      zypper) sudo zypper install -y "$resolved" || warn "zypper install $resolved failed" ;;
-    esac
+# pkg_install <tool...> — returns 0 when every tool is present afterwards,
+# 1 when an install failed, 3 (HTS_PKG_UNMAPPED) when a tool has no package on
+# this package manager and nothing else failed.
+pkg_install() {
+  local pkg resolved rc any_fail=0 any_unmapped=0
+  for pkg in "$@"; do
+    rc=0
+    resolved="$(resolve_pkg "$pkg")" || rc=$?
+    if [[ $rc -ne 0 || -z "$resolved" ]]; then
+      any_unmapped=1
+      continue
+    fi
+
+    if _pkg_is_installed "$resolved"; then
+      info "$resolved already installed"
+      continue
+    fi
+
+    pkg_refresh_once
+    if _pkg_run_install "$resolved"; then
+      hts_manifest_add tool "$resolved" "$PKG_MGR"
+    else
+      warn "$PKG_MGR install $resolved failed"
+      any_fail=1
+    fi
   done
+  [[ $any_fail -eq 1 ]] && return 1
+  [[ $any_unmapped -eq 1 ]] && return "$HTS_PKG_UNMAPPED"
+  return 0
 }
 
 pkg_install_cask() {
@@ -364,198 +484,164 @@ pkg_install_cask() {
     if brew list --cask "$pkg" &>/dev/null; then
       info "$pkg (cask) already installed"
     else
-      brew install --cask "$pkg" || warn "cask install $pkg failed"
+      pkg_refresh_once
+      if brew install --cask "$pkg"; then
+        hts_manifest_add tool "$pkg" "brew-cask"
+      else
+        warn "cask install $pkg failed"
+        return 1
+      fi
     fi
   else
     if [[ -n "$linux_snap" ]] && command -v snap &>/dev/null; then
-      sudo snap install "$linux_snap" --classic 2>/dev/null || warn "snap install $linux_snap failed"
+      if _sudo snap install "$linux_snap" --classic 2>/dev/null; then
+        hts_manifest_add tool "$linux_snap" "snap"
+      else
+        warn "snap install $linux_snap failed"
+        return 1
+      fi
     elif [[ -n "$linux_deb" ]]; then
       warn "$pkg: install manually from $linux_deb"
+      return 1
     else
       warn "$pkg: macOS cask only — no Linux equivalent configured"
+      return 1
     fi
   fi
+  return 0
 }
 
+# resolve_pkg <tool> — print the package name for the active package manager.
+# Prints nothing and returns HTS_PKG_UNMAPPED (3) when there is no package, so
+# callers can fall back to a direct download. The warning goes to stderr so it
+# is not captured by "$(resolve_pkg x)".
 resolve_pkg() {
-  local pkg=$1
+  local pkg=$1 name=""
   case "$PKG_MGR" in
     brew)
       case "$pkg" in
-        bat)          echo "bat" ;;
-        fd)           echo "fd" ;;
-        netcat)       echo "netcat" ;;
-        node)         echo "node" ;;
-        npm)          echo "node" ;;
-        golang|go)    echo "go" ;;
-        fontconfig)   echo "fontconfig" ;;
-        xz)           echo "xz" ;;
-        unzip)        echo "unzip" ;;
-        tar)          echo "gnu-tar" ;;
-        atuin)        echo "atuin" ;;
-        direnv)       echo "direnv" ;;
-        uv)           echo "uv" ;;
-        btop)         echo "btop" ;;
-        starship)     echo "starship" ;;
-        fastfetch)    echo "fastfetch" ;;
-        trivy)        echo "trivy" ;;
-        jadx)         echo "jadx" ;;
-        apktool)      echo "apktool" ;;
-        syft)         echo "syft" ;;
-        grype)        echo "grype" ;;
-        chisel)       echo "chisel" ;;
-        ligolo-ng)    echo "ligolo-ng" ;;
-        *)            echo "$pkg" ;;
+        tar)            name="gnu-tar" ;;
+        npm|node)       name="node" ;;
+        golang|go)      name="go" ;;
+        gpg)            name="gnupg" ;;
+        wireshark-cli)  name="wireshark" ;;
+        python3-venv|python3-pip) name="python" ;;
+        python3)        name="python" ;;
+        *)              name="$pkg" ;;
       esac ;;
     apt)
       case "$pkg" in
-        bat)          echo "bat" ;;        # binary is 'batcat' on Ubuntu
-        fd)           echo "fd-find" ;;   # binary is 'fdfind'
-        eza)          echo "eza" ;;
-        zoxide)       echo "zoxide" ;;
-        netcat)       echo "netcat-openbsd" ;;
-        httpie)       echo "httpie" ;;
-        git-delta)    echo "git-delta" ;;
-        tmux)         echo "tmux" ;;
-        fzf)          echo "fzf" ;;
-        ripgrep)      echo "ripgrep" ;;
-        tldr)         echo "tldr" ;;
-        jq)           echo "jq" ;;
-        yq)           echo "" ;;
-        lazygit)      echo "" ;;
-        gh)           echo "gh" ;;
-        pandoc)       echo "pandoc" ;;
-        nmap)         echo "nmap" ;;
-        hydra)        echo "hydra" ;;
-        sqlmap)       echo "sqlmap" ;;
-        masscan)      echo "masscan" ;;
-        tcpdump)      echo "tcpdump" ;;
-        openssl)      echo "openssl" ;;
-        gpg)          echo "gnupg" ;;
-        python3)      echo "python3" ;;
-        pipx)         echo "pipx" ;;
-        python3-venv) echo "python3-venv" ;;
-        python3-pip)  echo "python3-pip" ;;
-        wget)         echo "wget" ;;
-        curl)         echo "curl" ;;
-        mitmproxy)    echo "mitmproxy" ;;
-        nikto)        echo "nikto" ;;
-        gobuster)     echo "gobuster" ;;
-        ffuf)         echo "" ;;
-        nuclei)       echo "" ;;
-        amass)        echo "" ;;
-        subfinder)    echo "" ;;
-        httpx)        echo "" ;;
-        katana)       echo "" ;;
-        dnsx)         echo "" ;;
-        gau)          echo "" ;;
-        dalfox)       echo "" ;;
-        feroxbuster)  echo "feroxbuster" ;;
-        semgrep)      echo "" ;;
-        gitleaks)     echo "" ;;
-        trufflehog)   echo "" ;;
-        awscli)       echo "awscli" ;;
-        node)         echo "nodejs" ;;
-        npm)          echo "npm" ;;
-        golang|go)    echo "golang-go" ;;
-        fontconfig)   echo "fontconfig" ;;
-        xz)           echo "xz-utils" ;;
-        unzip)        echo "unzip" ;;
-        tar)          echo "tar" ;;
-        yazi)         echo "" ;;
-        xh)           echo "" ;;
-        john)         echo "john" ;;
-        hashcat)      echo "hashcat" ;;
-        wireshark-cli) echo "tshark" ;;
-        seclists)     echo "" ;;
-        btop)         echo "btop" ;;
-        direnv)       echo "direnv" ;;
-        atuin)        echo "" ;;          # installed via install script
-        starship)     echo "" ;;          # installed via install script
-        uv)           echo "" ;;          # installed via astral.sh script
-        fastfetch)    echo "fastfetch" ;;
-        trivy)        echo "trivy" ;;
-        jadx)         echo "jadx" ;;
-        apktool)      echo "apktool" ;;
-        responder)    echo "responder" ;;
-        chisel)       echo "chisel" ;;
-        *)            echo "$pkg" ;;
+        fd)             name="fd-find" ;;       # binary is 'fdfind'
+        netcat)         name="netcat-openbsd" ;;
+        gpg)            name="gnupg" ;;
+        node)           name="nodejs" ;;
+        golang|go)      name="golang-go" ;;
+        xz)             name="xz-utils" ;;
+        wireshark-cli)  name="tshark" ;;
+        # Not in Debian/Ubuntu archives (or too old/wrong): callers fall back
+        yq|lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
+        semgrep|gitleaks|trufflehog|yazi|xh|seclists|atuin|starship|uv) name="" ;;
+        trivy|feroxbuster|responder|ligolo-ng|kubescape|osv-scanner) name="" ;;
+        *)              name="$pkg" ;;
       esac ;;
     dnf|yum)
       case "$pkg" in
-        bat)          echo "bat" ;;
-        fd)           echo "fd-find" ;;
-        netcat)       echo "nmap-ncat" ;;
-        gpg)          echo "gnupg2" ;;
-        awscli)       echo "awscli" ;;
-        node)         echo "nodejs" ;;
-        npm)          echo "npm" ;;
-        golang|go)    echo "golang" ;;
-        fontconfig)   echo "fontconfig" ;;
-        xz)           echo "xz" ;;
-        unzip)        echo "unzip" ;;
-        tar)          echo "tar" ;;
-        btop)         echo "btop" ;;
-        direnv)       echo "direnv" ;;
-        starship)     echo "starship" ;;
-        fastfetch)    echo "fastfetch" ;;
-        trivy)        echo "trivy" ;;
-        *)            echo "$pkg" ;;
+        fd)             name="fd-find" ;;
+        netcat)         name="nmap-ncat" ;;
+        gpg)            name="gnupg2" ;;
+        node)           name="nodejs" ;;
+        golang|go)      name="golang" ;;
+        wireshark-cli)  name="wireshark-cli" ;;
+        python3-venv)   name="python3" ;;       # venv ships in python3 on RPM distros
+        # Not in the stock Fedora/RHEL repos
+        lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
+        semgrep|gitleaks|trufflehog|yazi|xh|seclists|responder|chisel) name="" ;;
+        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner)  name="" ;;
+        *)              name="$pkg" ;;
       esac ;;
     pacman)
       case "$pkg" in
-        netcat)       echo "openbsd-netcat" ;;
-        gpg)          echo "gnupg" ;;
-        awscli)       echo "aws-cli" ;;
-        fd)           echo "fd" ;;
-        node)         echo "nodejs" ;;
-        npm)          echo "npm" ;;
-        golang|go)    echo "go" ;;
-        fontconfig)   echo "fontconfig" ;;
-        xz)           echo "xz" ;;
-        unzip)        echo "unzip" ;;
-        tar)          echo "tar" ;;
-        btop)         echo "btop" ;;
-        yazi)         echo "yazi" ;;
-        direnv)       echo "direnv" ;;
-        atuin)        echo "atuin" ;;
-        starship)     echo "starship" ;;
-        uv)           echo "uv" ;;
-        fastfetch)    echo "fastfetch" ;;
-        trivy)        echo "trivy" ;;
-        jadx)         echo "jadx" ;;
-        apktool)      echo "android-apktool" ;;
-        *)            echo "$pkg" ;;
+        netcat)         name="openbsd-netcat" ;;
+        gpg)            name="gnupg" ;;
+        awscli)         name="aws-cli" ;;
+        node)           name="nodejs" ;;
+        golang|go)      name="go" ;;
+        apktool)        name="android-apktool" ;;
+        python3)        name="python" ;;
+        python3-pip)    name="python-pip" ;;
+        python3-venv)   name="python" ;;        # venv is part of the python package
+        pipx)           name="python-pipx" ;;
+        git-delta)      name="git-delta" ;;
+        httpx)          name="" ;;              # 'httpx' on Arch is the Python library
+        *)              name="$pkg" ;;
       esac ;;
     zypper)
       case "$pkg" in
-        golang|go)    echo "go" ;;
-        node)         echo "nodejs" ;;
-        npm)          echo "npm" ;;
-        fontconfig)   echo "fontconfig" ;;
-        xz)           echo "xz" ;;
-        unzip)        echo "unzip" ;;
-        tar)          echo "tar" ;;
-        btop)         echo "btop" ;;
-        direnv)       echo "direnv" ;;
-        *)            echo "$pkg" ;;
+        golang|go)      name="go" ;;
+        node)           name="nodejs" ;;
+        netcat)         name="netcat-openbsd" ;;
+        gpg)            name="gpg2" ;;
+        awscli)         name="aws-cli" ;;
+        wireshark-cli)  name="wireshark" ;;
+        python3-venv)   name="python3-virtualenv" ;;
+        python3-pip)    name="python3-pip" ;;
+        pipx)           name="python3-pipx" ;;
+        lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
+        semgrep|gitleaks|trufflehog|yazi|xh|seclists|responder|chisel) name="" ;;
+        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner)  name="" ;;
+        *)              name="$pkg" ;;
       esac ;;
-    *)            echo "$pkg" ;;
+    *)                  name="$pkg" ;;
+  esac
+
+  if [[ -z "$name" ]]; then
+    warn "no $PKG_MGR package for $pkg" >&2
+    return "$HTS_PKG_UNMAPPED"
+  fi
+  echo "$name"
+}
+
+# _hts_arch — print amd64 or arm64 for the running CPU (empty + status 1 otherwise).
+_hts_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64)  echo "amd64" ;;
+    aarch64|arm64) echo "arm64" ;;
+    *) return 1 ;;
   esac
 }
 
+# _install_release_bin <name> <url> <sha256> [dest-dir]
+# Download a single pinned binary with digest verification into ~/.local/bin
+# (or dest-dir), mark it executable, and record it. Non-zero on any failure.
+_install_release_bin() {
+  local name=$1 url=$2 sha=$3 dest_dir=${4:-$HOME/.local/bin}
+  [[ -n "$sha" ]] || { warn "$name: no pinned digest for this platform"; return 1; }
+  mkdir -p "$dest_dir" || return 1
+  if hts_download_verify "$url" "$sha" "$dest_dir/$name" && chmod +x "$dest_dir/$name"; then
+    hts_track_file "$dest_dir/$name"
+    hts_manifest_add tool "$name" "release-binary"
+    return 0
+  fi
+  rm -f "$dest_dir/$name"
+  warn "$name install failed"
+  return 1
+}
+
 linux_fixups() {
-  [[ "$OS" != "Linux" ]] && return
+  [[ "$OS" != "Linux" ]] && return 0
   if command -v batcat &>/dev/null && ! command -v bat &>/dev/null; then
     mkdir -p "$HOME/.local/bin"
     ln -sf "$(command -v batcat)" "$HOME/.local/bin/bat"
+    hts_track_file "$HOME/.local/bin/bat"
     ok "bat symlinked from batcat"
   fi
   if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
     mkdir -p "$HOME/.local/bin"
     ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
+    hts_track_file "$HOME/.local/bin/fd"
     ok "fd symlinked from fdfind"
   fi
+  return 0
 }
 
 # ─── End: lib/pkg_mgr.sh ────────────────────────────────────────────
@@ -590,8 +676,14 @@ pipx_install() {
     info "$pkg already installed via pipx"
   else
     log "Installing $pkg via pipx..."
-    pipx install "$pkg" || warn "pipx install $pkg failed"
+    if pipx install "$pkg"; then
+      hts_manifest_add tool "$pkg" "pipx"
+    else
+      warn "pipx install $pkg failed"
+      return 1
+    fi
   fi
+  return 0
 }
 
 # hts_node_managed — succeeds (and prints the manager name) when nvm, fnm or Volta
@@ -623,8 +715,14 @@ npm_global_install() {
     info "$pkg already installed via npm"
   else
     log "Installing $pkg via npm..."
-    npm install -g "$pkg" || warn "npm install -g $pkg failed"
+    if npm install -g "$pkg"; then
+      hts_manifest_add tool "$pkg" "npm"
+    else
+      warn "npm install -g $pkg failed"
+      return 1
+    fi
   fi
+  return 0
 }
 
 go_install() {
@@ -640,11 +738,19 @@ go_install() {
     fi
     if command -v go &>/dev/null; then
       log "go install $pkg..."
-      go install "$pkg" || warn "go install $pkg failed"
+      if go install "$pkg"; then
+        # detail records the module path so --update can run "go install <path>@latest"
+        hts_manifest_add tool "$name" "go:${pkg%@*}"
+      else
+        warn "go install $pkg failed"
+        return 1
+      fi
     else
       warn "go not found — cannot install $name. Install go first."
+      return 1
     fi
   fi
+  return 0
 }
 
 # ─── End: lib/helpers.sh ────────────────────────────────────────────
@@ -853,25 +959,79 @@ preflight() {
 #  lib/fonts.sh — Hacker & Developer Nerd Fonts Installer
 # =============================================================================
 
+# _install_meslo_ttfs <dest-dir> — pinned, digest-verified MesloLGS NF TTFs.
+# Returns non-zero when any file could not be fetched or verified.
+_install_meslo_ttfs() {
+  local dest=$1 f want rc=0 base
+  base="https://github.com/romkatv/powerlevel10k-media/raw/${MESLO_MEDIA_COMMIT}"
+  mkdir -p "$dest" || return 1
+  for f in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
+           "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
+    case "$f" in
+      *"Bold Italic"*) want="$MESLO_SHA256_BOLD_ITALIC" ;;
+      *Bold*)          want="$MESLO_SHA256_BOLD" ;;
+      *Italic*)        want="$MESLO_SHA256_ITALIC" ;;
+      *)               want="$MESLO_SHA256_REGULAR" ;;
+    esac
+    if hts_download_verify "$base/${f// /%20}" "$want" "$dest/$f"; then
+      hts_track_file "$dest/$f"
+    else
+      warn "Could not install $f"
+      rc=1
+    fi
+  done
+  return $rc
+}
+
+# _download_nf_archive <label> <archive> <font-dir> — pinned Nerd Fonts release
+_download_nf_archive() {
+  local name=$1 archive_name=$2 font_dir=$3
+  local sha_var want tmpdir url rc=0
+  sha_var="NERDFONTS_SHA256_$(printf '%s' "$archive_name" | tr '[:lower:]' '[:upper:]')"
+  want="${!sha_var:-}"
+  if [[ -z "$want" ]]; then
+    warn "No pinned digest for $archive_name — skipping $name"
+    return 1
+  fi
+  if ! command -v tar &>/dev/null || ! command -v xz &>/dev/null; then
+    pkg_install tar xz || true
+  fi
+  log "Downloading $name Nerd Font ${NERDFONTS_VERSION}..."
+  tmpdir="$(mktemp -d)" || return 1
+  url="https://github.com/ryanoasis/nerd-fonts/releases/download/${NERDFONTS_VERSION}/${archive_name}.tar.xz"
+  if hts_download_verify "$url" "$want" "$tmpdir/${archive_name}.tar.xz" \
+     && tar -xf "$tmpdir/${archive_name}.tar.xz" -C "$font_dir"; then
+    hts_track_file "$font_dir"
+    hts_manifest_add tool "nerd-font-$archive_name" "$NERDFONTS_VERSION"
+    ok "$name Nerd Font installed"
+  else
+    warn "Could not install $name Nerd Font archive"
+    rc=1
+  fi
+  rm -rf "$tmpdir"
+  return $rc
+}
+
 install_fonts() {
   local target_font="${1:-all}"
+  local rc=0
   step "Hacker & Developer Nerd Fonts ($target_font)"
 
   if [[ "$OS" == "Darwin" ]]; then
     log "Installing Nerd Fonts on macOS..."
-    pkg_install_cask "font-meslo-lg-nerd-font"
+    pkg_install_cask "font-meslo-lg-nerd-font" || rc=1
 
     if [[ "$target_font" == "all" || "$target_font" == *"jetbrains"* ]]; then
-      pkg_install_cask "font-jetbrains-mono-nerd-font"
+      pkg_install_cask "font-jetbrains-mono-nerd-font" || rc=1
     fi
     if [[ "$target_font" == "all" || "$target_font" == *"fira"* ]]; then
-      pkg_install_cask "font-fira-code-nerd-font"
+      pkg_install_cask "font-fira-code-nerd-font" || rc=1
     fi
     if [[ "$target_font" == "all" || "$target_font" == *"hack"* ]]; then
-      pkg_install_cask "font-hack-nerd-font"
+      pkg_install_cask "font-hack-nerd-font" || rc=1
     fi
     if [[ "$target_font" == "all" || "$target_font" == *"cascadia"* ]]; then
-      pkg_install_cask "font-caskaydia-cove-nerd-font"
+      pkg_install_cask "font-caskaydia-cove-nerd-font" || rc=1
     fi
 
     # Fallback: copy romkatv MesloLGS NF TTFs directly to ~/Library/Fonts
@@ -879,65 +1039,48 @@ install_fonts() {
     mkdir -p "$mac_font_dir"
     if [[ ! -f "$mac_font_dir/MesloLGS NF Regular.ttf" ]]; then
       log "Ensuring MesloLGS NF TTFs in ~/Library/Fonts..."
-      local base="https://github.com/romkatv/powerlevel10k-media/raw/master"
-      for f in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
-                "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
-        curl -fsSL "$base/${f// /%20}" -o "$mac_font_dir/$f" 2>/dev/null || true
-      done
+      _install_meslo_ttfs "$mac_font_dir" || rc=1
     fi
-    ok "macOS Nerd Fonts installed"
   else
     # Linux installation into ~/.local/share/fonts/NerdFonts
     local font_dir="$HOME/.local/share/fonts/NerdFonts"
     mkdir -p "$font_dir"
 
     if ! command -v fc-cache &>/dev/null; then
-      pkg_install fontconfig
+      pkg_install fontconfig || warn "fontconfig not installed — font cache will not be refreshed"
     fi
 
     # 1. MesloLGS NF (P10k recommended)
     log "Downloading MesloLGS NF..."
-    local base="https://github.com/romkatv/powerlevel10k-media/raw/master"
-    for f in "MesloLGS NF Regular.ttf" "MesloLGS NF Bold.ttf" \
-              "MesloLGS NF Italic.ttf" "MesloLGS NF Bold Italic.ttf"; do
-      curl -fsSL "$base/${f// /%20}" -o "$font_dir/$f" 2>/dev/null || true
-    done
-
-    # Helper to download and extract tar.xz from official Nerd Fonts release
-    _download_nf_archive() {
-      local name=$1
-      local archive_name=$2
-      log "Downloading $name Nerd Font..."
-      local tmp_archive="/tmp/${archive_name}.tar.xz"
-      local url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${archive_name}.tar.xz"
-      if curl -fsSL "$url" -o "$tmp_archive" 2>/dev/null; then
-        tar -xf "$tmp_archive" -C "$font_dir" 2>/dev/null || true
-        rm -f "$tmp_archive"
-        ok "$name Nerd Font installed"
-      else
-        warn "Could not download $name Nerd Font archive"
-      fi
-    }
+    _install_meslo_ttfs "$font_dir" || rc=1
 
     if [[ "$target_font" == "all" || "$target_font" == *"jetbrains"* ]]; then
-      _download_nf_archive "JetBrains Mono" "JetBrainsMono"
+      _download_nf_archive "JetBrains Mono" "JetBrainsMono" "$font_dir" || rc=1
     fi
     if [[ "$target_font" == "all" || "$target_font" == *"fira"* ]]; then
-      _download_nf_archive "Fira Code" "FiraCode"
+      _download_nf_archive "Fira Code" "FiraCode" "$font_dir" || rc=1
     fi
     if [[ "$target_font" == "all" || "$target_font" == *"hack"* ]]; then
-      _download_nf_archive "Hack" "Hack"
+      _download_nf_archive "Hack" "Hack" "$font_dir" || rc=1
     fi
     if [[ "$target_font" == "all" || "$target_font" == *"cascadia"* ]]; then
-      _download_nf_archive "Cascadia Code" "CascadiaCode"
+      _download_nf_archive "Cascadia Code" "CascadiaCode" "$font_dir" || rc=1
     fi
 
-    fc-cache -f "$HOME/.local/share/fonts" 2>/dev/null || true
-    ok "Linux font cache updated (~/.local/share/fonts)"
+    if command -v fc-cache &>/dev/null; then
+      fc-cache -f "$HOME/.local/share/fonts" 2>/dev/null && ok "Linux font cache updated (~/.local/share/fonts)"
+    else
+      warn "fc-cache not available — restart your terminal or run fc-cache manually"
+    fi
   fi
 
-  ok "Nerd Fonts ready"
+  if [[ $rc -eq 0 ]]; then
+    ok "Nerd Fonts ready"
+  else
+    warn "Some fonts could not be installed (see warnings above)"
+  fi
   info "Available terminal fonts: 'MesloLGS NF', 'JetBrainsMono Nerd Font', 'FiraCode Nerd Font', 'Hack Nerd Font'"
+  return $rc
 }
 
 # ─── End: lib/fonts.sh ────────────────────────────────────────────
@@ -960,76 +1103,92 @@ install_node() {
     ok "Node.js already installed: $(node -v) (npm $(npm -v 2>/dev/null || echo 'N/A'))"
   else
     log "Installing/upgrading Node.js LTS (>= v${min_version})..."
+    local interp=""
     case "$PKG_MGR" in
       brew)
-        brew install node || warn "brew install node failed"
+        pkg_install node || warn "brew install node failed"
         ;;
       apt)
         log "Setting up NodeSource LTS repository for Debian/Ubuntu..."
-        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - 2>/dev/null || warn "NodeSource setup failed"
-        sudo apt-get update -qq && sudo apt-get install -y nodejs || warn "apt install nodejs failed"
+        interp="$(_sudo_interp)" && \
+          hts_run_remote_script "https://deb.nodesource.com/setup_lts.x" "$interp" || warn "NodeSource setup failed"
+        _sudo apt-get update -qq && _sudo apt-get install -y nodejs || warn "apt install nodejs failed"
         ;;
-      dnf)
-        log "Setting up NodeSource LTS repository for Fedora..."
-        curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - 2>/dev/null || warn "NodeSource setup failed"
-        sudo dnf install -y nodejs || warn "dnf install nodejs failed"
-        ;;
-      yum)
-        curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - 2>/dev/null || warn "NodeSource setup failed"
-        sudo yum install -y nodejs || warn "yum install nodejs failed"
+      dnf|yum)
+        log "Setting up NodeSource LTS repository for $PKG_MGR..."
+        interp="$(_sudo_interp)" && \
+          hts_run_remote_script "https://rpm.nodesource.com/setup_lts.x" "$interp" || warn "NodeSource setup failed"
+        _sudo "$PKG_MGR" install -y nodejs || warn "$PKG_MGR install nodejs failed"
         ;;
       pacman)
-        sudo pacman -S --noconfirm --needed nodejs npm || warn "pacman install nodejs failed"
+        pkg_install nodejs npm || warn "pacman install nodejs failed"
         ;;
       zypper)
-        sudo zypper install -y nodejs npm || warn "zypper install nodejs failed"
+        pkg_install nodejs npm || warn "zypper install nodejs failed"
         ;;
     esac
+    hash -r 2>/dev/null || true
   fi
 
   # Configure npm global directory without sudo
   if command -v npm &>/dev/null; then
-    mkdir -p "$HOME/.npm-global"
-    npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
-    export PATH="$HOME/.npm-global/bin:$PATH"
-    ok "Configured npm global prefix to ~/.npm-global (no sudo required for global npm packages)"
+    _set_npm_prefix
   fi
 
-  if command -v node &>/dev/null; then
-    ok "Node.js: $(node -v) | npm: $(npm -v 2>/dev/null || echo 'N/A')"
-  else
-    warn "Node.js installation check failed"
-  fi
+  hts_verify_cmd "Node.js" node || { warn "Node.js installation check failed"; return 1; }
+  hts_verify_cmd "npm" npm || true
+  ok "Node.js: $(node -v) | npm: $(npm -v 2>/dev/null || echo 'N/A')"
+  return 0
 }
 
-install_claude() {
-  step "Claude Code CLI (@anthropic-ai/claude-code)"
-
-  if ! command -v node &>/dev/null; then
-    log "Node.js is required for Claude Code. Installing Node.js..."
-    install_node || { err "Node.js installation failed; cannot install Claude Code"; return 1; }
+# _set_npm_prefix — point the npm global prefix at ~/.npm-global unless a Node
+# version manager (nvm/fnm/Volta) owns it, in which case changing it breaks them.
+_set_npm_prefix() {
+  local mgr=""
+  if mgr="$(hts_node_managed)"; then
+    warn "Node is managed by $mgr — leaving the npm global prefix unchanged (an override would break $mgr's global packages)"
+    return 0
   fi
-
   mkdir -p "$HOME/.npm-global"
   npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
   export PATH="$HOME/.npm-global/bin:$PATH"
+  ok "Configured npm global prefix to ~/.npm-global (no sudo required for global npm packages)"
+}
 
+install_claude() {
+  step "Claude Code CLI (native installer)"
+
+  # Anthropic's documented install method is the native installer, which puts a
+  # self-updating binary in ~/.local/bin and needs neither Node.js nor sudo.
+  # (The npm package @anthropic-ai/claude-code still exists but needs Node 22+.)
   if command -v claude &>/dev/null; then
-    info "Claude Code is already installed: $(claude --version 2>/dev/null || echo 'installed')"
-    log "Checking for Claude Code updates..."
-    npm install -g @anthropic-ai/claude-code || warn "Failed to update @anthropic-ai/claude-code"
-  else
-    log "Installing @anthropic-ai/claude-code via npm..."
-    npm install -g @anthropic-ai/claude-code || warn "Failed to install @anthropic-ai/claude-code"
+    ok "Claude Code is already installed: $(claude --version 2>/dev/null || echo 'installed')"
+    info "Left as is. The native build updates itself; an npm install can be moved over with: ${BOLD}claude install${RESET}"
+    hts_verify_cmd "Claude Code CLI" claude
+    return 0
   fi
 
-  if command -v claude &>/dev/null; then
+  log "Installing Claude Code with the official native installer (stable channel)..."
+  if hts_run_remote_script "https://claude.ai/install.sh" bash stable; then
+    hts_manifest_add tool "claude-code" "native"
+  else
+    warn "Claude Code native installer failed"
+  fi
+
+  # The installer targets ~/.local/bin, which may not be on PATH in this shell yet
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+  esac
+
+  if hts_verify_cmd "Claude Code CLI" claude; then
     ok "Claude Code installed: $(claude --version 2>/dev/null || echo 'ready')"
-    info "Run Claude Code with: ${BOLD}claude${RESET} (or shortcut ${BOLD}cc${RESET})"
-    info "Authentication: set ${BOLD}export ANTHROPIC_API_KEY='your-key'${RESET} or run ${BOLD}claude${RESET} to log in"
-  else
-    warn "Claude Code installed, but 'claude' command not found in PATH yet. Ensure ~/.npm-global/bin is in PATH."
+    info "Run Claude Code with: ${BOLD}claude${RESET} (or shortcut ${BOLD}ccode${RESET})"
+    info "Authentication: run ${BOLD}claude${RESET} to log in, or set ${BOLD}export ANTHROPIC_API_KEY='your-key'${RESET}"
+    return 0
   fi
+  warn "Claude Code was not found after install. Ensure ~/.local/bin is in PATH and re-run: ./ter.sh --claude"
+  return 1
 }
 
 install_code() {
@@ -1037,6 +1196,7 @@ install_code() {
 
   if command -v code &>/dev/null; then
     ok "VS Code ('code' CLI) is already installed: $(code --version 2>/dev/null | head -1)"
+    hts_verify_cmd "VS Code CLI" code
     return 0
   fi
 
@@ -1046,6 +1206,7 @@ install_code() {
         info "Visual Studio Code.app detected in /Applications — linking 'code' CLI..."
         mkdir -p "$HOME/.local/bin"
         ln -sf "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
+        hts_track_file "$HOME/.local/bin/code"
         export PATH="$HOME/.local/bin:$PATH"
       else
         log "Installing Visual Studio Code via Homebrew Cask..."
@@ -1053,6 +1214,8 @@ install_code() {
         if [[ -d "/Applications/Visual Studio Code.app" ]] && ! command -v code &>/dev/null; then
           mkdir -p "$HOME/.local/bin"
           ln -sf "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" "$HOME/.local/bin/code"
+          hts_track_file "$HOME/.local/bin/code"
+        hts_track_file "$HOME/.local/bin/code"
           export PATH="$HOME/.local/bin:$PATH"
         fi
       fi
@@ -1061,38 +1224,37 @@ install_code() {
       case "$PKG_MGR" in
         apt)
           log "Installing Visual Studio Code via Microsoft APT repository..."
-          sudo apt-get install -y wget gpg apt-transport-https 2>/dev/null || true
+          pkg_install wget gpg apt-transport-https || true
           local key_url="https://packages.microsoft.com/keys/microsoft.asc"
-          local gpg_file="/tmp/packages.microsoft.gpg"
-          curl -fsSL "$key_url" | gpg --dearmor -o "$gpg_file" 2>/dev/null || true
-          if [[ -f "$gpg_file" ]]; then
-            sudo install -D -o root -g root -m 644 "$gpg_file" /etc/apt/keyrings/packages.microsoft.gpg 2>/dev/null || true
-            sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
-            rm -f "$gpg_file"
-            sudo apt-get update -qq && sudo apt-get install -y code || warn "apt install code failed"
+          local key_tmp gpg_file
+          key_tmp="$(mktemp)"; gpg_file="$(mktemp -u)"
+          if hts_fetch "$key_url" "$key_tmp" && gpg --dearmor -o "$gpg_file" < "$key_tmp" 2>/dev/null && [[ -s "$gpg_file" ]]; then
+            _sudo install -D -o root -g root -m 644 "$gpg_file" /etc/apt/keyrings/packages.microsoft.gpg || true
+            echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" \
+              | _sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
+            hts_track_file /etc/apt/sources.list.d/vscode.list
+            _HTS_PKG_REFRESHED=0
+            _sudo apt-get update -qq && _sudo apt-get install -y code || warn "apt install code failed"
           else
             warn "Could not download Microsoft GPG key for VS Code"
           fi
+          rm -f "$key_tmp" "$gpg_file"
           ;;
         dnf|yum)
           log "Installing Visual Studio Code via Microsoft RPM repository..."
-          sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null || true
-          sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
-          if [[ "$PKG_MGR" == "dnf" ]]; then
-            sudo dnf check-update -q || true
-            sudo dnf install -y code || warn "dnf install code failed"
-          else
-            sudo yum check-update -q || true
-            sudo yum install -y code || warn "yum install code failed"
-          fi
+          _sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null || true
+          printf '[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc\n' \
+            | _sudo tee /etc/yum.repos.d/vscode.repo >/dev/null
+          hts_track_file /etc/yum.repos.d/vscode.repo
+          _sudo "$PKG_MGR" install -y code || warn "$PKG_MGR install code failed"
           ;;
         pacman)
-          sudo pacman -S --noconfirm --needed code || warn "pacman install code failed"
+          pkg_install code || warn "pacman install code failed"
           ;;
         zypper)
-          sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null || true
-          sudo zypper addrepo https://packages.microsoft.com/yumrepos/vscode vscode 2>/dev/null || true
-          sudo zypper refresh -q && sudo zypper install -y code || warn "zypper install code failed"
+          _sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null || true
+          _sudo zypper --non-interactive addrepo https://packages.microsoft.com/yumrepos/vscode vscode 2>/dev/null || true
+          _sudo zypper --non-interactive refresh -q && _sudo zypper --non-interactive install -y code || warn "zypper install code failed"
           ;;
       esac
       ;;
@@ -1100,111 +1262,196 @@ install_code() {
 
   if command -v code &>/dev/null; then
     ok "Visual Studio Code ready: $(code --version 2>/dev/null | head -1)"
+    hts_verify_cmd "VS Code CLI" code
   else
     warn "VS Code installed, but 'code' binary not yet in PATH. Restart your shell."
+    hts_verify_cmd "VS Code CLI" code
+    return 1
   fi
 }
 
 install_dev() {
   step "Developer & Agentic AI Stack (Node.js + Claude Code + VS Code)"
-  install_node
-  install_claude
-  install_code
-  ok "Developer & Agentic AI stack complete"
+  local rc=0
+  install_node || rc=1
+  install_claude || rc=1
+  install_code || rc=1
+  if [[ $rc -eq 0 ]]; then
+    ok "Developer & Agentic AI stack complete"
+  else
+    warn "Developer & Agentic AI stack finished with errors"
+  fi
+  return $rc
 }
 
 # ─── End: lib/dev.sh ────────────────────────────────────────────
 
 # ─── Begin: lib/terminals.sh ──────────────────────────────────────────
 # =============================================================================
-#  lib/terminals.sh — Modern GPU Terminal Emulators & Aesthetic Configs
-#  Supports: Ghostty (recommended macOS/Wayland), WezTerm, Kitty, Alacritty
+#  lib/terminals.sh — GPU Terminal Emulators & Aesthetic Configs
+#  Supports: Ghostty, WezTerm, Kitty, Alacritty
+#
+#  Install matrix (what this module actually installs):
+#    terminal   macOS(cask)  apt                       dnf                 pacman
+#    Ghostty    yes          skip (no official pkg)    skip (no official)  yes
+#    WezTerm    yes          yes (upstream apt repo)   yes (upstream COPR) yes
+#    Kitty      yes          yes                       yes                 yes
+#    Alacritty  yes          yes if the release has it yes                 yes
+#  zypper: Kitty and Alacritty only. yum and others: nothing installed.
+#  WSL and headless Linux (no DISPLAY/WAYLAND_DISPLAY): no GUI installs at all.
+#  A terminal's config file is written only when that terminal is installed.
 # =============================================================================
+
+_term_is_wsl() {
+  [[ -r /proc/version ]] && grep -qi microsoft /proc/version 2>/dev/null
+}
+
+# _term_gui_ok — succeeds when GUI terminals make sense here; warns otherwise
+_term_gui_ok() {
+  [[ "$OS" == "Darwin" ]] && return 0
+  if _term_is_wsl; then
+    warn "WSL detected — skipping GUI terminal installs (use Windows Terminal or install terminals on the Windows side)"
+    return 1
+  fi
+  if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    warn "Headless Linux (no DISPLAY/WAYLAND_DISPLAY) — skipping GUI terminal installs"
+    return 1
+  fi
+  return 0
+}
+
+# _term_present <command> <MacApp.app>
+_term_present() {
+  command -v "$1" &>/dev/null || [[ -d "/Applications/$2" ]]
+}
+
+# _term_linux_install <package> — install via the distro package manager
+_term_linux_install() {
+  local pkg=$1 rc=1
+  case "$PKG_MGR" in
+    apt)    sudo apt-get install -y "$pkg" && rc=0 ;;
+    dnf)    sudo dnf install -y "$pkg" && rc=0 ;;
+    pacman) sudo pacman -S --noconfirm --needed "$pkg" && rc=0 ;;
+    zypper) sudo zypper install -y "$pkg" && rc=0 ;;
+  esac
+  if [[ $rc -eq 0 ]]; then
+    hts_manifest_add tool "$pkg" "$PKG_MGR"
+  else
+    warn "$PKG_MGR install $pkg failed"
+  fi
+  return $rc
+}
 
 install_ghostty() {
   step "Ghostty Terminal Emulator"
-  if command -v ghostty &>/dev/null || [[ -d "/Applications/Ghostty.app" ]]; then
-    ok "Ghostty already installed"
-  else
+  if ! _term_present ghostty Ghostty.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask ghostty
     else
-      # Linux installation
       case "$PKG_MGR" in
-        pacman) sudo pacman -S --noconfirm --needed ghostty || warn "pacman install ghostty failed" ;;
-        dnf)    sudo dnf copr enable -y pgdev/ghostty 2>/dev/null && sudo dnf install -y ghostty || warn "dnf install ghostty failed" ;;
-        apt)
-          log "Ghostty on Debian/Ubuntu: checking for snap/flatpak..."
-          if command -v flatpak &>/dev/null; then
-            flatpak install -y flathub com.mitchellh.ghostty 2>/dev/null || warn "flatpak install ghostty failed"
-          elif command -v snap &>/dev/null; then
-            sudo snap install ghostty --classic 2>/dev/null || warn "snap install ghostty failed"
-          else
-            warn "Ghostty: install via Flatpak (com.mitchellh.ghostty) or download from ghostty.org"
-          fi
-          ;;
-        *) warn "Ghostty: see https://ghostty.org for your Linux distribution package" ;;
+        pacman) _term_linux_install ghostty || return 1 ;;
+        *) warn "Ghostty: skipped on $PKG_MGR — no official package (only community repos); see https://ghostty.org/docs/install/binary-preview"
+           return 0 ;;
       esac
     fi
+  else
+    ok "Ghostty already installed"
   fi
-  write_ghostty_config
+  if _term_present ghostty Ghostty.app; then write_ghostty_config; fi
+  return 0
 }
 
 install_wezterm() {
   step "WezTerm Terminal Emulator"
-  if command -v wezterm &>/dev/null || [[ -d "/Applications/WezTerm.app" ]]; then
-    ok "WezTerm already installed"
-  else
+  if ! _term_present wezterm WezTerm.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask wezterm
     else
       case "$PKG_MGR" in
-        pacman) sudo pacman -S --noconfirm --needed wezterm || warn "pacman install wezterm failed" ;;
-        dnf)    sudo dnf copr enable -y wezfurlong/wezterm-nightly 2>/dev/null && sudo dnf install -y wezterm || warn "dnf install wezterm failed" ;;
+        pacman) _term_linux_install wezterm || return 1 ;;
+        dnf)
+          warn "WezTerm has no Fedora package — enabling upstream COPR wezfurlong/wezterm-nightly (nightly builds by the WezTerm author)"
+          if sudo dnf copr enable -y wezfurlong/wezterm-nightly && sudo dnf install -y wezterm; then
+            hts_manifest_add tool wezterm "dnf (copr wezfurlong/wezterm-nightly)"
+          else
+            warn "dnf install wezterm failed"; return 1
+          fi ;;
         apt)
-          log "Setting up WezTerm apt repository..."
-          curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /etc/apt/keyrings/wezterm.gpg 2>/dev/null || true
-          echo 'deb [signed-by=/etc/apt/keyrings/wezterm.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list >/dev/null
-          sudo apt-get update -qq && sudo apt-get install -y wezterm || warn "apt install wezterm failed"
-          ;;
-        *) warn "WezTerm: download from wezfurlong.org/wezterm" ;;
+          warn "WezTerm has no Debian/Ubuntu package — adding upstream apt repository https://apt.fury.io/wez/ (maintained by the WezTerm author)"
+          local keytmp
+          keytmp="$(mktemp "${TMPDIR:-/tmp}/wezkey.XXXXXX")" || return 1
+          if hts_fetch "https://apt.fury.io/wez/gpg.key" "$keytmp" && \
+             sudo mkdir -p /etc/apt/keyrings && \
+             sudo gpg --yes --dearmor -o /etc/apt/keyrings/wezterm.gpg "$keytmp"; then
+            echo 'deb [signed-by=/etc/apt/keyrings/wezterm.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list >/dev/null
+            if sudo apt-get update -qq && sudo apt-get install -y wezterm; then
+              hts_manifest_add tool wezterm "apt (apt.fury.io/wez)"
+            else
+              warn "apt install wezterm failed"; rm -f "$keytmp"; return 1
+            fi
+          else
+            warn "Could not fetch/install the WezTerm apt signing key — skipping WezTerm"
+            rm -f "$keytmp"; return 1
+          fi
+          rm -f "$keytmp" ;;
+        *) warn "WezTerm: skipped on $PKG_MGR — no package; see https://wezfurlong.org/wezterm/install/linux.html"
+           return 0 ;;
       esac
     fi
+  else
+    ok "WezTerm already installed"
   fi
-  write_wezterm_config
+  if _term_present wezterm WezTerm.app; then write_wezterm_config; fi
+  return 0
 }
 
 install_kitty() {
   step "Kitty Terminal Emulator"
-  if command -v kitty &>/dev/null || [[ -d "/Applications/kitty.app" ]]; then
-    ok "Kitty already installed"
-  else
+  if ! _term_present kitty kitty.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask kitty
     else
       case "$PKG_MGR" in
-        apt)    sudo apt-get install -y kitty || warn "apt install kitty failed" ;;
-        dnf)    sudo dnf install -y kitty || warn "dnf install kitty failed" ;;
-        pacman) sudo pacman -S --noconfirm --needed kitty || warn "pacman install kitty failed" ;;
-        *)      curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin || warn "kitty installer script failed" ;;
+        apt|dnf|pacman|zypper) _term_linux_install kitty || return 1 ;;
+        *) warn "Kitty: skipped on $PKG_MGR — no distro package (the upstream curl installer is deliberately not used)"
+           return 0 ;;
       esac
     fi
+  else
+    ok "Kitty already installed"
   fi
-  write_kitty_config
+  if _term_present kitty kitty.app; then write_kitty_config; fi
+  return 0
 }
 
 install_alacritty() {
   step "Alacritty Terminal Emulator"
-  if command -v alacritty &>/dev/null || [[ -d "/Applications/Alacritty.app" ]]; then
-    ok "Alacritty already installed"
-  else
+  if ! _term_present alacritty Alacritty.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask alacritty
     else
-      pkg_install alacritty
+      case "$PKG_MGR" in
+        apt)
+          if apt-cache show alacritty >/dev/null 2>&1; then
+            _term_linux_install alacritty || return 1
+          else
+            warn "Alacritty: skipped — not in this release's apt repositories (needs Debian 13+/Ubuntu 24.04+ or cargo install)"
+            return 0
+          fi ;;
+        dnf|pacman|zypper) _term_linux_install alacritty || return 1 ;;
+        *) warn "Alacritty: skipped on $PKG_MGR — no package mapping"
+           return 0 ;;
+      esac
     fi
+  else
+    ok "Alacritty already installed"
   fi
-  write_alacritty_config
+  if _term_present alacritty Alacritty.app; then write_alacritty_config; fi
+  return 0
 }
 
 write_ghostty_config() {
@@ -1212,6 +1459,7 @@ write_ghostty_config() {
   mkdir -p "$cfg_dir/themes"
 
   # Write fallback catppuccin-mocha theme file so both casing styles work seamlessly
+  backup_file "$cfg_dir/themes/catppuccin-mocha"
   cat > "$cfg_dir/themes/catppuccin-mocha" << 'MOCHA_THEME'
 palette = 0=#45475a
 palette = 1=#f38ba8
@@ -1236,8 +1484,10 @@ cursor-text = #1e1e2e
 selection-background = #585b70
 selection-foreground = #cdd6f4
 MOCHA_THEME
+  hts_track_file "$cfg_dir/themes/catppuccin-mocha"
 
   log "Writing Ghostty aesthetic configuration ($cfg_dir/config)..."
+  backup_file "$cfg_dir/config"
   cat > "$cfg_dir/config" << 'GHOSTTY_CFG'
 # =============================================================================
 # Ghostty Terminal Configuration — Catppuccin Mocha & Hacker Ergonomics
@@ -1271,6 +1521,7 @@ keybind = super+plus=increase_font_size:1
 keybind = super+minus=decrease_font_size:1
 keybind = super+zero=reset_font_size
 GHOSTTY_CFG
+  hts_track_file "$cfg_dir/config"
   ok "Ghostty configuration deployed"
 }
 
@@ -1278,6 +1529,7 @@ write_wezterm_config() {
   local cfg_dir="$HOME/.config/wezterm"
   mkdir -p "$cfg_dir"
   log "Writing WezTerm configuration ($cfg_dir/wezterm.lua)..."
+  backup_file "$cfg_dir/wezterm.lua"
   cat > "$cfg_dir/wezterm.lua" << 'WEZTERM_CFG'
 -- =============================================================================
 -- WezTerm Configuration — Cross-Platform Lua Multiplexer
@@ -1318,6 +1570,7 @@ config.keys = {
 
 return config
 WEZTERM_CFG
+  hts_track_file "$cfg_dir/wezterm.lua"
   ok "WezTerm configuration deployed"
 }
 
@@ -1325,6 +1578,7 @@ write_kitty_config() {
   local cfg_dir="$HOME/.config/kitty"
   mkdir -p "$cfg_dir"
   log "Writing Kitty configuration ($cfg_dir/kitty.conf)..."
+  backup_file "$cfg_dir/kitty.conf"
   cat > "$cfg_dir/kitty.conf" << 'KITTY_CFG'
 # =============================================================================
 # Kitty Terminal Configuration — Catppuccin Mocha
@@ -1356,6 +1610,7 @@ map cmd+w close_tab
 map cmd+d launch --location=vsplit --cwd=current
 map cmd+shift+d launch --location=hsplit --cwd=current
 KITTY_CFG
+  hts_track_file "$cfg_dir/kitty.conf"
   ok "Kitty configuration deployed"
 }
 
@@ -1363,6 +1618,7 @@ write_alacritty_config() {
   local cfg_dir="$HOME/.config/alacritty"
   mkdir -p "$cfg_dir"
   log "Writing Alacritty configuration ($cfg_dir/alacritty.toml)..."
+  backup_file "$cfg_dir/alacritty.toml"
   cat > "$cfg_dir/alacritty.toml" << 'ALACRITTY_CFG'
 # =============================================================================
 # Alacritty Configuration — Catppuccin Mocha
@@ -1392,34 +1648,24 @@ magenta = "#f5c2e7"
 cyan    = "#94e2d5"
 white   = "#bac2de"
 ALACRITTY_CFG
+  hts_track_file "$cfg_dir/alacritty.toml"
   ok "Alacritty configuration deployed"
 }
 
 install_terminals() {
   step "GPU-Accelerated Modern Terminal Emulators"
-  echo ""
-  info "Available GPU terminals: Ghostty (recommended for macOS), WezTerm, Kitty, Alacritty"
-  
-  if [[ "$OS" == "Darwin" ]]; then
-    # Default to Ghostty and WezTerm on macOS
-    install_ghostty
-    write_wezterm_config
-    write_kitty_config
-    write_alacritty_config
-  else
-    # Linux: deploy configs and install available
-    write_ghostty_config
-    write_wezterm_config
-    write_kitty_config
-    write_alacritty_config
-    if command -v pacman &>/dev/null; then
-      install_ghostty
-      install_wezterm
-    else
-      install_kitty
-    fi
+  info "Terminals: Ghostty, WezTerm, Kitty, Alacritty (installed only where a reliable package exists)"
+  local failed=0
+  install_ghostty   || failed=1
+  install_wezterm   || failed=1
+  install_kitty     || failed=1
+  install_alacritty || failed=1
+  if [[ $failed -eq 1 ]]; then
+    warn "One or more terminal installs failed (see messages above)"
+    return 1
   fi
-  ok "GPU Terminal configurations installed to ~/.config/"
+  ok "Terminal step complete (configs written only for installed terminals)"
+  return 0
 }
 
 # ─── End: lib/terminals.sh ────────────────────────────────────────────
@@ -1431,6 +1677,24 @@ install_terminals() {
 #            btop, yazi, delta, and Starship prompt
 # =============================================================================
 
+# Pinned installer versions (override with HTS_ATUIN_VERSION / HTS_UV_VERSION).
+HTS_ATUIN_VERSION_DEFAULT="18.25.1"
+HTS_UV_VERSION_DEFAULT="0.13.9"
+
+# _hts_url_exists <url> — HEAD request; succeeds on a 2xx after redirects
+_hts_url_exists() {
+  curl -fsSLI --connect-timeout 10 --max-time 30 -o /dev/null "$1" 2>/dev/null
+}
+
+# _hts_prompt_choice — print the validated prompt choice (p10k|starship)
+_hts_prompt_choice() {
+  case "${HTS_PROMPT:-p10k}" in
+    starship) echo "starship" ;;
+    p10k|"")  echo "p10k" ;;
+    *) warn "HTS_PROMPT='${HTS_PROMPT}' is not 'starship' or 'p10k' — using p10k" >&2; echo "p10k" ;;
+  esac
+}
+
 install_atuin() {
   step "Atuin (SQLite Shell History & Secrets Scrubbing)"
 
@@ -1440,8 +1704,19 @@ install_atuin() {
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install atuin
     else
-      log "Installing Atuin via official install script..."
-      curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh || warn "Atuin install script failed"
+      local av="${HTS_ATUIN_VERSION:-$HTS_ATUIN_VERSION_DEFAULT}"
+      local aurl="https://github.com/atuinsh/atuin/releases/download/v${av}/atuin-installer.sh"
+      if _hts_url_exists "$aurl"; then
+        log "Installing Atuin v${av} via its pinned release installer ($aurl)..."
+        if hts_run_remote_script "$aurl" "sh"; then
+          export PATH="$HOME/.cargo/bin:$HOME/.atuin/bin:$PATH"
+          hts_manifest_add tool atuin "release-installer v${av}"
+        else
+          warn "Atuin installer failed"
+        fi
+      else
+        warn "Atuin installer for v${av} not reachable ($aurl) — skipping Atuin install"
+      fi
     fi
   fi
 
@@ -1449,6 +1724,7 @@ install_atuin() {
   local cfg_dir="$HOME/.config/atuin"
   mkdir -p "$cfg_dir"
   log "Writing Atuin privacy configuration ($cfg_dir/config.toml)..."
+  backup_file "$cfg_dir/config.toml"
   cat > "$cfg_dir/config.toml" << 'ATUIN_CFG'
 # =============================================================================
 # Atuin Shell History — Security & Privacy Configuration
@@ -1460,10 +1736,13 @@ inline_height = 20
 show_preview = true
 enter_accept = false
 
-# Security: Scrub sensitive credentials from SQLite history
+# Security: do not record commands that contain recognised secrets (cloud keys,
+# GitHub/Slack tokens, ...). NOTE: the local history database itself is plain
+# SQLite and is NOT encrypted at rest; only optional sync is end-to-end
+# encrypted (and sync is disabled above).
 secrets_filter = true
 
-# Regex filter for tokens, passwords, and API keys
+# Commands matching these regexes are never saved to history
 history_filter = [
   "^export .*KEY=.*",
   "^export .*SECRET=.*",
@@ -1474,7 +1753,8 @@ history_filter = [
   "^curl .*Authorization: Bearer.*",
 ]
 ATUIN_CFG
-  ok "Atuin configured with secrets_filter = true"
+  hts_track_file "$cfg_dir/config.toml"
+  ok "Atuin configured with secrets_filter = true (local history DB is not encrypted at rest)"
 }
 
 install_direnv() {
@@ -1486,18 +1766,19 @@ install_direnv() {
     pkg_install direnv
   fi
 
-  # Deploy whitelist and security config
+  # Deploy security config (no blanket trust of any directory)
   local cfg_dir="$HOME/.config/direnv"
   mkdir -p "$cfg_dir"
+  backup_file "$cfg_dir/direnv.toml"
   cat > "$cfg_dir/direnv.toml" << 'DIRENV_CFG'
 [global]
 bash_path = "bash"
 disable_stdin = true
 warn_timeout = "5s"
-[whitelist]
-prefix = [ "~/pentest", "~/workspace", "~/projects" ]
 DIRENV_CFG
+  hts_track_file "$cfg_dir/direnv.toml"
   ok "direnv configured"
+  info "direnv trusts no directory automatically: review a .envrc, then run 'direnv allow' in that directory."
 }
 
 install_uv() {
@@ -1510,9 +1791,19 @@ install_uv() {
       pkg_install uv
     fi
     if ! command -v uv &>/dev/null; then
-      log "Installing uv via official installer..."
-      curl -LsSf https://astral.sh/uv/install.sh | sh || warn "uv installer failed"
-      export PATH="$HOME/.cargo/bin:$PATH"
+      local uvv="${HTS_UV_VERSION:-$HTS_UV_VERSION_DEFAULT}"
+      local uvurl="https://astral.sh/uv/${uvv}/install.sh"
+      if _hts_url_exists "$uvurl"; then
+        log "Installing uv ${uvv} via its pinned installer ($uvurl)..."
+        if hts_run_remote_script "$uvurl" "sh"; then
+          export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+          hts_manifest_add tool uv "release-installer ${uvv}"
+        else
+          warn "uv installer failed"
+        fi
+      else
+        warn "uv installer for ${uvv} not reachable ($uvurl) — skipping uv install"
+      fi
     fi
   fi
 
@@ -1537,7 +1828,9 @@ install_modern_cli() {
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install yazi
     elif command -v cargo &>/dev/null; then
-      cargo install --locked yazi-fm yazi-cli 2>/dev/null || true
+      if cargo install --locked yazi-fm yazi-cli 2>/dev/null; then
+        hts_manifest_add tool yazi "cargo"
+      fi
     fi
   fi
 
@@ -1561,8 +1854,13 @@ install_starship() {
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install starship
     else
-      log "Installing Starship prompt..."
-      curl -sS https://starship.rs/install.sh | sh -s -- -y 2>/dev/null || warn "Starship install failed"
+      log "Installing Starship prompt (upstream installer into ~/.local/bin; no pinned URL exists)..."
+      mkdir -p "$HOME/.local/bin"
+      if hts_run_remote_script "https://starship.rs/install.sh" "sh" -y -b "$HOME/.local/bin"; then
+        hts_manifest_add tool starship "upstream-installer"
+      else
+        warn "Starship install failed"
+      fi
     fi
   fi
 
@@ -1570,6 +1868,7 @@ install_starship() {
   local cfg_file="$HOME/.config/starship.toml"
   mkdir -p "$HOME/.config"
   log "Writing Starship configuration ($cfg_file)..."
+  backup_file "$cfg_file"
   cat > "$cfg_file" << 'STARSHIP_CFG'
 # =============================================================================
 # Starship Prompt Configuration — Minimal & Sub-Millisecond Latency
@@ -1630,7 +1929,12 @@ min_time = 2_000
 style = "dimmed yellow"
 format = "took [$duration]($style) "
 STARSHIP_CFG
-  ok "Starship configuration deployed to ~/.config/starship.toml"
+  hts_track_file "$cfg_file"
+  if [[ "$(_hts_prompt_choice)" == "starship" ]]; then
+    ok "Starship configuration deployed; HTS_PROMPT=starship will activate it in ~/.zshrc"
+  else
+    ok "Starship configuration deployed (inactive: prompt is p10k; rerun with HTS_PROMPT=starship to switch)"
+  fi
 }
 
 install_shell_tools() {
@@ -1825,19 +2129,68 @@ install_web_api() {
 # ─── Begin: lib/cloud_devsec.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/cloud_devsec.sh — Cloud, Container & DevSecOps Assessment Suite
-#  Includes: Trivy, Syft, Grype, Checkov, Kube-bench, Kube-hunter
+#  Includes: Trivy, Syft, Grype, Checkov, Kubescape, Kube-bench, OSV-Scanner
+#  (kube-hunter was dropped: unmaintained upstream since 2024)
 # =============================================================================
+
+# _devsec_sha <TOOL_PREFIX> <amd64|arm64> — pinned SHA-256 from versions.sh
+_devsec_sha() {
+  local var="${1}_SHA256_LINUX_$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+  printf '%s' "${!var:-}"
+}
+
+# _devsec_installer <label> <bin> <script-url> <version> — Anchore/Aqua installer
+# script, version pinned through the script's own version argument.
+_devsec_installer() {
+  local label=$1 bin=$2 url=$3 ver=$4
+  mkdir -p "$HOME/.local/bin"
+  if hts_run_remote_script "$url" "sh" -b "$HOME/.local/bin" "$ver"; then
+    hts_track_file "$HOME/.local/bin/$bin"
+    hts_manifest_add tool "$bin" "$ver"
+    return 0
+  fi
+  warn "$label install script failed"
+  return 1
+}
+
+_install_kube_bench_linux() {
+  local arch tmpdir sha dest="$HOME/.local/share/kube-bench" rc=0
+  arch="$(_hts_arch)" || { warn "kube-bench: unsupported architecture $(uname -m)"; return 1; }
+  sha="$(_devsec_sha KUBE_BENCH "$arch")"
+  [[ -n "$sha" ]] || { warn "kube-bench: no pinned digest for $arch"; return 1; }
+  tmpdir="$(mktemp -d)" || return 1
+  if hts_download_verify "https://github.com/aquasecurity/kube-bench/releases/download/v${KUBE_BENCH_VERSION}/kube-bench_${KUBE_BENCH_VERSION}_linux_${arch}.tar.gz" "$sha" "$tmpdir/kb.tar.gz" \
+     && mkdir -p "$tmpdir/x" "$HOME/.local/bin" \
+     && tar -xzf "$tmpdir/kb.tar.gz" -C "$tmpdir/x" \
+     && rm -rf "$dest" && mkdir -p "$dest" \
+     && mv "$tmpdir/x/kube-bench" "$tmpdir/x/cfg" "$dest/" \
+     && ln -sf "$dest/kube-bench" "$HOME/.local/bin/kube-bench"; then
+    hts_track_file "$dest"
+    hts_track_file "$HOME/.local/bin/kube-bench"
+    hts_manifest_add tool kube-bench "v${KUBE_BENCH_VERSION}"
+    info "kube-bench: run with --config-dir $dest/cfg --config $dest/cfg/config.yaml"
+  else
+    warn "kube-bench install failed"
+    rc=1
+  fi
+  rm -rf "$tmpdir"
+  return $rc
+}
 
 install_cloud_devsec() {
   step "Cloud, Container & DevSecOps Assessment Suite"
+  local rc=0 arch=""
+  export PATH="$HOME/.local/bin:$PATH"
+  [[ "$OS" == "Linux" ]] && arch="$(_hts_arch || true)"
 
   # 1. Trivy (Aqua Security unified vulnerability, container, and IaC scanner)
   if ! command -v trivy &>/dev/null; then
-    log "Installing Trivy..."
+    log "Installing Trivy ${TRIVY_VERSION}..."
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install trivy
+      pkg_install trivy || rc=1
     else
-      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$HOME/.local/bin" || warn "Trivy install script failed"
+      _devsec_installer Trivy trivy \
+        "https://raw.githubusercontent.com/aquasecurity/trivy/${TRIVY_VERSION}/contrib/install.sh" "$TRIVY_VERSION" || rc=1
     fi
   else
     ok "Trivy already installed: $(trivy --version 2>/dev/null | head -1)"
@@ -1845,11 +2198,12 @@ install_cloud_devsec() {
 
   # 2. Syft (Anchore SBOM generator)
   if ! command -v syft &>/dev/null; then
-    log "Installing Syft..."
+    log "Installing Syft ${SYFT_VERSION}..."
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install syft
+      pkg_install syft || rc=1
     else
-      curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$HOME/.local/bin" || warn "Syft install script failed"
+      _devsec_installer Syft syft \
+        "https://raw.githubusercontent.com/anchore/syft/${SYFT_VERSION}/install.sh" "$SYFT_VERSION" || rc=1
     fi
   else
     ok "Syft already installed: $(syft --version 2>/dev/null | head -1)"
@@ -1857,11 +2211,12 @@ install_cloud_devsec() {
 
   # 3. Grype (Anchore vulnerability matcher)
   if ! command -v grype &>/dev/null; then
-    log "Installing Grype..."
+    log "Installing Grype ${GRYPE_VERSION}..."
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install grype
+      pkg_install grype || rc=1
     else
-      curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$HOME/.local/bin" || warn "Grype install script failed"
+      _devsec_installer Grype grype \
+        "https://raw.githubusercontent.com/anchore/grype/${GRYPE_VERSION}/install.sh" "$GRYPE_VERSION" || rc=1
     fi
   else
     ok "Grype already installed: $(grype version 2>/dev/null | head -1)"
@@ -1879,17 +2234,55 @@ install_cloud_devsec() {
     ok "Checkov already installed: $(checkov --version 2>/dev/null || echo 'ready')"
   fi
 
-  # 5. Kube-bench & Kube-hunter
-  if ! command -v kube-hunter &>/dev/null; then
-    log "Installing Kube-hunter..."
-    if command -v uv &>/dev/null; then
-      uv tool install kube-hunter || pipx_install kube-hunter
+  # 5. Kubescape (Kubernetes posture scanner; replaces unmaintained kube-hunter)
+  if ! command -v kubescape &>/dev/null; then
+    log "Installing Kubescape ${KUBESCAPE_VERSION}..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install kubescape || rc=1
+    elif [[ -n "$arch" ]]; then
+      _install_release_bin kubescape \
+        "https://github.com/kubescape/kubescape/releases/download/${KUBESCAPE_VERSION}/kubescape_${KUBESCAPE_VERSION#v}_linux_${arch}" \
+        "$(_devsec_sha KUBESCAPE "$arch")" || rc=1
     else
-      pipx_install kube-hunter
+      warn "Kubescape: unsupported architecture $(uname -m)"; rc=1
     fi
   fi
 
-  ok "Cloud, Container & DevSecOps suite complete"
+  # 6. kube-bench (CIS Kubernetes benchmark)
+  if ! command -v kube-bench &>/dev/null; then
+    log "Installing kube-bench v${KUBE_BENCH_VERSION}..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install kube-bench || rc=1
+    else
+      _install_kube_bench_linux || rc=1
+    fi
+  fi
+
+  # 7. OSV-Scanner (Google; dependency vulnerability scanner)
+  if ! command -v osv-scanner &>/dev/null; then
+    log "Installing OSV-Scanner ${OSV_SCANNER_VERSION}..."
+    if [[ "$OS" == "Darwin" ]]; then
+      pkg_install osv-scanner || rc=1
+    elif [[ -n "$arch" ]]; then
+      _install_release_bin osv-scanner \
+        "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_${arch}" \
+        "$(_devsec_sha OSV_SCANNER "$arch")" || rc=1
+    else
+      warn "OSV-Scanner: unsupported architecture $(uname -m)"; rc=1
+    fi
+  fi
+
+  local b
+  for b in trivy syft grype checkov kubescape kube-bench osv-scanner; do
+    hts_verify_cmd "devsec: $b" "$b" || rc=1
+  done
+
+  if [[ $rc -eq 0 ]]; then
+    ok "Cloud, Container & DevSecOps suite complete"
+  else
+    warn "Cloud, Container & DevSecOps suite finished with errors"
+  fi
+  return $rc
 }
 
 # ─── End: lib/cloud_devsec.sh ────────────────────────────────────────────
@@ -2087,35 +2480,129 @@ install_bugbounty() {
 #  lib/cloud.sh — Cloud, Container & Infrastructure Security Tools
 # =============================================================================
 
+# _cloud_arch <aws|gcloud> — print the vendor's architecture token for Linux.
+_cloud_arch() {
+  local m
+  m="$(uname -m)"
+  case "$1:$m" in
+    aws:x86_64|aws:amd64)        echo "x86_64" ;;
+    aws:aarch64|aws:arm64)       echo "aarch64" ;;
+    gcloud:x86_64|gcloud:amd64)  echo "x86_64" ;;
+    gcloud:aarch64|gcloud:arm64) echo "arm" ;;
+    *) return 1 ;;
+  esac
+}
+
+# AWS CLI v2 into ~/.local (no sudo needed), right archive for the CPU.
+_install_awscli_linux() {
+  local arch tmpdir rc=0
+  if ! arch="$(_cloud_arch aws)"; then
+    warn "AWS CLI: unsupported architecture $(uname -m)"
+    return 1
+  fi
+  command -v unzip &>/dev/null || pkg_install unzip || true
+  if ! command -v unzip &>/dev/null; then
+    warn "AWS CLI: unzip is required and could not be installed"
+    return 1
+  fi
+  log "Installing AWS CLI v2 ($arch)..."
+  tmpdir="$(mktemp -d)" || return 1
+  if hts_fetch "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" "$tmpdir/awscliv2.zip" \
+     && unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir" \
+     && mkdir -p "$HOME/.local/bin" \
+     && "$tmpdir/aws/install" --update -i "$HOME/.local/aws-cli" -b "$HOME/.local/bin"; then
+    hts_track_file "$HOME/.local/bin/aws"
+    hts_track_file "$HOME/.local/aws-cli"
+    hts_manifest_add tool aws-cli "official-installer"
+  else
+    warn "AWS CLI install failed"
+    rc=1
+  fi
+  rm -rf "$tmpdir"
+  return $rc
+}
+
+# Azure CLI: Microsoft's script supports Debian/Ubuntu only; elsewhere use pipx.
+_install_azcli_linux() {
+  local interp
+  if [[ "$PKG_MGR" == "apt" ]]; then
+    log "Installing Azure CLI (Microsoft apt repository script)..."
+    interp="$(_sudo_interp)" || return 1
+    if hts_run_remote_script "https://aka.ms/InstallAzureCLIDeb" "$interp"; then
+      hts_manifest_add tool azure-cli "InstallAzureCLIDeb"
+      return 0
+    fi
+    warn "Azure CLI install failed — see https://learn.microsoft.com/cli/azure/install-azure-cli-linux"
+    return 1
+  fi
+  warn "Azure CLI: no scripted repository install for $PKG_MGR — using pipx"
+  pkg_install pipx || true
+  command -v pipx &>/dev/null || { warn "Azure CLI: pipx unavailable"; return 1; }
+  pipx_install azure-cli
+  export PATH="$HOME/.local/bin:$PATH"
+  command -v az &>/dev/null
+}
+
+# gcloud: Google's official archive, installed non-interactively under ~/.local.
+_install_gcloud_linux() {
+  local arch tmpdir dest="$HOME/.local/share/google-cloud-sdk" rc=0
+  if ! arch="$(_cloud_arch gcloud)"; then
+    warn "gcloud: unsupported architecture $(uname -m) — see cloud.google.com/sdk/docs/install"
+    return 1
+  fi
+  command -v tar &>/dev/null || pkg_install tar || true
+  command -v python3 &>/dev/null || info "gcloud bundles its own Python; system python3 not required"
+  log "Installing Google Cloud CLI ($arch) from the official archive..."
+  tmpdir="$(mktemp -d)" || return 1
+  if hts_fetch "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${arch}.tar.gz" "$tmpdir/gcloud.tar.gz" \
+     && tar -xzf "$tmpdir/gcloud.tar.gz" -C "$tmpdir" \
+     && rm -rf "$dest" \
+     && mkdir -p "$(dirname "$dest")" "$HOME/.local/bin" \
+     && mv "$tmpdir/google-cloud-sdk" "$dest" \
+     && "$dest/install.sh" --quiet --usage-reporting=false --path-update=false \
+          --command-completion=false --rc-path=/dev/null \
+     && ln -sf "$dest/bin/gcloud" "$HOME/.local/bin/gcloud"; then
+    hts_track_file "$dest"
+    hts_track_file "$HOME/.local/bin/gcloud"
+    hts_manifest_add tool google-cloud-cli "official-archive"
+  else
+    warn "gcloud install failed — see cloud.google.com/sdk/docs/install"
+    rc=1
+  fi
+  rm -rf "$tmpdir"
+  return $rc
+}
+
 install_cloud() {
   step "Cloud security tools"
+  local rc=0
+  export PATH="$HOME/.local/bin:$PATH"
 
   if [[ "$OS" == "Darwin" ]]; then
-    pkg_install awscli
-    pkg_install_cask google-cloud-sdk
-    pkg_install azure-cli
+    pkg_install awscli || rc=1
+    pkg_install_cask google-cloud-sdk || rc=1
+    pkg_install azure-cli || rc=1
   else
     if ! command -v aws &>/dev/null; then
-      log "Installing AWS CLI v2..."
-      local tmpdir
-      tmpdir=$(mktemp -d)
-      curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$tmpdir/awscliv2.zip"
-      unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir"
-      sudo "$tmpdir/aws/install" || warn "AWS CLI install failed"
-      rm -rf "$tmpdir"
+      _install_awscli_linux || rc=1
     else
       info "AWS CLI already installed"
     fi
     if ! command -v az &>/dev/null; then
-      curl -fsSL https://aka.ms/InstallAzureCLIDeb | sudo bash 2>/dev/null || \
-        warn "Azure CLI install failed — install manually"
+      _install_azcli_linux || rc=1
+    else
+      info "Azure CLI already installed"
     fi
-    warn "gcloud: install from cloud.google.com/sdk/docs/install"
+    if ! command -v gcloud &>/dev/null; then
+      _install_gcloud_linux || rc=1
+    else
+      info "gcloud already installed"
+    fi
   fi
 
   # Go-based cloud tools
   go_install "github.com/BishopFox/cloudfox@latest"                     cloudfox
-  go_install "github.com/zricethezav/gitleaks/v8@latest"                gitleaks
+  go_install "github.com/gitleaks/gitleaks/v8@latest"                   gitleaks
   go_install "github.com/trufflesecurity/trufflehog/v3@latest"          trufflehog
 
   # Python cloud tools
@@ -2123,7 +2610,17 @@ install_cloud() {
   pipx_install pacu
   pipx_install s3scanner
 
-  ok "Cloud security done"
+  local b
+  for b in aws gcloud az cloudfox gitleaks trufflehog prowler pacu s3scanner; do
+    hts_verify_cmd "cloud: $b" "$b" || rc=1
+  done
+
+  if [[ $rc -eq 0 ]]; then
+    ok "Cloud security done"
+  else
+    warn "Cloud security finished with errors"
+  fi
+  return $rc
 }
 
 # ─── End: lib/cloud.sh ────────────────────────────────────────────
@@ -2133,25 +2630,71 @@ install_cloud() {
 #  lib/ai_mcp.sh — Preconfigured Safe MCP Server Suite & AI Integrations
 # =============================================================================
 
+# ─── Pinned MCP server versions (bump deliberately; nothing floats to latest) ─
+# Verified against the registries on 2026-11-22.
+MCP_FILESYSTEM_VERSION="2.4.0"     # npm  @modelcontextprotocol/server-filesystem (maintained)
+MCP_MEMORY_VERSION="2.2.1"         # npm  @modelcontextprotocol/server-memory     (maintained)
+MCP_BRAVE_VERSION="2.2.0"          # npm  @brave/brave-search-mcp-server (replaces deprecated @modelcontextprotocol/server-brave-search)
+MCP_FETCH_VERSION="2026.11.18"     # PyPI mcp-server-fetch, run via uvx (npm "@modelcontextprotocol/server-fetch" does not exist)
+MCP_GITHUB_VERSION="2.2.0"         # github-mcp-server release binary (replaces archived @modelcontextprotocol/server-github)
+MCP_INSPECTOR_VERSION="2.16.0"     # npm  @modelcontextprotocol/inspector
+
+# SHA-256 of the github-mcp-server v2.2.0 release tarballs (from the release checksums file)
+MCP_GITHUB_SHA_DARWIN_ARM64="5e46b05b87989d23267f0a69ee60a3acd1de51a72512ee5fcc2786ca60c54a6a"
+MCP_GITHUB_SHA_DARWIN_X86_64="a42e667b99915cf368b92aa419fd2f753549ea7133cb3572a3e7f3e2d4a8675b"
+MCP_GITHUB_SHA_LINUX_ARM64="d21e4fca8603b59d99380f1c332aaea36d73033d52b389867adf2124ee150983"
+MCP_GITHUB_SHA_LINUX_X86_64="157c5664b273e5070126d414f88cbab765630acde588f75dafdf9998c2235c51"
+
+# Filesystem scope. The filesystem server is ONLY ever given ~/workspace and
+# ~/pentest (see _mcp_server_json). $HOME itself or / is never passed to it;
+# _mcp_check_scope enforces this before any config is written.
+
+# Servers this tool owns in the config files. Only these keys are added or
+# replaced; every other server and setting in the user's files is preserved.
+MCP_MANAGED_SERVERS="filesystem memory fetch github brave-search"
+
+# Why these launch methods:
+#  - filesystem, memory: still maintained under @modelcontextprotocol -> npx, pinned.
+#  - fetch: Python package mcp-server-fetch -> uvx, pinned with ==.
+#  - brave-search: Brave's own npm package, stdio transport.
+#  - github: GitHub's server needs Docker, the hosted remote endpoint (Claude
+#    Desktop config files cannot speak remote HTTP without a bridge), or the Go
+#    binary. We download the pinned, checksum-verified release binary into
+#    ~/.local/bin and run "github-mcp-server stdio": no Docker, works in both
+#    Claude Code and Claude Desktop config files.
+#  - API keys are never written to config. github-mcp-server and the Brave
+#    server read GITHUB_PERSONAL_ACCESS_TOKEN / BRAVE_API_KEY from the
+#    environment of the process that launches them, so entries carry no env
+#    block. The github and brave-search entries are only written when the
+#    variable is set at install time (otherwise they would start half-configured).
+
 install_ai_llm() {
   step "AI / LLM security tools"
 
   # Python tools
+  local tool
   for tool in garak llm jwt_tool; do
     pipx_install "$tool"
+    if command -v "$tool" &>/dev/null; then hts_manifest_add tool "$tool" pipx; fi
   done
 
   # Node & npm tools
   command -v node &>/dev/null || install_node
   npm_global_install promptfoo
+  if command -v promptfoo &>/dev/null; then hts_manifest_add tool promptfoo npm; fi
 
   # Ollama — local LLM runtime
   if ! command -v ollama &>/dev/null; then
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install_cask ollama "" "https://ollama.ai"
+      pkg_install_cask ollama "" "https://ollama.com"
+      if command -v ollama &>/dev/null || [[ -d /Applications/Ollama.app ]]; then hts_manifest_add tool ollama brew; fi
     else
       log "Installing Ollama..."
-      curl -fsSL https://ollama.ai/install.sh | sh || warn "Ollama install failed"
+      if hts_run_remote_script https://ollama.com/install.sh "sh"; then
+        hts_manifest_add tool ollama install-script
+      else
+        warn "Ollama install failed"
+      fi
     fi
   else
     info "Ollama already installed"
@@ -2160,145 +2703,424 @@ install_ai_llm() {
   ok "AI/LLM security done"
 }
 
+# ─── JSON helpers ─────────────────────────────────────────────────────────────
+
+# Escape a string for use inside a JSON string literal.
+_mcp_jstr() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  printf '%s' "$s"
+}
+
+# Resolve a launcher to an absolute path (GUI apps like Claude Desktop have a
+# minimal PATH); fall back to the bare name.
+_mcp_cmd_path() {
+  local p
+  p="$(command -v "$1" 2>/dev/null || true)"
+  if [[ -n "$p" && "$p" == /* ]]; then printf '%s' "$p"; else printf '%s' "$1"; fi
+}
+
+# Refuse to continue if the filesystem scope would ever include $HOME or /.
+_mcp_check_scope() {
+  local d
+  for d in "$@"; do
+    case "$d" in
+      ""|"/"|"$HOME"|"$HOME/")
+        err "Refusing to expose '$d' to the filesystem MCP server"
+        return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# _mcp_server_json <name> <scope: desktop|project>
+# Prints one server entry as JSON. Prints nothing (rc 1) if it cannot be offered.
+_mcp_server_json() {
+  local name=$1 scope=${2:-desktop} ws pt
+  ws="$(_mcp_jstr "$HOME/workspace")"
+  pt="$(_mcp_jstr "$HOME/pentest")"
+  case "$name" in
+    filesystem)
+      if [[ "$scope" == "project" ]]; then
+        printf '{"command":"%s","args":["-y","@modelcontextprotocol/server-filesystem@%s","%s"]}' \
+          "$(_mcp_jstr "$(_mcp_cmd_path npx)")" "$MCP_FILESYSTEM_VERSION" "$pt"
+      else
+        printf '{"command":"%s","args":["-y","@modelcontextprotocol/server-filesystem@%s","%s","%s"]}' \
+          "$(_mcp_jstr "$(_mcp_cmd_path npx)")" "$MCP_FILESYSTEM_VERSION" "$ws" "$pt"
+      fi ;;
+    memory)
+      printf '{"command":"%s","args":["-y","@modelcontextprotocol/server-memory@%s"]}' \
+        "$(_mcp_jstr "$(_mcp_cmd_path npx)")" "$MCP_MEMORY_VERSION" ;;
+    fetch)
+      command -v uvx &>/dev/null || return 1
+      printf '{"command":"%s","args":["mcp-server-fetch==%s"]}' \
+        "$(_mcp_jstr "$(_mcp_cmd_path uvx)")" "$MCP_FETCH_VERSION" ;;
+    github)
+      [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ]] || return 1
+      [[ -x "$HOME/.local/bin/github-mcp-server" ]] || return 1
+      printf '{"command":"%s","args":["stdio"]}' "$(_mcp_jstr "$HOME/.local/bin/github-mcp-server")" ;;
+    brave-search)
+      [[ -n "${BRAVE_API_KEY:-}" ]] || return 1
+      printf '{"command":"%s","args":["-y","@brave/brave-search-mcp-server@%s","--transport","stdio"]}' \
+        "$(_mcp_jstr "$(_mcp_cmd_path npx)")" "$MCP_BRAVE_VERSION" ;;
+    *) return 1 ;;
+  esac
+}
+
+# _mcp_entries_json <scope> <name...> — print {"name":{...},...}
+_mcp_entries_json() {
+  local scope=$1; shift
+  local n e out="" sep=""
+  for n in "$@"; do
+    e="$(_mcp_server_json "$n" "$scope")" || continue
+    out="${out}${sep}\"${n}\":${e}"
+    sep=","
+  done
+  printf '{%s}' "$out"
+}
+
+# _mcp_side_file <config> <entries-file> <side-file>
+_mcp_side_file() {
+  local cfg=$1 entries=$2 side=$3
+  if cp "$entries" "$side" 2>/dev/null; then hts_track_file "$side"; fi
+  warn "Could not merge into $cfg (left unchanged). This tool's entries were written to:"
+  warn "  $side"
+  warn "Copy the entries inside it into the \"mcpServers\" object of $cfg by hand."
+}
+
+# _mcp_merge_file <config> <entries-json-file>
+# Backs up the config, then adds/replaces only the managed entries under
+# "mcpServers", keeping everything else. Uses python3, else jq. Never writes
+# invalid JSON; on an unparsable existing file or no JSON tool, leaves the
+# original untouched and writes the entries beside it for manual merging.
+_mcp_merge_file() {
+  local cfg=$1 entries=$2 tmp side
+  side="${cfg}.hts-mcp-servers.json"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hts-mcp.XXXXXX")" || return 1
+  backup_file "$cfg"
+
+  if command -v python3 &>/dev/null; then
+    if ! python3 - "$cfg" "$entries" "$tmp" 2>/dev/null <<'PY'
+import json, os, sys
+cfg, entries, out = sys.argv[1:4]
+doc = {}
+if os.path.exists(cfg) and os.path.getsize(cfg) > 0:
+    with open(cfg) as f:
+        txt = f.read()
+    if txt.strip():
+        doc = json.loads(txt)
+if not isinstance(doc, dict):
+    raise SystemExit("config root is not a JSON object")
+with open(entries) as f:
+    new = json.load(f)
+servers = doc.get("mcpServers")
+if not isinstance(servers, dict):
+    servers = {}
+servers.update(new)
+doc["mcpServers"] = servers
+with open(out, "w") as f:
+    json.dump(doc, f, indent=2)
+    f.write("\n")
+PY
+    then
+      rm -f "$tmp"
+      _mcp_side_file "$cfg" "$entries" "$side"
+      return 1
+    fi
+  elif command -v jq &>/dev/null; then
+    local base="$cfg"
+    if [[ ! -s "$cfg" ]]; then base="$tmp.empty"; echo '{}' > "$base"; fi
+    if ! jq --slurpfile new "$entries" '.mcpServers = ((.mcpServers // {}) + $new[0])' "$base" > "$tmp" 2>/dev/null; then
+      rm -f "$tmp" "$tmp.empty"
+      _mcp_side_file "$cfg" "$entries" "$side"
+      return 1
+    fi
+    rm -f "$tmp.empty"
+  else
+    rm -f "$tmp"
+    warn "Neither python3 nor jq is available; cannot merge $cfg safely"
+    _mcp_side_file "$cfg" "$entries" "$side"
+    return 1
+  fi
+
+  # Final validation before replacing the user's file
+  if command -v python3 &>/dev/null; then
+    python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$tmp" 2>/dev/null \
+      || { rm -f "$tmp"; err "Merged JSON failed validation; $cfg left unchanged"; return 1; }
+  else
+    jq -e . "$tmp" >/dev/null 2>&1 \
+      || { rm -f "$tmp"; err "Merged JSON failed validation; $cfg left unchanged"; return 1; }
+  fi
+  cat "$tmp" > "$cfg" || { rm -f "$tmp"; return 1; }
+  rm -f "$tmp"
+  hts_track_file "$cfg"
+  return 0
+}
+
+# Register servers with Claude Code at user scope (~/.claude.json) so they are
+# available in every project. Replaces only the entries this tool manages.
+_mcp_register_claude_code() {
+  if ! command -v claude &>/dev/null; then
+    info "claude CLI not found; skipping Claude Code user-level registration"
+    return 0
+  fi
+  local n e failed=0
+  for n in "$@"; do
+    e="$(_mcp_server_json "$n" desktop)" || continue
+    claude mcp remove --scope user "$n" &>/dev/null || true
+    if claude mcp add-json --scope user "$n" "$e" &>/dev/null; then
+      info "Claude Code (user scope): registered $n"
+    else
+      warn "Could not register $n with Claude Code; try: claude mcp add-json --scope user $n '<json>'"
+      failed=1
+    fi
+  done
+  return $failed
+}
+
+# Download the pinned, checksum-verified GitHub MCP server binary.
+_mcp_install_github_server() {
+  local dest="$HOME/.local/bin/github-mcp-server" os arch sha tmpd
+  if [[ -x "$dest" ]] && "$dest" --version 2>/dev/null | grep -q "$MCP_GITHUB_VERSION"; then
+    info "github-mcp-server $MCP_GITHUB_VERSION already installed"
+    return 0
+  fi
+  case "$(uname -s)" in Darwin) os=Darwin ;; Linux) os=Linux ;; *) return 1 ;; esac
+  case "$(uname -m)" in
+    arm64|aarch64) arch=arm64 ;;
+    x86_64|amd64)  arch=x86_64 ;;
+    *) warn "No github-mcp-server build for $(uname -m)"; return 1 ;;
+  esac
+  case "${os}_${arch}" in
+    Darwin_arm64)  sha="$MCP_GITHUB_SHA_DARWIN_ARM64" ;;
+    Darwin_x86_64) sha="$MCP_GITHUB_SHA_DARWIN_X86_64" ;;
+    Linux_arm64)   sha="$MCP_GITHUB_SHA_LINUX_ARM64" ;;
+    Linux_x86_64)  sha="$MCP_GITHUB_SHA_LINUX_X86_64" ;;
+    *) return 1 ;;
+  esac
+  tmpd="$(mktemp -d "${TMPDIR:-/tmp}/hts-ghmcp.XXXXXX")" || return 1
+  log "Installing github-mcp-server $MCP_GITHUB_VERSION..."
+  if hts_download_verify "https://github.com/github/github-mcp-server/releases/download/v${MCP_GITHUB_VERSION}/github-mcp-server_${os}_${arch}.tar.gz" "$sha" "$tmpd/gh.tgz" \
+     && tar -xzf "$tmpd/gh.tgz" -C "$tmpd" github-mcp-server \
+     && mkdir -p "$HOME/.local/bin" \
+     && install -m 755 "$tmpd/github-mcp-server" "$dest"; then
+    rm -rf "$tmpd"
+    hts_track_file "$dest"
+    hts_manifest_add tool github-mcp-server release-binary
+    return 0
+  fi
+  rm -rf "$tmpd"
+  warn "github-mcp-server install failed"
+  return 1
+}
+
 setup_mcp_suite() {
   step "Preconfigured Safe MCP Server Suite (Claude Code & Claude Desktop)"
+  local rc=0
 
   command -v node &>/dev/null || install_node
-  npm_global_install @modelcontextprotocol/inspector
 
-  pipx_install semgrep 2>/dev/null || pkg_install semgrep
+  # MCP Inspector (pinned) and security scanners
+  if ! command -v mcp-inspector &>/dev/null; then
+    if ! hts_node_managed >/dev/null; then
+      mkdir -p "$HOME/.npm-global"
+      npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
+      export PATH="$HOME/.npm-global/bin:$PATH"
+    fi
+    if npm install -g "@modelcontextprotocol/inspector@${MCP_INSPECTOR_VERSION}"; then
+      hts_manifest_add tool "@modelcontextprotocol/inspector@${MCP_INSPECTOR_VERSION}" npm
+    else
+      warn "npm install -g inspector failed"
+    fi
+  fi
+  if ! pipx_install semgrep 2>/dev/null; then pkg_install semgrep; fi
+  if command -v semgrep &>/dev/null; then hts_manifest_add tool semgrep pipx; fi
   pipx_install detect-secrets
+  if command -v detect-secrets &>/dev/null; then hts_manifest_add tool detect-secrets pipx; fi
 
-  # 1. Ensure sandboxed project directories exist (NEVER expose $HOME or /)
+  # uvx (from uv) runs the Python fetch server
+  if ! command -v uvx &>/dev/null; then
+    pipx_install uv
+    export PATH="$HOME/.local/bin:$PATH"
+    if command -v uvx &>/dev/null; then hts_manifest_add tool uv pipx; fi
+  fi
+  command -v uvx &>/dev/null || warn "uvx not available: the fetch server will be skipped"
+
+  # GitHub server binary only if the user has a token to use it with
+  if [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ]]; then
+    _mcp_install_github_server || rc=1
+  fi
+
+  # 1. Sandboxed project directories (NEVER expose $HOME or /)
   local workspace_dir="$HOME/workspace"
   local pentest_dir="$HOME/pentest"
+  _mcp_check_scope "$workspace_dir" "$pentest_dir" || return 1
   mkdir -p "$workspace_dir" "$pentest_dir"
 
-  # 2. Determine Claude Desktop config path
-  local claude_cfg_file=""
+  # 2. Which servers can be configured right now
+  local n active="" skipped=""
+  for n in $MCP_MANAGED_SERVERS; do
+    if _mcp_server_json "$n" desktop >/dev/null 2>&1; then
+      active="$active $n"
+    else
+      skipped="$skipped $n"
+    fi
+  done
+
+  local claude_cfg_file
   if [[ "$OS" == "Darwin" ]]; then
-    local claude_dir="$HOME/Library/Application Support/Claude"
-    mkdir -p "$claude_dir"
-    claude_cfg_file="$claude_dir/claude_desktop_config.json"
+    claude_cfg_file="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
   else
-    local claude_dir="$HOME/.config/Claude"
-    mkdir -p "$claude_dir"
-    claude_cfg_file="$claude_dir/claude_desktop_config.json"
+    claude_cfg_file="$HOME/.config/Claude/claude_desktop_config.json"
+  fi
+  mkdir -p "$(dirname "$claude_cfg_file")"
+
+  local ef
+  ef="$(mktemp "${TMPDIR:-/tmp}/hts-mcp-entries.XXXXXX")" || return 1
+  # shellcheck disable=SC2086
+  _mcp_entries_json desktop $active > "$ef"
+
+  log "Merging MCP servers into Claude Desktop config (existing servers and settings are kept)..."
+  if _mcp_merge_file "$claude_cfg_file" "$ef"; then
+    ok "Claude Desktop MCP configuration updated: $claude_cfg_file"
+  else
+    rc=1
   fi
 
-  # Backup existing config if present
-  if [[ -f "$claude_cfg_file" ]]; then
-    cp "$claude_cfg_file" "${claude_cfg_file}.bak.$(date +%Y%m%d_%H%M%S)"
-    info "Backed up existing Claude Desktop config to ${claude_cfg_file}.bak"
+  # 3. Project-level .mcp.json for ~/pentest (filesystem limited to ~/pentest)
+  local project_mcp="$pentest_dir/.mcp.json" pactive=""
+  for n in filesystem fetch memory; do
+    case " $active " in *" $n "*) pactive="$pactive $n" ;; esac
+  done
+  # shellcheck disable=SC2086
+  _mcp_entries_json project $pactive > "$ef"
+  if _mcp_merge_file "$project_mcp" "$ef"; then
+    ok "Project MCP config updated: $project_mcp"
+  else
+    rc=1
   fi
+  rm -f "$ef"
 
-  log "Deploying preconfigured MCP Server Suite to Claude Desktop..."
-  cat > "$claude_cfg_file" << EOF
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "$workspace_dir",
-        "$pentest_dir"
-      ]
-    },
-    "github": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
-      }
-    },
-    "fetch": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-fetch"
-      ]
-    },
-    "brave-search": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-brave-search"
-      ],
-      "env": {
-        "BRAVE_API_KEY": ""
-      }
-    },
-    "memory": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ]
-    }
-  }
+  # 4. Claude Code user-level registration
+  # shellcheck disable=SC2086
+  _mcp_register_claude_code $active || rc=1
+
+  # 5. sec-mcp helper
+  _mcp_install_secmcp || rc=1
+
+  # 6. One post-install note about keys
+  case " $skipped " in
+    *" github "*|*" brave-search "*)
+      info "API keys: export the variables below in your shell profile, then run 'sec-mcp setup':"
+      case " $skipped " in *" github "*) info "  export GITHUB_PERSONAL_ACCESS_TOKEN=...   (enables the github server)" ;; esac
+      case " $skipped " in *" brave-search "*) info "  export BRAVE_API_KEY=...                  (enables the brave-search server)" ;; esac
+      info "  Keys are never stored in the config files. Claude Desktop only sees variables it was"
+      info "  launched with (macOS: 'launchctl setenv NAME value', then restart the app)." ;;
+  esac
+  case " $skipped " in *" fetch "*) info "Skipped: fetch (needs uvx; install uv, then run 'sec-mcp setup')" ;; esac
+  info "Configured servers:$active"
+  return $rc
 }
-EOF
-  ok "Claude Desktop MCP configuration generated: $claude_cfg_file"
 
-  # 3. Deploy project-level .mcp.json template
-  local project_mcp="$pentest_dir/.mcp.json"
-  cat > "$project_mcp" << EOF
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "$pentest_dir"]
-    },
-    "fetch": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-fetch"]
-    },
-    "memory": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
-    }
-  }
-}
-EOF
-  ok "Project MCP template deployed: $project_mcp"
-
-  # 4. Install sec-mcp helper utility
-  mkdir -p "$HOME/.local/bin"
-  cat > "$HOME/.local/bin/sec-mcp" << 'SECMCP'
+_mcp_install_secmcp() {
+  local dest="$HOME/.local/bin/sec-mcp" self="" esc
+  mkdir -p "$HOME/.local/bin" || return 1
+  backup_file "$dest"
+  # Remember the installer so 'sec-mcp setup' can re-run it (only if run from a file)
+  self="${BASH_SOURCE[${#BASH_SOURCE[@]}-1]:-}"
+  if [[ -f "$self" && "$(basename "$self")" == "ter.sh" ]]; then
+    self="$(cd "$(dirname "$self")" && pwd)/$(basename "$self")"
+  else
+    self=""
+  fi
+  esc="${self//\\/\\\\}"; esc="${esc//&/\\&}"; esc="${esc//|/\\|}"
+  cat > "$dest" << 'SECMCP'
 # =============================================================================
 # sec-mcp — Security MCP Suite Manager
+#   list     show the servers actually present in your config files
+#   inspect  launch the MCP Inspector (pinned version)
+#   setup    re-run the MCP configuration (merges; keeps your other servers)
 # =============================================================================
+HTS_INSTALLER="@@INSTALLER@@"
+INSPECTOR_VERSION="@@INSPECTOR@@"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  DESKTOP_CFG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+else
+  DESKTOP_CFG="$HOME/.config/Claude/claude_desktop_config.json"
+fi
+
+# _show <label> <file> — print the servers of one config file
+_show() {
+  local label=$1 file=$2
+  echo -e "\033[1;36m$label\033[0m  ($file)"
+  if [[ ! -f "$file" ]]; then echo "  (file not found)"; return; fi
+  if command -v python3 &>/dev/null; then
+    python3 - "$file" <<'PY'
+import json, os, sys
+home = os.path.expanduser("~")
+try:
+    doc = json.load(open(sys.argv[1]))
+except Exception as e:
+    print("  (unreadable JSON: %s)" % e); sys.exit(0)
+servers = doc.get("mcpServers") or {}
+if not servers:
+    print("  (no MCP servers)")
+for name, s in servers.items():
+    cmd = s.get("command") or s.get("url") or "?"
+    args = [str(a) for a in s.get("args", [])]
+    print("  [x] %-13s %s %s" % (name, os.path.basename(cmd), " ".join(args)))
+    if "filesystem" in name or any("server-filesystem" in a for a in args):
+        dirs = [a for a in args if a.startswith("/")]
+        print("      filesystem scope: %s" % (", ".join(dirs) or "(none)"))
+        if any(d.rstrip("/") in (home, "") for d in dirs):
+            print("      WARNING: scope includes your whole home directory or /")
+    if name == "github" and not os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN"):
+        print("      note: GITHUB_PERSONAL_ACCESS_TOKEN is not set in this shell")
+    if name == "brave-search" and not os.environ.get("BRAVE_API_KEY"):
+        print("      note: BRAVE_API_KEY is not set in this shell")
+PY
+  elif command -v jq &>/dev/null; then
+    jq -r '(.mcpServers // {}) | to_entries[] | "  [x] \(.key)  \(.value.command // .value.url) \((.value.args // []) | join(" "))"' "$file" 2>/dev/null || echo "  (unreadable JSON)"
+  else
+    echo "  (python3 or jq required to read this file)"
+  fi
+}
+
 case "$1" in
   list|ls)
-    echo -e "\033[1;36mActive MCP Servers:\033[0m"
-    echo -e "  \033[0;32m[✓]\033[0m filesystem   (Sandboxed to ~/workspace & ~/pentest)"
-    echo -e "  \033[0;32m[✓]\033[0m github       (GitHub PR, Repo, Issue integration)"
-    echo -e "  \033[0;32m[✓]\033[0m fetch        (Fast web document reader)"
-    echo -e "  \033[0;32m[✓]\033[0m brave-search (Real-time web search)"
-    echo -e "  \033[0;32m[✓]\033[0m memory       (Persistent graph memory across sessions)"
+    _show "Claude Desktop" "$DESKTOP_CFG"
+    _show "Project (~/pentest)" "$HOME/pentest/.mcp.json"
+    if [[ -f "$HOME/.claude.json" ]]; then
+      _show "Claude Code (user scope)" "$HOME/.claude.json"
+    fi
     ;;
   inspect)
     echo -e "\033[1;36mLaunching MCP Inspector UI...\033[0m"
-    npx -y @modelcontextprotocol/inspector
+    npx -y "@modelcontextprotocol/inspector@${INSPECTOR_VERSION}"
     ;;
   setup)
     echo -e "\033[1;36mRe-running MCP Suite setup...\033[0m"
-    if command -v setup_mcp_suite &>/dev/null; then
-      setup_mcp_suite
+    if [[ -n "$HTS_INSTALLER" && -f "$HTS_INSTALLER" ]]; then
+      bash "$HTS_INSTALLER" --mcp
     else
-      echo "Run './ter.sh --mcp' to configure."
+      echo "The original installer path is unknown. Re-run the installer with: ter.sh --mcp"
+      exit 1
     fi
     ;;
   *)
     echo "Usage: sec-mcp {list|inspect|setup}"
+    echo "  list     show servers in your Claude Desktop / project / Claude Code config"
+    echo "  inspect  launch the MCP Inspector"
+    echo "  setup    re-run MCP configuration via the installer (--mcp)"
     ;;
 esac
 SECMCP
-  chmod +x "$HOME/.local/bin/sec-mcp"
+  sed -i.bak -e "s|@@INSTALLER@@|${esc}|" -e "s|@@INSPECTOR@@|${MCP_INSPECTOR_VERSION}|" "$dest" && rm -f "$dest.bak"
+  chmod +x "$dest"
+  hts_track_file "$dest"
+  hts_manifest_add tool sec-mcp script
   ok "sec-mcp management CLI installed to ~/.local/bin/sec-mcp"
 }
 
@@ -2313,100 +3135,184 @@ install_mcp() {
 #  lib/workflow.sh — Workflow, Productivity, and Core Shell Tools
 # =============================================================================
 
+# _clone_repo <label> <url> <dest> — clone, or fast-forward an existing clone.
+# A network failure is reported and returned, never fatal to the run.
+_clone_repo() {
+  local name=$1 url=$2 dest=$3
+  if ! command -v git &>/dev/null; then
+    warn "git not found — cannot fetch $name"
+    return 1
+  fi
+  if [[ -d "$dest/.git" || -d "$dest" ]]; then
+    info "'$name' exists — updating"
+    git -C "$dest" pull --ff-only -q 2>/dev/null || warn "Could not update $name (offline or diverged); keeping current copy"
+    return 0
+  fi
+  log "Cloning $name..."
+  mkdir -p "$(dirname "$dest")" || return 1
+  if git clone --depth=1 "$url" "$dest"; then
+    hts_track_file "$dest"
+    hts_manifest_add component "$name" "$url"
+    return 0
+  fi
+  rm -rf "$dest"
+  warn "Failed to clone $name from $url"
+  return 1
+}
+
+# _install_lazygit — package manager first, then pinned release binary, then go.
+_install_lazygit() {
+  command -v lazygit &>/dev/null && return 0
+  local arch sha tmpdir rc=1
+  export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"
+
+  if pkg_install lazygit && command -v lazygit &>/dev/null; then
+    return 0
+  fi
+
+  if [[ "$OS" == "Linux" ]] && arch="$(uname -m)"; then
+    case "$arch" in
+      x86_64|amd64)  arch="x86_64"; sha="$LAZYGIT_SHA256_LINUX_AMD64" ;;
+      aarch64|arm64) arch="arm64";  sha="$LAZYGIT_SHA256_LINUX_ARM64" ;;
+      *)             arch="";       sha="" ;;
+    esac
+    if [[ -n "$arch" ]]; then
+      log "Installing lazygit v${LAZYGIT_VERSION} release binary..."
+      tmpdir="$(mktemp -d)" || return 1
+      if hts_download_verify "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_linux_${arch}.tar.gz" "$sha" "$tmpdir/lazygit.tar.gz" \
+         && tar -xzf "$tmpdir/lazygit.tar.gz" -C "$tmpdir" lazygit \
+         && mkdir -p "$HOME/.local/bin" \
+         && install -m 755 "$tmpdir/lazygit" "$HOME/.local/bin/lazygit"; then
+        hts_track_file "$HOME/.local/bin/lazygit"
+        hts_manifest_add tool lazygit "v${LAZYGIT_VERSION}"
+        rc=0
+      else
+        warn "lazygit release binary install failed — falling back to go install"
+      fi
+      rm -rf "$tmpdir"
+      [[ $rc -eq 0 ]] && return 0
+    fi
+  fi
+
+  go_install "github.com/jesseduffield/lazygit@v${LAZYGIT_VERSION}" lazygit
+  command -v lazygit &>/dev/null
+}
+
+# _install_yq — pinned, digest-verified release binary on Linux.
+_install_yq() {
+  command -v yq &>/dev/null && return 0
+  if [[ "$OS" == "Darwin" ]]; then
+    pkg_install yq
+    return $?
+  fi
+  local arch sha
+  arch="$(_hts_arch)" || { warn "yq: unsupported architecture $(uname -m)"; return 1; }
+  if [[ "$arch" == "amd64" ]]; then sha="$YQ_SHA256_LINUX_AMD64"; else sha="$YQ_SHA256_LINUX_ARM64"; fi
+  log "Installing yq ${YQ_VERSION}..."
+  if _install_release_bin yq \
+       "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${arch}" "$sha"; then
+    ok "yq ${YQ_VERSION} installed"
+    return 0
+  fi
+  warn "yq install failed"
+  return 1
+}
+
+# _install_xh — package on macOS; pinned musl release tarball on Linux.
+_install_xh() {
+  command -v xh &>/dev/null && return 0
+  if [[ "$OS" == "Darwin" ]]; then
+    pkg_install xh
+    return $?
+  fi
+  local arch sha target tmpdir rc=1
+  arch="$(_hts_arch)" || { warn "xh: unsupported architecture $(uname -m)"; return 1; }
+  if [[ "$arch" == "amd64" ]]; then
+    target="x86_64-unknown-linux-musl"; sha="$XH_SHA256_LINUX_AMD64"
+  else
+    target="aarch64-unknown-linux-musl"; sha="$XH_SHA256_LINUX_ARM64"
+  fi
+  log "Installing xh ${XH_VERSION}..."
+  tmpdir="$(mktemp -d)" || return 1
+  if hts_download_verify "https://github.com/ducaale/xh/releases/download/${XH_VERSION}/xh-${XH_VERSION}-${target}.tar.gz" "$sha" "$tmpdir/xh.tar.gz" \
+     && tar -xzf "$tmpdir/xh.tar.gz" -C "$tmpdir" \
+     && mkdir -p "$HOME/.local/bin" \
+     && install -m 755 "$tmpdir/xh-${XH_VERSION}-${target}/xh" "$HOME/.local/bin/xh"; then
+    hts_track_file "$HOME/.local/bin/xh"
+    hts_manifest_add tool xh "$XH_VERSION"
+    rc=0
+  else
+    warn "xh install failed — install via cargo: cargo install xh"
+  fi
+  rm -rf "$tmpdir"
+  return $rc
+}
+
 install_core() {
   step "Core terminal tools"
+  local rc=0 pkg prc
+  export PATH="$HOME/.local/bin:$PATH"
   pkg_update
 
-  # QoL tools
+  # QoL tools. Unmapped packages (status 3) were already warned about.
   for pkg in fzf bat eza zoxide git-delta tmux fd ripgrep tldr; do
-    pkg_install "$pkg"
+    prc=0
+    pkg_install "$pkg" || prc=$?
+    [[ $prc -eq 1 ]] && rc=1
   done
 
-  # Linux: install go-based tools that aren't in distro repos
-  if [[ "$OS" == "Linux" ]]; then
-    go_install "github.com/jesseduffield/lazygit@latest" lazygit
-  fi
+  # lazygit: package manager, pinned release binary, then go install
+  _install_lazygit || rc=1
 
   linux_fixups
 
   # Ensure Meslo Nerd Font is installed (required for Powerlevel10k)
-  install_fonts "meslo"
+  install_fonts "meslo" || warn "Nerd Font install had problems"
 
   # External OMZ plugins
-  _clone_plugin() {
-    local name=$1 url=$2
-    local dest="$ZSH_CUSTOM/plugins/$name"
-    if [[ -d "$dest" ]]; then
-      info "Plugin '$name' exists — updating"
-      git -C "$dest" pull --ff-only -q 2>/dev/null || true
-    else
-      log "Cloning $name..."
-      git clone --depth=1 "$url" "$dest"
-    fi
-  }
-  _clone_plugin zsh-autosuggestions     https://github.com/zsh-users/zsh-autosuggestions
-  _clone_plugin zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting
-  _clone_plugin zsh-completions         https://github.com/zsh-users/zsh-completions
+  local zsh_custom="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+  _clone_repo zsh-autosuggestions     https://github.com/zsh-users/zsh-autosuggestions     "$zsh_custom/plugins/zsh-autosuggestions" || rc=1
+  _clone_repo zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting "$zsh_custom/plugins/zsh-syntax-highlighting" || rc=1
+  _clone_repo zsh-completions         https://github.com/zsh-users/zsh-completions         "$zsh_custom/plugins/zsh-completions" || rc=1
 
   # Powerlevel10k
-  local p10k_dir="$ZSH_CUSTOM/themes/powerlevel10k"
-  if [[ -d "$p10k_dir" ]]; then
-    info "Powerlevel10k exists — updating"
-    git -C "$p10k_dir" pull --ff-only -q 2>/dev/null || true
-  else
-    log "Cloning Powerlevel10k..."
-    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$p10k_dir"
-  fi
+  _clone_repo powerlevel10k https://github.com/romkatv/powerlevel10k.git "$zsh_custom/themes/powerlevel10k" || rc=1
 
-  ok "Core terminal done"
+  # Verify what this step is supposed to provide
+  local b
+  for b in fzf bat eza zoxide delta tmux fd rg lazygit; do
+    hts_verify_cmd "core: $b" "$b" || rc=1
+  done
+
+  if [[ $rc -eq 0 ]]; then
+    ok "Core terminal done"
+  else
+    warn "Core terminal finished with errors (see warnings above)"
+  fi
+  return $rc
 }
 
 install_workflow() {
   step "Workflow tools"
+  local rc=0 pkg prc
+  export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"
 
   for pkg in jq gh pandoc; do
-    pkg_install "$pkg"
+    prc=0
+    pkg_install "$pkg" || prc=$?
+    [[ $prc -eq 1 ]] && rc=1
   done
 
-  # yq — YAML processor
-  if ! command -v yq &>/dev/null; then
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install yq
-    else
-      local yq_ver="v4.44.1"
-      local yq_bin="yq_linux_amd64"
-      [[ "$ARCH" == "aarch64" ]] && yq_bin="yq_linux_arm64"
-      curl -fsSL "https://github.com/mikefarah/yq/releases/download/${yq_ver}/${yq_bin}" \
-        -o "$HOME/.local/bin/yq" && chmod +x "$HOME/.local/bin/yq"
-      ok "yq installed"
-    fi
-  else
-    info "yq already installed"
-  fi
-
-  # lazygit
-  if ! command -v lazygit &>/dev/null; then
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install lazygit
-    else
-      go_install "github.com/jesseduffield/lazygit@latest" lazygit
-    fi
-  fi
-
-  # xh — fast HTTP client
-  if ! command -v xh &>/dev/null; then
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install xh
-    else
-      curl -fsSL https://raw.githubusercontent.com/ducaale/xh/master/install.sh | bash || \
-        warn "xh install failed — install via cargo: cargo install xh"
-    fi
-  fi
+  _install_yq || rc=1
+  _install_lazygit || rc=1
+  _install_xh || rc=1
 
   # yazi — terminal file manager
   if ! command -v yazi &>/dev/null; then
     if [[ "$OS" == "Darwin" ]]; then
-      pkg_install yazi
+      pkg_install yazi || rc=1
+    elif pkg_install yazi 2>/dev/null; then
+      :
     else
       warn "yazi: install via cargo: cargo install yazi-fm"
     fi
@@ -2414,7 +3320,7 @@ install_workflow() {
 
   # obsidian — note-taking
   if [[ "$OS" == "Darwin" ]]; then
-    pkg_install_cask obsidian
+    pkg_install_cask obsidian || rc=1
   else
     warn "Obsidian: download AppImage from obsidian.md/download"
   fi
@@ -2429,7 +3335,17 @@ install_workflow() {
     ok "git-delta configured in ~/.gitconfig"
   fi
 
-  ok "Workflow tools done"
+  local b
+  for b in jq gh pandoc yq lazygit xh; do
+    hts_verify_cmd "workflow: $b" "$b" || rc=1
+  done
+
+  if [[ $rc -eq 0 ]]; then
+    ok "Workflow tools done"
+  else
+    warn "Workflow tools finished with errors (see warnings above)"
+  fi
+  return $rc
 }
 
 # ─── End: lib/workflow.sh ────────────────────────────────────────────
@@ -2448,11 +3364,24 @@ install_dashboard() {
     case "$PKG_MGR" in
       brew)   pkg_install fastfetch ;;
       apt)
-        sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch 2>/dev/null && \
-          sudo apt-get update -qq && sudo apt-get install -y fastfetch || warn "fastfetch ppa install failed"
+        # Official distro package first (Debian 13+/Ubuntu 24.10+); the PPA is only a fallback.
+        if apt-cache show fastfetch >/dev/null 2>&1; then
+          sudo apt-get install -y fastfetch && hts_manifest_add tool fastfetch "apt" || warn "apt install fastfetch failed"
+        elif command -v add-apt-repository &>/dev/null && grep -qi ubuntu /etc/os-release 2>/dev/null; then
+          warn "fastfetch has no package in this release's official repositories"
+          warn "Adding third-party PPA ppa:zhangsongcui3371/fastfetch (maintained by the community, not Ubuntu)"
+          if sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch && \
+             sudo apt-get update -qq && sudo apt-get install -y fastfetch; then
+            hts_manifest_add tool fastfetch "apt (ppa:zhangsongcui3371/fastfetch)"
+          else
+            warn "fastfetch ppa install failed"
+          fi
+        else
+          warn "fastfetch: not packaged for this apt distro and no PPA applies — skipping (see github.com/fastfetch-cli/fastfetch)"
+        fi
         ;;
-      dnf)    sudo dnf install -y fastfetch || warn "dnf install fastfetch failed" ;;
-      pacman) sudo pacman -S --noconfirm --needed fastfetch || warn "pacman install fastfetch failed" ;;
+      dnf)    sudo dnf install -y fastfetch && hts_manifest_add tool fastfetch "dnf" || warn "dnf install fastfetch failed" ;;
+      pacman) sudo pacman -S --noconfirm --needed fastfetch && hts_manifest_add tool fastfetch "pacman" || warn "pacman install fastfetch failed" ;;
       *)      warn "fastfetch: install from github.com/fastfetch-cli/fastfetch" ;;
     esac
   else
@@ -2463,6 +3392,7 @@ install_dashboard() {
   local ff_dir="$HOME/.config/fastfetch"
   mkdir -p "$ff_dir"
   log "Writing Fastfetch configuration ($ff_dir/config.jsonc)..."
+  backup_file "$ff_dir/config.jsonc"
   cat > "$ff_dir/config.jsonc" << 'FF_CFG'
 {
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
@@ -2490,6 +3420,7 @@ install_dashboard() {
   ]
 }
 FF_CFG
+  hts_track_file "$ff_dir/config.jsonc"
   ok "Fastfetch configuration deployed"
 
   # 3. Deploy modern welcome.zsh script
@@ -2502,6 +3433,7 @@ write_modern_welcome() {
   mkdir -p "$ZSH_CUSTOM"
 
   log "Deploying modernized Tactical Security Cockpit to welcome.zsh..."
+  backup_file "$ZSH_CUSTOM/welcome.zsh"
   cat > "$ZSH_CUSTOM/welcome.zsh" << 'WELCOME_SCRIPT'
 # =============================================================================
 # Modern Tactical Security Cockpit — High Performance (<15ms), Zero-Lag Welcome
@@ -2525,14 +3457,14 @@ _PENTEST_TIPS=(
   "Run 'scan <target>' for a full nmap scan saved into ./scans/."
   "Use 'secrets_scan_local' to scan current dir with TruffleHog."
   "Run 'awscheck' to inspect active AWS identity and attached IAM policies."
-  "Ctrl+R opens Atuin encrypted SQLite history search with token scrubbing."
+  "Ctrl+R opens Atuin history search; commands containing secrets are not recorded."
   "Run 'schematest <spec.json>' to property-fuzz APIs with Schemathesis."
   "Run 'nxc smb <subnet> -u user -p pass' for high-speed AD credential auditing."
   "Use 'ligolo_start' to scaffold kernel TUN pivoting instead of proxychains."
   "Run 'trivy fs .' to audit container, filesystem, and IaC vulnerabilities."
   "Run 'sbom_audit <image>' to generate Syft SBOM and cross-scan with Grype."
-  "Run 'claude' (or 'cc') to start Claude Code for terminal agentic coding."
-  "Run 'doctor' (or 'sec-doctor') to audit all installed security & dev tools."
+  "Run 'claude' (or 'ccode') to start Claude Code for terminal agentic coding."
+  "Run 'doctor' for a quick tool check ('./ter.sh --doctor' runs the full audit)."
   "Use 'yazi' for lightning-fast async terminal file management with image previews."
   "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
   "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
@@ -2620,7 +3552,7 @@ _show_welcome() {
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
   printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
-  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(cc)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
+  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
   printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}nxc${_W_RESET}\n"
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   
@@ -2650,6 +3582,7 @@ _welcome_once() {
 }
 add-zsh-hook precmd _welcome_once
 WELCOME_SCRIPT
+  hts_track_file "$ZSH_CUSTOM/welcome.zsh"
 }
 
 # ─── End: lib/dashboard.sh ────────────────────────────────────────────
@@ -2657,157 +3590,667 @@ WELCOME_SCRIPT
 # ─── Begin: lib/doctor.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/doctor.sh — Security Terminal Doctor & Diagnostic Audit
+#
+#  READ-ONLY. Only `command -v`, `--version` style probes and reads of config
+#  files happen here: no installs, no writes, no network calls.
+#
+#  Environment:  HTS_DOCTOR_FORMAT=json   print one JSON document, nothing else
+#  Exit status:  0 when every required item of every installed component is
+#                present (or when no manifest exists), 1 otherwise.
 # =============================================================================
 
-sec_doctor() {
-  step "Security Terminal Doctor & Diagnostic Audit"
+# Group ids in installer order, and their display titles.
+_DOC_GROUPS="core fonts node claude code terminals shell-tools mcp pentest seclists bugbounty ad-pivot web-api cloud mobile ai workflow dashboard config"
+
+_doc_gtitle() {
+  case "$1" in
+    core) echo "Core terminal" ;;            fonts) echo "Hacker Fonts" ;;
+    node) echo "Node.js & npm" ;;            claude) echo "Claude Code CLI" ;;
+    code) echo "VS Code & CLI" ;;            terminals) echo "GPU Terminals" ;;
+    shell-tools) echo "Shell History" ;;     mcp) echo "MCP Server Suite" ;;
+    pentest) echo "Pentest tools" ;;         seclists) echo "SecLists" ;;
+    bugbounty) echo "Bug bounty" ;;          ad-pivot) echo "Active Directory" ;;
+    web-api) echo "Web & API Sec" ;;         cloud) echo "Cloud & DevSecOps" ;;
+    mobile) echo "Mobile & Reverse" ;;       ai) echo "AI / LLM sec" ;;
+    workflow) echo "Workflow tools" ;;        dashboard) echo "Tactical Cockpit" ;;
+    config) echo "Config files" ;;            *) echo "$1" ;;
+  esac
+}
+
+# ─── Result store (parallel arrays, bash 3.2 safe) ────────────────────────────
+_doc_reset() {
+  _DI_G=(); _DI_OWN=(); _DI_NAME=(); _DI_ST=(); _DI_VER=(); _DI_NOTE=()
+  _DH_ST=(); _DH_NAME=(); _DH_MSG=(); _DH_FIX=()
+  _DOC_OS="$(uname -s)"
+}
+
+_doc_add() { # group+owners label status version note
+  local own=$1 n=${#_DI_G[@]}
+  _DI_G[$n]="${own%%+*}"
+  _DI_OWN[$n]="${own//+/ }"
+  _DI_NAME[$n]=$2; _DI_ST[$n]=$3; _DI_VER[$n]=${4:-}; _DI_NOTE[$n]=${5:-}
+}
+
+_doc_hyg() { # status name message fix
+  local n=${#_DH_ST[@]}
+  _DH_ST[$n]=$1; _DH_NAME[$n]=$2; _DH_MSG[$n]=${3:-}; _DH_FIX[$n]=${4:-}
+}
+
+# Evaluate platform flags. Prints: na | opt | req
+_doc_flags() {
+  local f=" $1 " mac=0
+  [[ "$_DOC_OS" == "Darwin" ]] && mac=1
+  case "$f" in *" mac "*) [[ $mac -eq 1 ]] || { echo na; return; } ;; esac
+  case "$f" in *" lin "*) [[ $mac -eq 0 ]] || { echo na; return; } ;; esac
+  case "$f" in *" opt "*) echo opt; return ;; esac
+  case "$f" in *" optlinux "*) [[ $mac -eq 0 ]] && { echo opt; return; } ;; esac
+  case "$f" in *" optmac "*) [[ $mac -eq 1 ]] && { echo opt; return; } ;; esac
+  echo req
+}
+
+# Version probe: never evaluates strings, 5s cap when `timeout` exists.
+_doc_ver() { # binary "args" -> prints a short version string
+  local out="" tmo=""
+  local -a va
+  [[ -z "${2:-}" || "$2" == "-" ]] && return 0
+  read -r -a va <<< "$2"
+  command -v timeout >/dev/null 2>&1 && tmo=timeout
+  [[ -z "$tmo" ]] && command -v gtimeout >/dev/null 2>&1 && tmo=gtimeout
+  if [[ -n "$tmo" ]]; then
+    out="$("$tmo" 5 "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
+  else
+    out="$("$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
+  fi
+  printf '%s\n' "$out" | grep -m1 -oE '[0-9]+\.[0-9]+(\.[0-9A-Za-z_+-]+)*' | head -n1 | cut -c1-13
+}
+
+# _b <group[+owner...]> <label> <bin|bin2|app:Name.app> <version-args|-> [flags]
+_b() {
+  local own=$1 label=$2 spec=$3 vargs=${4:--} kind alt found="" path="" ver=""
+  local -a alts
+  kind="$(_doc_flags "${5:-}")"
+  if [[ "$kind" == "na" ]]; then _doc_add "$own" "$label" na "" "n/a"; return 0; fi
+  IFS='|' read -r -a alts <<< "$spec"
+  for alt in "${alts[@]}"; do
+    case "$alt" in
+      app:*)
+        if [[ -d "/Applications/${alt#app:}" || -d "$HOME/Applications/${alt#app:}" ]]; then
+          found=app; path="/Applications/${alt#app:}"; break
+        fi ;;
+      *)
+        if command -v "$alt" >/dev/null 2>&1; then found=bin; path="$alt"; break; fi ;;
+    esac
+  done
+  if [[ -z "$found" ]]; then
+    if [[ "$kind" == "opt" ]]; then _doc_add "$own" "$label" not_installed "" "optional"
+    else _doc_add "$own" "$label" missing "" "missing"; fi
+    return 0
+  fi
+  [[ "$found" == "bin" ]] && ver="$(_doc_ver "$path" "$vargs")"
+  [[ "$found" == "app" && -z "$ver" ]] && ver="(app)"
+  _doc_add "$own" "$label" installed "$ver" ""
+}
+
+# _f <group[+owner...]> <label> <path> [flags] — file must exist and be non-empty
+_f() {
+  local kind
+  kind="$(_doc_flags "${4:-}")"
+  if [[ "$kind" == "na" ]]; then _doc_add "$1" "$2" na "" "n/a"; return 0; fi
+  if [[ -s "$3" ]]; then _doc_add "$1" "$2" installed "" ""
+  elif [[ -e "$3" ]]; then _doc_add "$1" "$2" missing "" "empty file"
+  elif [[ "$kind" == "opt" ]]; then _doc_add "$1" "$2" not_installed "" "optional"
+  else _doc_add "$1" "$2" missing "" "missing"; fi
+}
+
+# _d <group[+owner...]> <label> <dir> [dir...]  — any of the directories exists
+_d() {
+  local own=$1 label=$2 d; shift 2
+  for d in "$@"; do
+    if [[ -d "$d" ]]; then _doc_add "$own" "$label" installed "" ""; return 0; fi
+  done
+  _doc_add "$own" "$label" missing "" "missing"
+}
+
+# _t <group> <label> <font-name-glob> [flags] — font file present in a font dir
+_t() {
+  local kind d hit="" dirs
+  kind="$(_doc_flags "${4:-}")"
+  if [[ "$_DOC_OS" == "Darwin" ]]; then dirs="$HOME/Library/Fonts|/Library/Fonts"
+  else dirs="$HOME/.local/share/fonts|/usr/share/fonts|/usr/local/share/fonts"; fi
+  local -a da
+  IFS='|' read -r -a da <<< "$dirs"
+  for d in "${da[@]}"; do
+    [[ -d "$d" ]] || continue
+    hit="$(find "$d" -maxdepth 4 -iname "$3" 2>/dev/null | head -n1)"
+    [[ -n "$hit" ]] && break
+  done
+  if [[ -n "$hit" ]]; then _doc_add "$1" "$2" installed "" ""
+  elif [[ "$kind" == "opt" ]]; then _doc_add "$1" "$2" not_installed "" "optional"
+  else _doc_add "$1" "$2" missing "" "missing"; fi
+}
+
+# ─── Coverage: every binary and file the installer writes ─────────────────────
+_doc_collect_items() {
+  local zc="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}" cfg="$HOME/.config" claude_cfg
+
+  # 1 Core terminal (also pulled in by Shell History)
+  _b core "Zsh" zsh "--version"
+  _d core "Oh My Zsh" "$HOME/.oh-my-zsh"
+  _d core "zsh-autosuggestions" "$zc/plugins/zsh-autosuggestions"
+  _d core "zsh-syntax-hl" "$zc/plugins/zsh-syntax-highlighting"
+  _d core "zsh-completions" "$zc/plugins/zsh-completions"
+  _d core "Powerlevel10k" "$zc/themes/powerlevel10k"
+  _b core+shell-tools "fzf" fzf "--version"
+  _b core+shell-tools "bat" "bat|batcat" "--version"
+  _b core+shell-tools "eza" eza "--version"
+  _b core+shell-tools "zoxide" zoxide "--version"
+  _b core+shell-tools "ripgrep (rg)" rg "--version"
+  _b core+shell-tools "fd" "fd|fdfind" "--version"
+  _b core+shell-tools "git-delta" delta "--version"
+  _b core "tmux" tmux "-V"
+  _b core "tldr" tldr "-"
+
+  # 2 Fonts
+  _t fonts "MesloLGS NF" "*Meslo*"
+  _t fonts "JetBrains Mono" "*JetBrains*" opt
+  _t fonts "Fira Code" "*Fira*Code*" opt
+  _t fonts "Hack" "*Hack*" opt
+  _t fonts "Caskaydia Cove" "*Caskaydia*" opt
+
+  # 3-5 Developer stack (--dev installs node, claude and code)
+  _b node "Node.js" node "-v"
+  _b node "npm" npm "-v"
+  _b claude "Claude Code CLI" claude "--version"
+  _b code "VS Code (code)" "code|app:Visual Studio Code.app" "--version"
+
+  # 6 GPU terminals
+  _b terminals "Ghostty" "ghostty|app:Ghostty.app" "--version" optlinux
+  _b terminals "WezTerm" "wezterm|app:WezTerm.app" "--version"
+  _b terminals "Kitty" "kitty|app:kitty.app" "--version"
+  _b terminals "Alacritty" "alacritty|app:Alacritty.app" "--version"
+  _f terminals "ghostty/config" "$cfg/ghostty/config"
+  _f terminals "wezterm.lua" "$cfg/wezterm/wezterm.lua"
+  _f terminals "kitty.conf" "$cfg/kitty/kitty.conf"
+  _f terminals "alacritty.toml" "$cfg/alacritty/alacritty.toml"
+
+  # 7 Shell history & ergonomics
+  _b shell-tools "Atuin" atuin "--version"
+  _b shell-tools "direnv" direnv "--version"
+  _b shell-tools "uv" uv "--version"
+  _b shell-tools "uvx" uvx "--version" opt
+  _b shell-tools "btop" btop "--version"
+  _b shell-tools+workflow "yazi" yazi "-" optlinux
+  _b shell-tools "Starship" starship "--version"
+  _f shell-tools "atuin/config.toml" "$cfg/atuin/config.toml"
+  _f shell-tools "direnv.toml" "$cfg/direnv/direnv.toml"
+  _f shell-tools "starship.toml" "$cfg/starship.toml"
+
+  # 8 MCP server suite
+  if [[ "$_DOC_OS" == "Darwin" ]]; then claude_cfg="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+  else claude_cfg="$HOME/.config/Claude/claude_desktop_config.json"; fi
+  _b mcp "sec-mcp" sec-mcp "-"
+  _b mcp "MCP Inspector" mcp-inspector "-"
+  _b mcp "detect-secrets" detect-secrets "--version"
+  _b mcp "semgrep" semgrep "--version" opt
+  _d mcp "~/workspace" "$HOME/workspace"
+  _d mcp "~/pentest" "$HOME/pentest"
+  _f mcp "claude_desktop" "$claude_cfg"
+  _f mcp "pentest/.mcp.json" "$HOME/pentest/.mcp.json"
+
+  # 9 Pentest tools
+  _b pentest "nmap" nmap "--version"
+  _b pentest "netcat" "nc|ncat|netcat" "-"
+  _b pentest "wget" wget "--version"
+  _b pentest "curl" curl "--version"
+  _b pentest "httpie" "http|https" "--version"
+  _b pentest "gobuster" gobuster "version"
+  _b pentest "hydra" hydra "-h"
+  _b pentest "sqlmap" sqlmap "--version"
+  _b pentest "masscan" masscan "--version"
+  _b pentest "tcpdump" tcpdump "--version"
+  _b pentest "openssl" openssl "version"
+  _b pentest "gpg" gpg "--version"
+  _b pentest "python3" python3 "--version"
+  _b pentest "pipx" pipx "--version"
+  _b pentest "john" "john|john-the-ripper" "-"
+  _b pentest "hashcat" hashcat "--version"
+  _b pentest "tshark (wireshark)" tshark "--version" lin
+  _b pentest "impacket" "impacket-secretsdump|secretsdump.py|secretsdump" "-"
+  _b pentest "pwntools (pwn)" pwn "-"
+  _b pentest "scapy" scapy "-"
+  _d seclists+pentest "SecLists" "$HOME/pentest/wordlists/seclists/Discovery" /opt/seclists/Discovery \
+    /usr/share/seclists/Discovery /opt/homebrew/share/seclists/Discovery
+
+  # 10 Bug bounty
+  _b bugbounty "mitmproxy" mitmproxy "--version"
+  _b bugbounty "nikto" nikto "-"
+  _b bugbounty "subfinder" subfinder "-"
+  _b bugbounty "httpx" httpx "-"
+  _b bugbounty "nuclei" nuclei "-"
+  _b bugbounty "katana" katana "-"
+  _b bugbounty "dnsx" dnsx "-"
+  _b bugbounty "interactsh-client" interactsh-client "-"
+  _b bugbounty "gau" gau "-"
+  _b bugbounty "hakrawler" hakrawler "-"
+  _b bugbounty "waybackurls" waybackurls "-"
+  _b bugbounty "amass" amass "-"
+  _b bugbounty "dalfox" dalfox "-"
+  _b bugbounty "Burp Suite" "burpsuite|app:Burp Suite Community Edition.app|app:Burp Suite Professional.app" "-" mac
+  _b bugbounty "bbot" bbot "--version" opt
+
+  # 11 Active Directory & pivoting
+  _b ad-pivot "Ligolo-ng" "ligolo-proxy|ligolo-ng|ligolo" "-" opt
+  _b ad-pivot "Chisel" chisel "--version"
+  _b ad-pivot+pentest "NetExec (nxc)" "nxc|netexec" "-"
+  _b ad-pivot "BloodHound.py" bloodhound-python "-"
+  _b ad-pivot "Certipy" certipy "-"
+  _b ad-pivot "Responder" responder "-"
+
+  # 12 Web & API (ffuf, feroxbuster, arjun, caido are shared with bug bounty)
+  _b web-api "Schemathesis" "schemathesis|st" "--version"
+  _b web-api "Kiterunner (kr)" kr "-"
+  _b web-api+bugbounty "Caido" "caido-cli|caido|app:Caido.app" "-" optlinux
+  _b web-api+bugbounty "Arjun" arjun "-"
+  _b web-api+bugbounty "ffuf" ffuf "-V"
+  _b web-api+bugbounty "feroxbuster" feroxbuster "-V"
+
+  # 13 Cloud & DevSecOps
+  _b cloud "AWS CLI" aws "--version"
+  _b cloud "Azure CLI" az "-"
+  _b cloud "gcloud" "gcloud|app:Google Cloud SDK" "-" optlinux
+  _b cloud "cloudfox" cloudfox "-"
+  _b cloud "gitleaks" gitleaks "version"
+  _b cloud "trufflehog" trufflehog "--version"
+  _b cloud "prowler" prowler "-"
+  _b cloud "pacu" pacu "-"
+  _b cloud "s3scanner" s3scanner "-"
+  _b cloud "Trivy" trivy "--version"
+  _b cloud "Syft" syft "--version"
+  _b cloud "Grype" grype "version"
+  _b cloud "Checkov" checkov "-"
+  _b cloud "kubescape" kubescape "-" opt
+  _b cloud "kube-bench" kube-bench "-" opt
+  _b cloud "osv-scanner" osv-scanner "--version" opt
+
+  # 14 Mobile & reverse engineering
+  _b mobile "jadx" jadx "--version" opt
+  _b mobile "apktool" apktool "--version" opt
+  _b mobile "frida" frida "--version" opt
+  _b mobile "objection" objection "-" opt
+
+  # 15 AI / LLM security
+  _b ai "garak" garak "-"
+  _b ai "llm" llm "--version"
+  _b ai "jwt_tool" "jwt_tool|jwt_tool.py" "-"
+  _b ai "promptfoo" promptfoo "-"
+  _b ai "Ollama" "ollama|app:Ollama.app" "--version"
+
+  # 16 Workflow tools
+  _b workflow "jq" jq "--version"
+  _b workflow "GitHub CLI (gh)" gh "--version"
+  _b workflow "pandoc" pandoc "--version"
+  _b workflow "yq" yq "--version"
+  _b workflow "lazygit" lazygit "--version"
+  _b workflow "xh" xh "--version" optlinux
+  _b workflow "Obsidian" "app:Obsidian.app" "-" mac
+
+  # 17 Tactical cockpit
+  _b dashboard "fastfetch" fastfetch "--version"
+  _f dashboard "fastfetch config" "$cfg/fastfetch/config.jsonc"
+  _f dashboard "welcome.zsh" "$zc/welcome.zsh"
+
+  # 18 Config files
+  _f config ".zshrc" "$HOME/.zshrc"
+  _f config ".tmux.conf" "$HOME/.tmux.conf"
+  _f config "pentest.zsh" "$zc/pentest.zsh"
+  _f config "advanced_pentest" "$zc/advanced_pentest.zsh"
+}
+
+# ─── Hygiene checks (read-only) ───────────────────────────────────────────────
+_DOC_SECRET_RE='^(ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|BSA|sk-|xox[abp]-|AKIA)[A-Za-z0-9_./+=-]{16,}$'
+
+_doc_mcp_pkg() { # file label package-token  (npm or uvx package argument)
+  local f=$1 lbl=$2 t=$3 base
+  base=$t
+  [[ "${t:1}" == *@* ]] && base="${t%@*}"
+  case "$base" in
+    @modelcontextprotocol/server-github)
+      _doc_hyg warn "$lbl" "uses server-github, which is deprecated and archived" \
+        "switch to GitHub's official github-mcp-server" ;;
+    @modelcontextprotocol/server-brave-search)
+      _doc_hyg warn "$lbl" "uses server-brave-search, which is deprecated and archived" \
+        "switch to Brave's maintained MCP server (@brave/brave-search-mcp-server)" ;;
+    @modelcontextprotocol/server-fetch)
+      _doc_hyg warn "$lbl" "server-fetch does not exist on npm" \
+        "use the Python mcp-server-fetch via uvx with a pinned version" ;;
+  esac
+  return 0
+}
+
+_doc_mcp_pin() { # label kind(npx|uvx) package
+  local lbl=$1 kind=$2 p=$3 ver=""
+  [[ "${p:1}" == *@* ]] && ver="${p##*@}"
+  [[ "$kind" == "uvx" && "$p" == *==* ]] && ver="${p##*==}"
+  if [[ -z "$ver" || "$ver" == "latest" ]]; then
+    _doc_hyg warn "$lbl" "$kind launches $p unpinned" "pin a version, e.g. ${p%%@latest}@<version>"
+  fi
+  return 0
+}
+
+_doc_mcp_path() { # label path
+  local lbl=$1 p=$2 h="${HOME%/}"
+  case "$p" in
+    /|"~"|"~/"|'$HOME'|'$HOME/'|'${HOME}'|'${HOME}/')
+      _doc_hyg warn "$lbl" "filesystem server is allowed the whole home or root ($p)" \
+        "list only project directories such as ~/workspace" ;;
+    *)
+      if [[ "${p%/}" == "$h" ]]; then
+        _doc_hyg warn "$lbl" "filesystem server is allowed your entire home directory" \
+          "list only project directories such as ~/workspace"
+      fi ;;
+  esac
+  return 0
+}
+
+_doc_scan_mcp() { # file label
+  local f=$1 lbl=$2 t mode="" before pair key val n0 n1
+  local keyre='(KEY|TOKEN|SECRET|PASSW|AUTH)'
+  if [[ ! -f "$f" ]]; then _doc_hyg skip "$lbl" "not present" ""; return 0; fi
+  n0=${#_DH_ST[@]}
+  while IFS= read -r t; do
+    t="${t#\"}"; t="${t%\"}"
+    case "$mode" in
+      npx|uvx)
+        case "$t" in
+          args) continue ;;
+          --from) mode="${mode}from"; continue ;;
+          -*) continue ;;
+        esac
+        _doc_mcp_pkg "$f" "$lbl" "$t"; _doc_mcp_pin "$lbl" "$mode" "$t"
+        case "$t" in *server-filesystem*) mode=fs ;; *) mode="" ;; esac
+        continue ;;
+      npxfrom|uvxfrom)
+        _doc_mcp_pkg "$f" "$lbl" "$t"; _doc_mcp_pin "$lbl" "${mode%from}" "$t"; mode=""; continue ;;
+      fs)
+        case "$t" in
+          /*|"~"*|'$'*) _doc_mcp_path "$lbl" "$t"; continue ;;
+        esac
+        mode="" ;;
+    esac
+    case "$t" in
+      npx|*/npx) mode=npx ;;
+      uvx|*/uvx) mode=uvx ;;
+    esac
+  done < <(grep -oE '"([^"\\]|\\.)*"' "$f" 2>/dev/null)
+
+  while IFS= read -r pair; do
+    key="${pair#\"}"; key="${key%%\"*}"
+    val="${pair#*:}"; val="${val#"${val%%[![:space:]]*}"}"; val="${val#\"}"; val="${val%\"}"
+    [[ -z "$val" || "$val" == *'$'* ]] && continue
+    if [[ "$val" =~ $_DOC_SECRET_RE ]] || { [[ "$key" =~ $keyre ]] \
+        && [[ "$val" =~ ^[A-Za-z0-9_+=-]{24,}$ ]]; }; then
+      _doc_hyg warn "$lbl" "plaintext secret stored under key $key" \
+        "keep it out of the file: set it in your environment or secret manager"
+    fi
+  done < <(grep -oE '"[^"\\]+"[[:space:]]*:[[:space:]]*"[^"\\]{8,}"' "$f" 2>/dev/null)
+
+  n1=${#_DH_ST[@]}
+  [[ $n1 -eq $n0 ]] && _doc_hyg ok "$lbl" "no issues found" ""
+  return 0
+}
+
+_doc_scan_misc() {
+  local f content q1='"' q2="'" re
+  # direnv: [whitelist] prefix = [...] trusts whole directory trees
+  f="$HOME/.config/direnv/direnv.toml"
+  if [[ -f "$f" ]]; then
+    content="$(tr '\n' ' ' < "$f" 2>/dev/null)"
+    re='\[whitelist\][^[]*prefix[[:space:]]*=[[:space:]]*\[[^]]*['"$q1$q2"']'
+    if [[ "$content" =~ $re ]]; then
+      _doc_hyg warn "direnv" "[whitelist] auto-trusts whole directory prefixes" \
+        "remove the prefix list and run 'direnv allow' per project"
+    else
+      _doc_hyg ok "direnv" "no auto-trusted prefixes" ""
+    fi
+  else
+    _doc_hyg skip "direnv" "not present" ""
+  fi
+  # Atuin: secrets_filter must not be disabled
+  f="$HOME/.config/atuin/config.toml"
+  if [[ -f "$f" ]]; then
+    if grep -qE '^[[:space:]]*secrets_filter[[:space:]]*=[[:space:]]*false' "$f" 2>/dev/null; then
+      _doc_hyg warn "atuin" "secrets_filter is disabled" "set secrets_filter = true in $f"
+    else
+      _doc_hyg ok "atuin" "secrets_filter enabled" ""
+    fi
+  else
+    _doc_hyg skip "atuin" "not present" ""
+  fi
+}
+
+# ─── Manifest: which components did the user install? ─────────────────────────
+# Sets _DOC_MODE (known|info), _DOC_INST (space-padded list of group ids).
+_doc_read_manifest() {
+  local c
+  _DOC_MODE=info; _DOC_INST=" "; _DOC_MANI_NOTE="no manifest — the installer has not run in install mode"
+  [[ -f "$HTS_MANIFEST" ]] || return 0
+  while IFS= read -r c; do
+    c="${c#--}"; c="$(printf '%s' "$c" | tr '[:upper:]_' '[:lower:]-')"
+    case "$c" in
+      dev) _DOC_INST="$_DOC_INST""node claude code " ;;
+      cloud|cloud-devsec|devsecops) _DOC_INST="$_DOC_INST""cloud " ;;
+      ad-pivoting|pivoting|ad) _DOC_INST="$_DOC_INST""ad-pivot " ;;
+      configs) _DOC_INST="$_DOC_INST""config " ;;
+      doctor|"") ;;
+      *) _DOC_INST="$_DOC_INST$c " ;;
+    esac
+  done < <(awk -F'\t' '$2=="component"{print $3}' "$HTS_MANIFEST" 2>/dev/null)
+  if [[ "$_DOC_INST" == " " ]]; then
+    _DOC_MANI_NOTE="manifest has no component records"
+  else
+    _DOC_MODE=known; _DOC_MANI_NOTE=""
+  fi
+  return 0
+}
+
+_doc_active() { # owners -> 0 when any owner is an installed component
+  local o
+  [[ "$_DOC_MODE" == "known" ]] || return 1
+  for o in $1; do
+    case "$_DOC_INST" in *" $o "*) return 0 ;; esac
+  done
+  return 1
+}
+
+_doc_jesc() {
+  local s=$1
+  s="$(printf '%s' "$s" | LC_ALL=C tr -d '\000-\010\013\014\016-\037')"
+  s=${s//\\/\\\\}; s=${s//\"/\\\"}
+  s=${s//$'\t'/\\t}; s=${s//$'\n'/\\n}; s=${s//$'\r'/\\r}
+  printf '%s' "$s"
+}
+
+# ─── Rendering ────────────────────────────────────────────────────────────────
+_doc_cell() { # index -> prints one fixed-width cell (no newline)
+  local i=$1 mark txt
+  case "${_DI_ST[$i]}" in
+    installed)     mark="${GREEN}[✓]${RESET}"; txt="${_DI_VER[$i]}" ;;
+    missing)
+      if _doc_active "${_DI_OWN[$i]}"; then mark="${RED}[✗]${RESET}"; else mark="${DIM}[-]${RESET}"; fi
+      txt="${_DI_NOTE[$i]}" ;;
+    not_installed) mark="${DIM}[-]${RESET}"; txt="not installed" ;;
+    *)             mark="${DIM}[~]${RESET}"; txt="n/a" ;;
+  esac
+  printf '%b %-17.17s %-13.13s' "$mark" "${_DI_NAME[$i]}" "$txt"
+}
+
+_doc_render_text() {
+  local g i n=${#_DI_G[@]} col cnt inst miss opt na fail state
   echo ""
   echo -e "${BOLD}${CYAN}  ╔══════════════════════════════════════════════════════════════════╗${RESET}"
   echo -e "${BOLD}${CYAN}  ║           SECURITY TERMINAL ENVIRONMENT AUDIT                    ║${RESET}"
   echo -e "${BOLD}${CYAN}  ╚══════════════════════════════════════════════════════════════════╝${RESET}"
-  echo ""
-
-  _doc_item() {
-    local name=$1
-    local cmd=$2
-    local ver_cmd=${3:-}
-    local is_installed=false
-    local app_path=""
-
-    if command -v "$cmd" &>/dev/null; then
-      is_installed=true
-    elif [[ -d "/Applications/$cmd.app" ]]; then
-      is_installed=true
-      app_path="/Applications/$cmd.app"
-    elif [[ -d "/Applications/${name}.app" ]]; then
-      is_installed=true
-      app_path="/Applications/${name}.app"
-    fi
-
-    if $is_installed; then
-      local ver=""
-      [[ -n "$ver_cmd" ]] && ver=$(eval "$ver_cmd" 2>/dev/null | head -1)
-      [[ -z "$ver" && -n "$app_path" ]] && ver="$app_path"
-      printf "  ${GREEN}[✓]${RESET} %-26s ${DIM}%s${RESET}\n" "$name" "$ver"
-    else
-      printf "  ${RED}[✗]${RESET} %-26s ${YELLOW}not installed${RESET}\n" "$name"
-    fi
-  }
-
-  echo -e "${BOLD}${YELLOW}Core Shell & Terminal Ergonomics:${RESET}"
-  _doc_item "Zsh Shell" "zsh" "zsh --version"
-  _doc_item "Starship Prompt" "starship" "starship --version"
-  _doc_item "Atuin (SQLite History)" "atuin" "atuin --version"
-  _doc_item "direnv (Env Isolation)" "direnv" "direnv --version"
-  _doc_item "Astral uv / uvx" "uv" "uv --version"
-  _doc_item "btop (Resource Monitor)" "btop" "btop --version"
-  _doc_item "tmux" "tmux" "tmux -V"
-  _doc_item "fzf (Fuzzy Finder)" "fzf" "fzf --version"
-  _doc_item "bat (Cat with wings)" "bat" "bat --version"
-  _doc_item "eza (Modern ls)" "eza" "eza --version"
-  _doc_item "zoxide (Smart cd)" "zoxide" "zoxide --version"
-  _doc_item "ripgrep (rg)" "rg" "rg --version"
-  _doc_item "fd (Modern find)" "fd" "fd --version"
-  _doc_item "git-delta (Git diff)" "delta" "delta --version"
-  _doc_item "yazi (File Manager)" "yazi" "yazi --version"
-
-  echo -e "\n${BOLD}${YELLOW}GPU Terminal Emulators:${RESET}"
-  _doc_item "Ghostty" "ghostty" "ghostty --version"
-  _doc_item "WezTerm" "wezterm" "wezterm --version"
-  _doc_item "Kitty" "kitty" "kitty --version"
-  _doc_item "Alacritty" "alacritty" "alacritty --version"
-
-  echo -e "\n${BOLD}${YELLOW}Developer & Agentic AI Stack:${RESET}"
-  _doc_item "Node.js" "node" "node -v"
-  _doc_item "npm" "npm" "npm -v"
-  _doc_item "Claude Code CLI" "claude" "claude --version"
-  _doc_item "Visual Studio Code" "code" "code --version"
-  _doc_item "Go (Golang)" "go" "go version"
-  _doc_item "Python 3" "python3" "python3 --version"
-  _doc_item "pipx" "pipx" "pipx --version"
-  _doc_item "sec-mcp (MCP Manager)" "sec-mcp" "echo 'ready'"
-  _doc_item "MCP Inspector" "npx" "command -v npx &>/dev/null && echo 'ready via npx' || false"
-
-  echo -e "\n${BOLD}${YELLOW}Offensive Security & Bug Bounty:${RESET}"
-  _doc_item "nmap" "nmap" "nmap --version"
-  _doc_item "nuclei" "nuclei" "nuclei -version"
-  _doc_item "subfinder" "subfinder" "subfinder -version"
-  _doc_item "httpx" "httpx" "httpx -version"
-  _doc_item "katana" "katana" "katana -version"
-  _doc_item "dnsx" "dnsx" "dnsx -version"
-  _doc_item "ffuf" "ffuf" "ffuf -V"
-  _doc_item "sqlmap" "sqlmap" "sqlmap --version"
-  _doc_item "hydra" "hydra" "hydra -h 2>&1 | head -1"
-  _doc_item "gobuster" "gobuster" "gobuster version"
-  _doc_item "mitmproxy" "mitmproxy" "mitmproxy --version"
-  _doc_item "SecLists Wordlists" "seclists" "[[ -d \"$HOME/pentest/wordlists/seclists/Discovery\" || -d /opt/seclists/Discovery || -d /usr/share/seclists/Discovery ]] && echo 'installed' || false"
-
-  echo -e "\n${BOLD}${YELLOW}Active Directory & Pivoting:${RESET}"
-  _doc_item "Ligolo-ng" "ligolo" "echo 'ready'"
-  _doc_item "Chisel" "chisel" "chisel --version"
-  _doc_item "NetExec (nxc)" "nxc" "nxc --version"
-  _doc_item "BloodHound (Python)" "bloodhound-python" "echo 'ready'"
-  _doc_item "Certipy (AD CS)" "certipy" "certipy -v"
-  _doc_item "Responder" "responder" "echo 'ready'"
-
-  echo -e "\n${BOLD}${YELLOW}Web & API Security:${RESET}"
-  _doc_item "Schemathesis" "schemathesis" "schemathesis --version"
-  _doc_item "Kiterunner (kr)" "kr" "kr version"
-  _doc_item "Caido (CLI/GUI)" "caido" "echo 'ready'"
-  _doc_item "Arjun" "arjun" "arjun -h 2>&1 | head -1"
-  _doc_item "Feroxbuster" "feroxbuster" "feroxbuster -V"
-
-  echo -e "\n${BOLD}${YELLOW}Container, SBOM & DevSecOps:${RESET}"
-  _doc_item "Trivy" "trivy" "trivy --version"
-  _doc_item "Syft" "syft" "syft --version"
-  _doc_item "Grype" "grype" "grype version"
-  _doc_item "Checkov" "checkov" "checkov --version"
-  _doc_item "Kube-hunter" "kube-hunter" "echo 'ready'"
-
-  echo -e "\n${BOLD}${YELLOW}Mobile & Reverse Engineering:${RESET}"
-  _doc_item "Jadx" "jadx" "jadx --version"
-  _doc_item "Apktool" "apktool" "apktool --version"
-
-  echo -e "\n${BOLD}${YELLOW}Cloud & AI Security:${RESET}"
-  _doc_item "AWS CLI" "aws" "aws --version"
-  _doc_item "Azure CLI" "az" "az --version"
-  _doc_item "Google Cloud SDK" "gcloud" "gcloud --version"
-  _doc_item "trufflehog" "trufflehog" "trufflehog --version"
-  _doc_item "gitleaks" "gitleaks" "gitleaks version"
-  _doc_item "prowler" "prowler" "prowler -v"
-  _doc_item "Ollama" "ollama" "ollama --version"
-  _doc_item "Promptfoo" "promptfoo" "promptfoo --version"
-
-  echo -e "\n${BOLD}${YELLOW}Workflow & Terminal Dashboards:${RESET}"
-  _doc_item "Fastfetch" "fastfetch" "fastfetch --version"
-  _doc_item "lazygit" "lazygit" "lazygit --version"
-  _doc_item "jq" "jq" "jq --version"
-  _doc_item "yq" "yq" "yq --version"
-  _doc_item "GitHub CLI (gh)" "gh" "gh --version"
-
-  # Dotfiles audit
-  echo ""
-  local dotfiles=(
-    "$HOME/.zshrc"
-    "$HOME/.tmux.conf"
-    "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/pentest.zsh"
-    "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/advanced_pentest.zsh"
-    "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/welcome.zsh"
-    "$HOME/.config/starship.toml"
-    "$HOME/.config/atuin/config.toml"
-    "$HOME/.config/ghostty/config"
-    "$HOME/.config/wezterm/wezterm.lua"
-  )
-  for cfg in "${dotfiles[@]}"; do
-    if [[ -f "$cfg" ]]; then
-      printf "  ${GREEN}[✓]${RESET} %-26s ${DIM}found (${cfg})${RESET}\n" "$(basename "$cfg")"
-    else
-      printf "  ${RED}[✗]${RESET} %-26s ${YELLOW}missing${RESET}\n" "$(basename "$cfg")"
-    fi
+  echo -e "  ${DIM}v$HTS_VERSION  $_DOC_OS $(uname -m)   ${GREEN}[✓]${RESET}${DIM} ok  ${RED}[✗]${RESET}${DIM} missing  [-] not installed  [~] n/a${RESET}"
+  [[ -n "$_DOC_MANI_NOTE" ]] && echo -e "  ${YELLOW}Note:${RESET} $_DOC_MANI_NOTE; reporting everything informationally."
+  _T_INST=0; _T_MISS=0; _T_OPT=0; _T_NA=0; _T_FAIL=0
+  for g in $_DOC_GROUPS; do
+    inst=0; miss=0; opt=0; na=0; fail=0; cnt=0
+    for ((i = 0; i < n; i++)); do
+      [[ "${_DI_G[$i]}" == "$g" ]] || continue
+      cnt=$((cnt + 1))
+      case "${_DI_ST[$i]}" in
+        installed) inst=$((inst + 1)) ;;
+        missing) miss=$((miss + 1)); _doc_active "${_DI_OWN[$i]}" && fail=$((fail + 1)) ;;
+        not_installed) opt=$((opt + 1)) ;;
+        *) na=$((na + 1)) ;;
+      esac
+    done
+    [[ $cnt -eq 0 ]] && continue
+    _T_INST=$((_T_INST + inst)); _T_MISS=$((_T_MISS + miss)); _T_OPT=$((_T_OPT + opt))
+    _T_NA=$((_T_NA + na)); _T_FAIL=$((_T_FAIL + fail))
+    if [[ "$_DOC_MODE" != "known" ]]; then state="${DIM}informational${RESET}"
+    elif _doc_active "$g"; then state="${CYAN}installed${RESET}"
+    else state="${DIM}not selected${RESET}"; fi
+    echo ""
+    printf '%b  %-20s%b %b  %b%d ok, %d missing, %d optional, %d n/a%b\n' \
+      "${BOLD}${YELLOW}" "$(_doc_gtitle "$g")" "${RESET}" "$state" "${DIM}" "$inst" "$miss" "$opt" "$na" "${RESET}"
+    col=0
+    for ((i = 0; i < n; i++)); do
+      [[ "${_DI_G[$i]}" == "$g" ]] || continue
+      if [[ $col -eq 0 ]]; then printf '  '; _doc_cell "$i"; col=1
+      else printf '  '; _doc_cell "$i"; printf '\n'; col=0; fi
+    done
+    [[ $col -eq 1 ]] && printf '\n'
   done
 
   echo ""
+  echo -e "${BOLD}${YELLOW}  Config & hygiene${RESET}"
+  local nh=${#_DH_ST[@]}
+  for ((i = 0; i < nh; i++)); do
+    case "${_DH_ST[$i]}" in
+      ok)   printf '  %b %-23.23s %b%s%b\n' "${GREEN}[✓]${RESET}" "${_DH_NAME[$i]}" "$DIM" "${_DH_MSG[$i]}" "$RESET" ;;
+      warn) printf '  %b %-23.23s %s\n' "${YELLOW}[!]${RESET}" "${_DH_NAME[$i]}" "${_DH_MSG[$i]}"
+            printf '      %bfix: %s%b\n' "$DIM" "${_DH_FIX[$i]}" "$RESET" ;;
+      *)    printf '  %b %-23.23s %b%s%b\n' "${DIM}[~]${RESET}" "${_DH_NAME[$i]}" "$DIM" "${_DH_MSG[$i]}" "$RESET" ;;
+    esac
+  done
+
+  echo ""
+  echo -e "${BOLD}${YELLOW}  State${RESET}"
+  printf '  %-12s %s\n' "Version" "$HTS_VERSION"
+  printf '  %-12s %s (%s entries)\n' "Manifest" "$HTS_MANIFEST" "$_DOC_MANI_N"
+  printf '  %-12s %s\n' "Log" "$HTS_LOG"
+  printf '  %-12s %s available\n' "Backups" "$_DOC_BACKUPS"
+
+  echo ""
   echo -e "${BOLD}${CYAN}  ════════════════════════════════════════════════════════════════════${RESET}"
+  printf '  Total: %d ok, %d missing, %d optional, %d n/a, %d warnings\n' \
+    "$_T_INST" "$_T_MISS" "$_T_OPT" "$_T_NA" "$_DOC_WARNS"
+  if [[ "$_DOC_MODE" != "known" ]]; then
+    echo -e "  ${CYAN}Informational run:${RESET} nothing to verify against; exit status 0."
+  elif [[ $_T_FAIL -eq 0 ]]; then
+    echo -e "  ${GREEN}PASS${RESET} — everything belonging to installed components is present."
+  else
+    echo -e "  ${RED}FAIL${RESET} — $_T_FAIL required item(s) missing from installed components."
+  fi
+}
+
+_doc_render_json() {
+  local g i j n=${#_DI_G[@]} nh=${#_DH_ST[@]} first gfirst=1 ifirst st
+  local inst=0 miss=0 opt=0 na=0 fail=0 state
+  printf '{"version":"%s","platform":{"os":"%s","arch":"%s"},"mode":"%s",' \
+    "$(_doc_jesc "$HTS_VERSION")" "$(_doc_jesc "$_DOC_OS")" "$(_doc_jesc "$(uname -m)")" \
+    "$([[ "$_DOC_MODE" == "known" ]] && echo manifest || echo informational)"
+  printf '"components":{'
+  for g in $_DOC_GROUPS; do
+    ifirst=1
+    [[ $gfirst -eq 0 ]] && printf ','
+    gfirst=0
+    printf '"%s":[' "$g"
+    for ((i = 0; i < n; i++)); do
+      [[ "${_DI_G[$i]}" == "$g" ]] || continue
+      st="${_DI_ST[$i]}"
+      case "$st" in
+        installed) inst=$((inst + 1)) ;;
+        missing) miss=$((miss + 1)); _doc_active "${_DI_OWN[$i]}" && fail=$((fail + 1)) ;;
+        not_installed) opt=$((opt + 1)) ;;
+        *) na=$((na + 1)) ;;
+      esac
+      [[ $ifirst -eq 0 ]] && printf ','
+      ifirst=0
+      printf '{"name":"%s","status":"%s"' "$(_doc_jesc "${_DI_NAME[$i]}")" "$st"
+      [[ "$st" == "installed" && -n "${_DI_VER[$i]}" ]] && printf ',"version":"%s"' "$(_doc_jesc "${_DI_VER[$i]}")"
+      printf '}'
+    done
+    printf ']'
+  done
+  printf '},"component_state":{'
+  gfirst=1
+  for g in $_DOC_GROUPS; do
+    [[ $gfirst -eq 0 ]] && printf ','
+    gfirst=0
+    if [[ "$_DOC_MODE" != "known" ]]; then state=unknown
+    elif _doc_active "$g"; then state=installed
+    else state=not_selected; fi
+    printf '"%s":"%s"' "$g" "$state"
+  done
+  printf '},"hygiene":['
+  first=1
+  for ((j = 0; j < nh; j++)); do
+    [[ $first -eq 0 ]] && printf ','
+    first=0
+    printf '{"name":"%s","status":"%s","detail":"%s","fix":"%s"}' "$(_doc_jesc "${_DH_NAME[$j]}")" \
+      "${_DH_ST[$j]}" "$(_doc_jesc "${_DH_MSG[$j]}")" "$(_doc_jesc "${_DH_FIX[$j]}")"
+  done
+  printf '],"state":{"manifest":"%s","manifest_entries":%s,"log":"%s","backups":%s},' \
+    "$(_doc_jesc "$HTS_MANIFEST")" "$_DOC_MANI_N" "$(_doc_jesc "$HTS_LOG")" "$_DOC_BACKUPS"
+  printf '"totals":{"installed":%d,"missing":%d,"not_installed":%d,"na":%d,"warnings":%d,"failing":%d},' \
+    "$inst" "$miss" "$opt" "$na" "$_DOC_WARNS" "$fail"
+  printf '"ok":%s}\n' "$([[ $fail -eq 0 ]] && echo true || echo false)"
+  _T_FAIL=$fail
+}
+
+_doc_main() {
+  local json=0 i
+  [[ "${HTS_DOCTOR_FORMAT:-}" == "json" ]] && json=1
+  _doc_reset
+  _doc_read_manifest
+  _doc_collect_items
+
+  if [[ "$_DOC_OS" == "Darwin" ]]; then
+    _doc_scan_mcp "$HOME/Library/Application Support/Claude/claude_desktop_config.json" "MCP: Claude Desktop"
+  else
+    _doc_scan_mcp "$HOME/.config/Claude/claude_desktop_config.json" "MCP: Claude Desktop"
+  fi
+  _doc_scan_mcp "$HOME/pentest/.mcp.json" "MCP: pentest/.mcp.json"
+  _doc_scan_misc
+
+  _DOC_WARNS=0
+  for ((i = 0; i < ${#_DH_ST[@]}; i++)); do
+    [[ "${_DH_ST[$i]}" == "warn" ]] && _DOC_WARNS=$((_DOC_WARNS + 1))
+  done
+  _DOC_MANI_N=0
+  [[ -f "$HTS_MANIFEST" ]] && _DOC_MANI_N="$(wc -l < "$HTS_MANIFEST" 2>/dev/null | tr -d ' ')"
+  _DOC_BACKUPS=0
+  [[ -d "$HTS_BACKUP_ROOT" ]] && _DOC_BACKUPS="$(find "$HTS_BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+
+  _T_FAIL=0
+  if [[ $json -eq 1 ]]; then _doc_render_json; else _doc_render_text; fi
+  [[ ${_T_FAIL:-0} -eq 0 ]]
+}
+
+sec_doctor() {
+  local old_path="$PATH" rc=0 d
+  for d in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/go/bin" "$HOME/.cargo/bin" \
+           /opt/homebrew/bin /usr/local/bin; do
+    case ":$PATH:" in *":$d:"*) ;; *) [[ -d "$d" ]] && PATH="$PATH:$d" ;; esac
+  done
+  if [[ "${HTS_DOCTOR_FORMAT:-}" != "json" ]]; then
+    step "Security Terminal Doctor & Diagnostic Audit"
+  fi
+  _doc_main || rc=$?
+  PATH="$old_path"
+  return "$rc"
 }
 
 # ─── End: lib/doctor.sh ────────────────────────────────────────────
@@ -2839,23 +4282,53 @@ write_configs() {
   fi
 
   # ─────────────────────────────────────────────────────────────────────────
-  # ~/.zshrc
+  # ~/.zshrc  (prompt: exactly one of Powerlevel10k / Starship, chosen by HTS_PROMPT)
   # ─────────────────────────────────────────────────────────────────────────
-  log "Writing ~/.zshrc..."
-  cat > "$HOME/.zshrc" << ZSHRC
+  local PROMPT_CHOICE PROMPT_TOP PROMPT_THEME PROMPT_TAIL
+  PROMPT_CHOICE="$(_hts_prompt_choice)"
+  if [[ "$PROMPT_CHOICE" == "starship" ]]; then
+    PROMPT_TOP='# Prompt: Starship (HTS_PROMPT=starship) — Powerlevel10k is not loaded'
+    PROMPT_THEME='ZSH_THEME=""'
+    read -r -d '' PROMPT_TAIL << 'TAIL_STARSHIP' || true
+# =============================================================================
+# Starship prompt (config: ~/.config/starship.toml) — keep at the end
+# =============================================================================
+if command -v starship &>/dev/null; then
+  eval "$(starship init zsh)"
+else
+  echo "starship not found in PATH — install it or rerun the installer with HTS_PROMPT=p10k" >&2
+fi
+TAIL_STARSHIP
+  else
+    read -r -d '' PROMPT_TOP << 'TOP_P10K' || true
 # =============================================================================
 # Powerlevel10k instant prompt — MUST stay at the very top
 # =============================================================================
 typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
-if [[ -r "\${XDG_CACHE_HOME:-\$HOME/.cache}/p10k-instant-prompt-\${(%):-%n}.zsh" ]]; then
-  source "\${XDG_CACHE_HOME:-\$HOME/.cache}/p10k-instant-prompt-\${(%):-%n}.zsh"
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
+TOP_P10K
+    PROMPT_THEME='ZSH_THEME="powerlevel10k/powerlevel10k"'
+    read -r -d '' PROMPT_TAIL << 'TAIL_P10K' || true
+# =============================================================================
+# p10k config
+# =============================================================================
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+TAIL_P10K
+  fi
+  info "Prompt: $PROMPT_CHOICE (set HTS_PROMPT=starship|p10k to choose)"
+
+  log "Writing ~/.zshrc..."
+  backup_file "$HOME/.zshrc"
+  cat > "$HOME/.zshrc" << ZSHRC
+${PROMPT_TOP}
 
 # =============================================================================
 # Oh My Zsh core
 # =============================================================================
 export ZSH="\$HOME/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
+${PROMPT_THEME}
 
 # =============================================================================
 # History — security-hardened
@@ -2944,16 +4417,13 @@ if command -v npm &>/dev/null; then
 fi
 
 # =============================================================================
-# Ergonomics Hooks: Atuin, direnv, Starship
+# Ergonomics Hooks: Atuin, direnv
 # =============================================================================
-# Atuin shell history (SQLite + secrets scrub)
+# Atuin shell history (local SQLite, secrets filtered; DB is not encrypted at rest)
 command -v atuin &>/dev/null && eval "\$(atuin init zsh)"
 
 # direnv (.envrc isolation)
 command -v direnv &>/dev/null && eval "\$(direnv hook zsh)"
-
-# Optional Starship prompt (active if starship.toml exists and p10k not preferred)
-# command -v starship &>/dev/null && eval "\$(starship init zsh)"
 
 # =============================================================================
 # Key bindings
@@ -2995,17 +4465,16 @@ command -v zoxide &>/dev/null && eval "\$(zoxide init zsh)"
 export EDITOR="vim"
 export VISUAL="vim"
 
-# =============================================================================
-# p10k config
-# =============================================================================
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+${PROMPT_TAIL}
 ZSHRC
+  hts_track_file "$HOME/.zshrc"
   ok "~/.zshrc written"
 
   # ─────────────────────────────────────────────────────────────────────────
   # ~/.oh-my-zsh/custom/pentest.zsh
   # ─────────────────────────────────────────────────────────────────────────
   log "Writing pentest.zsh..."
+  backup_file "$ZSH_CUSTOM/pentest.zsh"
   cat > "$ZSH_CUSTOM/pentest.zsh" << 'PENTEST'
 # =============================================================================
 # Pentest aliases & functions — cross-platform (macOS + Linux)
@@ -3079,7 +4548,7 @@ alias yaml2json='yq -o json .'
 alias json2yaml='yq -P .'
 alias http='xh'
 
-alias cc='claude'
+alias ccode='claude'
 alias claude-yolo='claude --dangerously-skip-permissions'
 alias c='code'
 alias c.='code .'
@@ -3201,8 +4670,17 @@ subdomains() {
 }
 
 sec-doctor() {
+  # '--full' delegates to the installer's complete audit when its script is known
+  if [[ "$1" == "--full" ]]; then
+    if [[ -n "${HTS_TER_SH:-}" && -f "$HTS_TER_SH" ]]; then
+      bash "$HTS_TER_SH" --doctor
+    else
+      echo "Full audit: run 'bash ter.sh --doctor' from the installer checkout (or set HTS_TER_SH=/path/to/ter.sh)."
+    fi
+    return
+  fi
   echo ""
-  echo "  ╔══ Security Terminal Health & Environment Audit ════════════╗"
+  echo "  ╔══ Quick Tool Check (~30 tools) — not the full installer audit ═╗"
   _doc() {
     local label=$1 cmd=$2
     if command -v "$cmd" &>/dev/null; then
@@ -3242,15 +4720,18 @@ sec-doctor() {
   _doc "zoxide" "zoxide"
   _doc "ripgrep" "rg"
   echo "  ╚════════════════════════════════════════════════════════════╝"
+  echo "  Full audit (versions, config, PATH, state): 'bash ter.sh --doctor' or 'doctor --full'"
   echo ""
 }
 PENTEST
+  hts_track_file "$ZSH_CUSTOM/pentest.zsh"
   ok "pentest.zsh written"
 
   # ─────────────────────────────────────────────────────────────────────────
   # ~/.oh-my-zsh/custom/advanced_pentest.zsh
   # ─────────────────────────────────────────────────────────────────────────
   log "Writing advanced_pentest.zsh..."
+  backup_file "$ZSH_CUSTOM/advanced_pentest.zsh"
   cat > "$ZSH_CUSTOM/advanced_pentest.zsh" << 'ADVPENTEST'
 # =============================================================================
 # Advanced Security — Bug Bounty / Cloud / AI / MCP — cross-platform
@@ -3337,46 +4818,60 @@ mcp_audit() {
     jq -r '.mcpServers | to_entries[] | "  ║   Server: \(.key)"' "$cfg" 2>/dev/null || true
     grep -qE "(allow-all|--privileged|network=host)" "$cfg" 2>/dev/null && \
       echo "  ║   [!] WARNING: Dangerous permission flags"
-    grep -qE "(API_KEY|SECRET|password)" "$cfg" 2>/dev/null && \
-      echo "  ║   [!] WARNING: Possible hardcoded secrets"
+    # Only a non-empty literal value counts; empty placeholders and ${VAR} references do not.
+    local _hits
+    if command -v jq &>/dev/null; then
+      _hits=$(jq -r '[.. | objects | to_entries[]
+        | select((.key | test("api[_-]?key|secret|token|passw"; "i"))
+          and (.value | type == "string") and (.value | length > 0)
+          and (.value | test("^\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?$") | not))] | length' "$cfg" 2>/dev/null)
+    else
+      _hits=$(grep -ciE '"[A-Za-z0-9_-]*(api[_-]?key|secret|token|passw)[A-Za-z0-9_-]*"[[:space:]]*:[[:space:]]*"[^"$]+"' "$cfg" 2>/dev/null)
+    fi
+    [[ "${_hits:-0}" -gt 0 ]] && \
+      echo "  ║   [!] WARNING: Possible hardcoded secrets ($_hits non-empty key/token/password value(s))"
   done
   [[ $found -eq 0 ]] && echo "  ║  No MCP config files found"
   echo "  ╚══════════════════════════════════════════════════════════╝"
 }
 
 agentscan() {
-  local dir="${1:-.}"
+  local dir="${1:-.}" out
+  local -a gargs
+  gargs=(-rnI --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv --exclude-dir=venv --exclude-dir=__pycache__)
   echo "[*] Agent security scan: $dir"
   echo ""
   echo "── Hardcoded Secrets ────────────────────────────────────────────"
-  grep -rn --include="*.py" --include="*.ts" --include="*.js" --include="*.json" \
-    -E "(api_key|secret|password|token)\s*=\s*['\"][^'\"]{8,}" "$dir" 2>/dev/null | \
-    grep -v ".git" | head -20 || echo "  None found"
+  out=$(grep "${gargs[@]}" --include="*.py" --include="*.ts" --include="*.js" --include="*.json" \
+    -E "(api_key|secret|password|token)[[:space:]]*=[[:space:]]*['\"][^'\"]{8,}" "$dir" 2>/dev/null | head -20)
+  [[ -n "$out" ]] && echo "$out" || echo "  None found"
   echo ""
   echo "── Shell Injection Risk ─────────────────────────────────────────"
-  grep -rn --include="*.py" --include="*.ts" --include="*.js" \
-    -E "(subprocess|exec|eval|shell=True|os\.system)" "$dir" 2>/dev/null | \
-    grep -v ".git" | head -20 || echo "  None found"
+  out=$(grep "${gargs[@]}" --include="*.py" --include="*.ts" --include="*.js" \
+    -E "(subprocess|exec|eval|shell=True|os\.system)" "$dir" 2>/dev/null | head -20)
+  [[ -n "$out" ]] && echo "$out" || echo "  None found"
   echo ""
   echo "── Prompt Injection Risk ────────────────────────────────────────"
-  grep -rn --include="*.py" --include="*.ts" --include="*.js" \
+  out=$(grep "${gargs[@]}" --include="*.py" --include="*.ts" --include="*.js" \
     -E "(f\"|f'|\.format\(|\`.*\$\{)" "$dir" 2>/dev/null | \
-    grep -iE "(prompt|message|content|system)" | grep -v ".git" | head -20 || echo "  None found"
+    grep -iE "(prompt|message|content|system)" | head -20)
+  [[ -n "$out" ]] && echo "$out" || echo "  None found"
   echo ""
   echo "[+] Scan complete"
 }
 
 jwtinspect() {
-  local token=$1
+  local token=$1 seg label
   [[ -z "$token" ]] && { echo "Usage: jwtinspect <jwt>"; return 1; }
-  echo "[*] Header:"
-  echo "$token" | cut -d. -f1 | \
-    python3 -c "import sys,base64,json; d=sys.stdin.read().strip(); \
-    print(json.dumps(json.loads(base64.b64decode(d+'==')),indent=2))" 2>/dev/null
-  echo "[*] Payload:"
-  echo "$token" | cut -d. -f2 | \
-    python3 -c "import sys,base64,json; d=sys.stdin.read().strip(); \
-    print(json.dumps(json.loads(base64.b64decode(d+'==')),indent=2))" 2>/dev/null
+  for seg in 1 2; do
+    [[ $seg -eq 1 ]] && label="Header" || label="Payload"
+    echo "[*] $label:"
+    printf '%s' "$token" | cut -d. -f"$seg" | python3 -c '
+import sys, base64, json
+d = sys.stdin.read().strip().replace("-", "+").replace("_", "/")
+d += "=" * (-len(d) % 4)
+print(json.dumps(json.loads(base64.b64decode(d)), indent=2))' 2>/dev/null || echo "[-] could not decode segment $seg (not valid base64url JSON)"
+  done
 }
 
 awscheck() {
@@ -3469,6 +4964,7 @@ REPORT
   ${EDITOR:-vim} "$outfile"
 }
 ADVPENTEST
+  hts_track_file "$ZSH_CUSTOM/advanced_pentest.zsh"
   ok "advanced_pentest.zsh written"
 
   # ─────────────────────────────────────────────────────────────────────────
@@ -3484,6 +4980,7 @@ ADVPENTEST
   # ~/.tmux.conf
   # ─────────────────────────────────────────────────────────────────────────
   log "Writing ~/.tmux.conf..."
+  backup_file "$HOME/.tmux.conf"
   cat > "$HOME/.tmux.conf" << 'TMUXCONF'
 # =============================================================================
 # tmux config — security terminal (macOS + Linux)
@@ -3533,6 +5030,7 @@ set -sg escape-time 10
 setw -g monitor-activity on
 set -g visual-activity off
 TMUXCONF
+  hts_track_file "$HOME/.tmux.conf"
   ok "~/.tmux.conf written"
 
   # ─── Workspace ────────────────────────────────────────────────────────────
@@ -3551,6 +5049,506 @@ TMUXCONF
 }
 
 # ─── End: lib/configs.sh ────────────────────────────────────────────
+
+# ─── Begin: lib/lifecycle.sh ──────────────────────────────────────────
+# =============================================================================
+#  lib/lifecycle.sh — --status, --restore, --uninstall, --purge-tools, --update
+#  Reads the manifest written by backup_file / hts_track_file / hts_manifest_add:
+#    epoch<TAB>kind<TAB>name<TAB>detail   (kind: component|tool|file|backup)
+# =============================================================================
+
+HTS_REPO_SLUG="jinnu92/Hackers-terminal-setup"
+_LC_US=$'\037'
+
+# ─── Argument parsing ─────────────────────────────────────────────────────────
+# Sets HTS_LC_CMD (status|restore|uninstall|update|""), HTS_LC_TS, HTS_LC_PURGE,
+# HTS_LC_DRY, HTS_LC_YES, HTS_DOCTOR_FORMAT and the array HTS_PASSTHRU (all args
+# that are not lifecycle flags / --json). Returns non-zero on invalid usage.
+hts_lifecycle_parse() {
+  HTS_LC_CMD=""; HTS_LC_TS=""; HTS_LC_PURGE=0; HTS_LC_DRY=0; HTS_LC_YES=0
+  HTS_PASSTHRU=()
+  local cmds="" a nxt rest="" bad="" ncmd=0 args=("$@") i=0 n=$#
+  case "${1:-}" in -h|--help|help) HTS_PASSTHRU=("$@"); return 0 ;; esac
+  while [[ $i -lt $n ]]; do
+    a="${args[$i]}"; i=$((i+1))
+    case "$a" in
+      --status|--uninstall|--update) cmds="$cmds ${a#--}"; ncmd=$((ncmd+1)) ;;
+      --restore)
+        cmds="$cmds restore"; ncmd=$((ncmd+1))
+        if [[ $i -lt $n ]]; then
+          nxt="${args[$i]}"
+          case "$nxt" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]*) HTS_LC_TS="$nxt"; i=$((i+1)) ;; esac
+        fi ;;
+      --purge-tools) HTS_LC_PURGE=1 ;;
+      --json)        HTS_DOCTOR_FORMAT=json; export HTS_DOCTOR_FORMAT ;;
+      -y|--yes)      HTS_LC_YES=1; HTS_PASSTHRU+=("$a") ;;
+      -n|--dry-run)  HTS_LC_DRY=1; HTS_PASSTHRU+=("$a") ;;
+      *)             rest="$rest $a"; HTS_PASSTHRU+=("$a") ;;
+    esac
+  done
+  if [[ $ncmd -eq 0 ]]; then
+    if [[ "$HTS_LC_PURGE" == "1" ]]; then err "--purge-tools only works together with --uninstall"; return 1; fi
+    return 0
+  fi
+  if [[ $ncmd -gt 1 ]]; then err "Only one lifecycle command allowed at a time (got:$cmds)"; return 1; fi
+  HTS_LC_CMD="${cmds# }"
+  if [[ "$HTS_LC_PURGE" == "1" && "$HTS_LC_CMD" != "uninstall" ]]; then
+    err "--purge-tools only works together with --uninstall"; return 1
+  fi
+  if [[ -n "$rest" ]]; then
+    bad="${rest# }"
+    err "Lifecycle command --$HTS_LC_CMD cannot be combined with other options or component selections: $bad"
+    return 1
+  fi
+  HTS_PASSTHRU=()
+  return 0
+}
+
+# True when the arguments ask only for the doctor (keeps --json output clean).
+hts_doctor_only_args() {
+  local a low seen=0
+  [[ $# -gt 0 ]] || return 1
+  for a in "$@"; do
+    low="$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')"
+    case "$low" in
+      -y|--yes|y|yes) ;;
+      *) [[ "$(hts_resolve_token "$low" 2>/dev/null)" == "doctor" ]] || return 1; seen=1 ;;
+    esac
+  done
+  [[ $seen -eq 1 ]]
+}
+
+# ─── Safety helpers ───────────────────────────────────────────────────────────
+_lc_rows() {   # file kind -> epoch US name US detail
+  [[ -f "$1" ]] || return 0
+  awk -F'\t' -v k="$2" 'BEGIN{OFS="\037"} /^[[:space:]]*#/ {next} NF>=3 && $2==k {print $1,$3,$4}' "$1"
+}
+
+# Validate a manifest path for touching. Sets _LC_PATH (normalised) / _LC_REASON.
+_lc_validate_path() {
+  local p=$1 home parent realp realhome rel
+  _LC_PATH=""; _LC_REASON=""
+  home="${HOME%/}"
+  if [[ -z "$home" || "$home" != /* ]]; then _LC_REASON="HOME is unset or not absolute"; return 1; fi
+  if [[ -z "$p" ]]; then _LC_REASON="empty path"; return 1; fi
+  if [[ "$p" != /* ]]; then _LC_REASON="not an absolute path"; return 1; fi
+  case "$p" in *$'\n'*|*$'\r'*|*$'\t'*) _LC_REASON="control characters in path"; return 1 ;; esac
+  case "/$p/" in */../*|*/./*) _LC_REASON="contains '..' or '.' component"; return 1 ;; esac
+  while [[ "$p" == */ && "$p" != "/" ]]; do p="${p%/}"; done
+  if [[ "$p" == "$home" ]]; then _LC_REASON="is \$HOME itself"; return 1; fi
+  case "$p" in "$home"/?*) ;; *) _LC_REASON="outside \$HOME"; return 1 ;; esac
+  rel="${p#"$home"/}"
+  if [[ "$rel" != */* && -d "$p" && ! -L "$p" ]]; then
+    _LC_REASON="top-level directory of \$HOME (may hold your work) — left in place"; return 1
+  fi
+  parent="$(dirname "$p")"
+  if [[ -d "$parent" ]]; then
+    realp="$(cd -P "$parent" 2>/dev/null && pwd -P)" || realp=""
+    realhome="$(cd -P "$home" 2>/dev/null && pwd -P)" || realhome=""
+    if [[ -z "$realp" || -z "$realhome" ]]; then _LC_REASON="cannot resolve parent directory"; return 1; fi
+    case "$realp/" in "$realhome"/*) ;; *) _LC_REASON="resolves outside \$HOME via symlink"; return 1 ;; esac
+  fi
+  _LC_PATH="$p"
+  return 0
+}
+
+# Directories may only be removed when they are tool clones under ~/.local/share.
+_lc_dir_removable() {
+  local p=$1 home="${HOME%/}"
+  [[ -n "$p" && -d "$p" && ! -L "$p" ]] || return 1
+  case "$p" in "$home"/.local/share/?*) return 0 ;; esac
+  return 1
+}
+_lc_name_ok() {
+  local re='^[A-Za-z0-9][A-Za-z0-9._+@/:-]*$'
+  [[ -n "$1" && "$1" =~ $re ]]
+}
+_lc_init() {
+  _LC_DRY="${HTS_LC_DRY:-0}"; _LC_YES="${HTS_LC_YES:-0}"
+  _LC_OK=0; _LC_FAIL=0; _LC_REFUSED=0
+  _LC_TMP="$(mktemp -d "${TMPDIR:-/tmp}/hts-lc.XXXXXX")" || { err "cannot create temp dir"; return 1; }
+  _LC_PLAN="$_LC_TMP/plan"; _LC_TOOLS="$_LC_TMP/tools"
+  if [[ -z "${HOME:-}" || "$HOME" != /* || "${HOME%/}" == "" ]]; then
+    err "HOME is unset or invalid — refusing to continue"; return 1
+  fi
+}
+_lc_cleanup() {
+  case "${_LC_TMP:-}" in */hts-lc.??????) rm -rf "$_LC_TMP" ;; esac
+}
+_lc_confirm() {   # returns 0 proceed, 1 declined, 2 refused (no terminal)
+  local ans=""
+  [[ "$_LC_DRY" == "1" || "$_LC_YES" == "1" ]] && return 0
+  if [[ -t 0 ]]; then
+    read -r -p "$1 [y/N] " ans || ans=""
+  elif [[ "${_HTS_PIPED:-0}" == "1" ]] && { exec 3</dev/tty; } 2>/dev/null; then
+    printf '%s [y/N] ' "$1" >&2; read -r ans <&3 || ans=""; exec 3<&-
+  else
+    err "Confirmation required but stdin is not a terminal. Re-run with -y to proceed unattended."
+    return 2
+  fi
+  case "$ans" in y|Y|yes|YES) return 0 ;; esac
+  info "Aborted — nothing changed."; return 1
+}
+_lc_exec() {   # desc cmd...
+  local desc=$1; shift
+  if [[ "$_LC_DRY" == "1" ]]; then echo -e "  ${DIM}[dry-run]${RESET} $desc: $*"; return 0; fi
+  local rc=0
+  run_step "$desc" "$@" </dev/null || rc=$?
+  set +e   # run_step re-enables errexit
+  if [[ $rc -eq 0 ]]; then _LC_OK=$((_LC_OK+1)); else _LC_FAIL=$((_LC_FAIL+1)); return 1; fi
+}
+_lc_summary() {
+  echo ""
+  if [[ "$_LC_DRY" == "1" ]]; then info "Dry run — no changes were made."; return 0; fi
+  if [[ ${#HTS_RES_STATUS[@]} -gt 0 ]]; then hts_print_summary || true; fi
+  echo -e "  ${GREEN}$_LC_OK ok${RESET}, ${RED}$_LC_FAIL failed${RESET}, ${YELLOW}$_LC_REFUSED refused/skipped${RESET}"
+  [[ "$_LC_FAIL" -eq 0 ]]
+}
+
+# ─── Backup plan: earliest backup per original path (optionally one run only) ─
+_lc_build_plan() {   # [timestamp]
+  local want="${1:-}" raw="$_LC_TMP/raw" f epoch orig detail ts rel
+  : > "$raw"
+  for f in "$HTS_MANIFEST" "$HTS_MANIFEST".uninstalled-*; do
+    [[ -f "$f" ]] || continue
+    while IFS="$_LC_US" read -r epoch orig detail; do
+      [[ -n "$orig" && -n "$detail" ]] || continue
+      case "$detail" in "$HTS_BACKUP_ROOT"/*) ;; *) continue ;; esac
+      case "/$detail/" in */../*) continue ;; esac
+      rel="${detail#"$HTS_BACKUP_ROOT"/}"; ts="${rel%%/*}"
+      [[ -n "$ts" ]] || continue
+      case "$epoch" in ''|*[!0-9]*) epoch=0 ;; esac
+      printf '%s\037%s\037%s\037%s\n' "$epoch" "$ts" "$orig" "$detail" >> "$raw"
+    done < <(_lc_rows "$f" backup)
+  done
+  sort -t "$_LC_US" -k1,1n -s "$raw" | awk -F "$_LC_US" -v want="$want" '(want=="" || $2==want) && !seen[$3]++' > "$_LC_PLAN"
+}
+
+# Restore one backed-up file. Backs up the current file first (reversible).
+_lc_restore_one() {   # original backup
+  local orig=$1 bak=$2
+  if ! _lc_validate_path "$orig"; then
+    warn "refused $orig — $_LC_REASON"; _LC_REFUSED=$((_LC_REFUSED+1)); return 1
+  fi
+  orig="$_LC_PATH"
+  if [[ ! -e "$bak" && ! -L "$bak" ]]; then
+    warn "backup missing for $orig ($bak)"; _LC_FAIL=$((_LC_FAIL+1)); return 1
+  fi
+  if [[ -d "$bak" && ! -L "$bak" ]]; then
+    warn "skipped $orig — backup is a directory (restore manually from $bak)"; _LC_REFUSED=$((_LC_REFUSED+1)); return 1
+  fi
+  if [[ -d "$orig" && ! -L "$orig" ]]; then
+    warn "skipped $orig — now a directory"; _LC_REFUSED=$((_LC_REFUSED+1)); return 1
+  fi
+  if [[ "$_LC_DRY" == "1" ]]; then echo -e "  ${DIM}[dry-run]${RESET} restore $orig  <-  $bak"; return 0; fi
+  if [[ -e "$orig" || -L "$orig" ]]; then
+    backup_file "$orig"
+    local cur
+    case "$orig" in
+      "${HOME%/}"/*) cur="$HTS_BACKUP_ROOT/$HTS_RUN_TS/${orig#"${HOME%/}"/}" ;;
+      *)             cur="$HTS_BACKUP_ROOT/$HTS_RUN_TS/${orig#/}" ;;
+    esac
+    if [[ ! -e "$cur" && ! -L "$cur" ]]; then
+      warn "could not back up current $orig — not overwriting"; _LC_FAIL=$((_LC_FAIL+1)); return 1
+    fi
+  fi
+  mkdir -p "$(dirname "$orig")" || { _LC_FAIL=$((_LC_FAIL+1)); return 1; }
+  _lc_exec "restore $orig" _lc_copy_over "$bak" "$orig"
+}
+_lc_copy_over() { rm -f -- "$2" && cp -pP -- "$1" "$2"; }
+
+# ─── --status ─────────────────────────────────────────────────────────────────
+hts_lc_status() {
+  _lc_init || return 1
+  local n d ts cnt any=0 f
+  step "Hackers Terminal Setup — status"
+  if [[ ! -s "$HTS_MANIFEST" ]]; then
+    info "Nothing installed by this tool yet (no manifest at $HTS_MANIFEST)."
+  else
+    echo -e "  ${BOLD}Installed components:${RESET}"
+    n=0
+    while IFS="$_LC_US" read -r _ d ts; do
+      [[ -n "$d" ]] || continue; echo "    - $d  ${ts:+($ts)}"; n=$((n+1))
+    done < <(_lc_rows "$HTS_MANIFEST" component | sort -t "$_LC_US" -k2,2 -u)
+    [[ $n -gt 0 ]] || echo "    (none recorded)"
+    echo -e "  ${BOLD}Tracked tools:${RESET} $(_lc_rows "$HTS_MANIFEST" tool | awk -F"$_LC_US" '{print $2}' | sort -u | wc -l | tr -d ' ')"
+    echo -e "  ${BOLD}Tracked files:${RESET} $(_lc_rows "$HTS_MANIFEST" file | awk -F"$_LC_US" '{print $2}' | sort -u | wc -l | tr -d ' ')"
+  fi
+  echo -e "  ${BOLD}Backup runs:${RESET}"
+  if [[ -d "$HTS_BACKUP_ROOT" ]]; then
+    for d in "$HTS_BACKUP_ROOT"/*/; do
+      [[ -d "$d" ]] || continue
+      ts="$(basename "$d")"; cnt="$(find "$d" -type f 2>/dev/null | wc -l | tr -d ' ')"
+      echo "    $ts  ($cnt files)"; any=1
+    done
+  fi
+  [[ $any -eq 1 ]] || echo "    (none)"
+  for f in "$HTS_MANIFEST".uninstalled-*; do [[ -f "$f" ]] && echo "  Archived manifest: $f"; done
+  echo -e "  ${BOLD}State dir:${RESET} $HTS_STATE_DIR"
+  echo -e "  ${BOLD}Manifest:${RESET}  $HTS_MANIFEST"
+  echo -e "  ${BOLD}Backups:${RESET}   $HTS_BACKUP_ROOT"
+  echo -e "  ${BOLD}Log:${RESET}       ${HTS_LOG:-(not set)}"
+  _lc_cleanup
+  return 0
+}
+
+# ─── --restore ────────────────────────────────────────────────────────────────
+hts_lc_restore() {
+  _lc_init || return 1
+  local ts="${HTS_LC_TS:-}" epoch rts orig bak n rc=0
+  step "Restore backed-up files"
+  if [[ -z "$ts" ]]; then
+    local runs
+    runs="$(for f in "$HTS_MANIFEST" "$HTS_MANIFEST".uninstalled-*; do _lc_rows "$f" backup; done | awk -F"$_LC_US" -v r="$HTS_BACKUP_ROOT/" 'index($3,r)==1 {s=substr($3,length(r)+1); sub("/.*","",s); c[s]++} END{for(k in c) print k, c[k]}' | sort)"
+    if [[ -n "$runs" ]]; then
+      echo -e "  ${BOLD}Backup runs:${RESET}"; echo "$runs" | sed 's/^/    /;s/ \([0-9]*\)$/  (\1 files)/'
+      info "Restoring the EARLIEST backup of each file (your pre-install original)."
+    fi
+  fi
+  _lc_build_plan "$ts"
+  n="$(wc -l < "$_LC_PLAN" | tr -d ' ')"
+  if [[ "$n" -eq 0 ]]; then
+    if [[ -n "$ts" ]]; then warn "No backups recorded for run '$ts'."; else info "No backups recorded — nothing to restore."; fi
+    _lc_cleanup; return 0
+  fi
+  echo -e "  ${BOLD}Files to restore ($n):${RESET}"
+  while IFS="$_LC_US" read -r epoch rts orig bak; do
+    echo "    $orig   <- run $rts"
+  done < "$_LC_PLAN"
+  _lc_confirm "Restore these $n file(s)? Current files are backed up first." || { rc=$?; _lc_cleanup; return $rc; }
+  while IFS="$_LC_US" read -r epoch rts orig bak; do
+    _lc_restore_one "$orig" "$bak" || true
+  done < "$_LC_PLAN"
+  _lc_summary || rc=1
+  _lc_cleanup
+  return $rc
+}
+
+# ─── Tool grouping (uninstall / purge / update) ───────────────────────────────
+_lc_collect_tools() {   # method US name US detail, unique
+  local epoch name detail m
+  : > "$_LC_TOOLS"
+  while IFS="$_LC_US" read -r epoch name detail; do
+    [[ -n "$name" ]] || continue
+    m="$(printf '%s' "${detail%%:*}" | tr '[:upper:]' '[:lower:]')"; [[ -n "$m" ]] || m="unknown"
+    printf '%s\037%s\037%s\n' "$m" "$name" "$detail" >> "$_LC_TOOLS"
+  done < <(_lc_rows "$HTS_MANIFEST" tool)
+  sort -t "$_LC_US" -k1,2 -u "$_LC_TOOLS" -o "$_LC_TOOLS"
+}
+_lc_names_for() {   # method -> space separated, validated names (go: binary basename)
+  local m=$1 out="" mm name det
+  while IFS="$_LC_US" read -r mm name det; do
+    [[ "$mm" == "$m" ]] || continue
+    [[ "$m" == "go" ]] && { name="${name%@*}"; name="${name##*/}"; }
+    if _lc_name_ok "$name"; then out="$out $name"
+    else warn "ignoring unsafe tool name in manifest: '$name'" >&2; fi
+  done < "$_LC_TOOLS"
+  echo "${out# }"
+}
+_lc_gobin() {
+  local b=""
+  command -v go >/dev/null 2>&1 && b="$(go env GOBIN 2>/dev/null)"
+  if [[ -z "$b" ]]; then b="${GOPATH:-$HOME/go}"; b="${b%%:*}/bin"; fi
+  echo "$b"
+}
+
+# _LC_MODE=print shows the command, _LC_MODE=exec runs it (honouring dry-run).
+_lc_cmd() {
+  local desc=$1; shift
+  if [[ "$_LC_MODE" == "print" ]]; then echo "      $*"; else _lc_exec "$desc" "$@" || true; fi
+}
+_lc_tools_remove() {
+  local m names arr x gobin
+  for m in brew pipx npm apt dnf yum pacman zypper go cargo; do
+    names="$(_lc_names_for "$m")"; [[ -n "$names" ]] || continue
+    read -r -a arr <<< "$names"
+    [[ "$_LC_MODE" == "print" ]] && echo "    $m: ${arr[*]}"
+    case "$m" in
+      brew)   _lc_cmd "brew uninstall" brew uninstall "${arr[@]}" ;;
+      npm)    _lc_cmd "npm uninstall -g" npm uninstall -g "${arr[@]}" ;;
+      apt)    _lc_cmd "apt-get remove" sudo apt-get remove -y "${arr[@]}" ;;
+      dnf)    _lc_cmd "dnf remove" sudo dnf remove -y "${arr[@]}" ;;
+      yum)    _lc_cmd "yum remove" sudo yum remove -y "${arr[@]}" ;;
+      zypper) _lc_cmd "zypper remove" sudo zypper remove -y "${arr[@]}" ;;
+      pacman) _lc_cmd "pacman -R" sudo pacman -R --noconfirm "${arr[@]}" ;;
+      cargo)  _lc_cmd "cargo uninstall" cargo uninstall "${arr[@]}" ;;
+      pipx)   for x in "${arr[@]}"; do _lc_cmd "pipx uninstall $x" pipx uninstall "$x"; done ;;
+      go)
+        gobin="$(_lc_gobin)"
+        if ! _lc_validate_path "$gobin"; then
+          warn "go bin dir '$gobin' rejected ($_LC_REASON) — not removing go tools"; _LC_REFUSED=$((_LC_REFUSED+1))
+        else
+          for x in "${arr[@]}"; do _lc_cmd "remove go binary $x" rm -f -- "$_LC_PATH/$x"; done
+        fi ;;
+    esac
+  done
+  # Anything else (direct downloads etc.) cannot be removed generically.
+  while IFS="$_LC_US" read -r m x _; do
+    case "$m" in brew|pipx|npm|apt|dnf|yum|pacman|zypper|go|cargo) ;; *)
+      [[ "$_LC_MODE" == "print" ]] && echo "    $m: $x (no automatic removal; delete manually)" ;;
+    esac
+  done < "$_LC_TOOLS"
+}
+
+# ─── --uninstall ──────────────────────────────────────────────────────────────
+hts_lc_uninstall() {
+  _lc_init || return 1
+  local epoch name detail kind rts orig bak cand="$_LC_TMP/cand" acts="$_LC_TMP/acts" p rc=0
+  local n_restore=0 n_rm=0 n_skip=0 act arg extra
+  step "Uninstall (conservative)"
+  if [[ ! -s "$HTS_MANIFEST" ]]; then
+    info "No manifest at $HTS_MANIFEST — nothing was installed by this tool. Nothing to do."
+    _lc_cleanup; return 0
+  fi
+  _lc_build_plan ""
+  # Candidates: manifest file entries (latest first so children go before parents) + backed-up paths.
+  { _lc_rows "$HTS_MANIFEST" file | awk -F"$_LC_US" '{a[NR]=$2} END{for(i=NR;i>=1;i--)print a[i]}'
+    awk -F"$_LC_US" '{print $3}' "$_LC_PLAN"; } | awk '!seen[$0]++' > "$cand"
+  : > "$acts"
+  while IFS= read -r name || [[ -n "$name" ]]; do
+    if ! _lc_validate_path "$name"; then
+      printf 'refuse\037%s\037%s\n' "$name" "$_LC_REASON" >> "$acts"; continue
+    fi
+    p="$_LC_PATH"
+    bak="$(awk -F"$_LC_US" -v p="$p" '$3==p {print $4; exit}' "$_LC_PLAN")"
+    if [[ -n "$bak" ]]; then printf 'restore\037%s\037%s\n' "$p" "$bak" >> "$acts"
+    elif [[ ! -e "$p" && ! -L "$p" ]]; then printf 'gone\037%s\037\n' "$p" >> "$acts"
+    elif [[ -d "$p" && ! -L "$p" ]]; then
+      if _lc_dir_removable "$p"; then printf 'rmdir\037%s\037\n' "$p" >> "$acts"
+      else printf 'refuse\037%s\037%s\n' "$p" "directory not under ~/.local/share — left in place" >> "$acts"; fi
+    else printf 'rmfile\037%s\037\n' "$p" >> "$acts"; fi
+  done < "$cand"
+
+  echo -e "  ${BOLD}Planned file actions:${RESET}"
+  while IFS="$_LC_US" read -r act arg extra; do
+    case "$act" in
+      restore) echo "    restore  $arg  <- $extra"; n_restore=$((n_restore+1)) ;;
+      rmfile)  echo "    remove   $arg"; n_rm=$((n_rm+1)) ;;
+      rmdir)   echo "    remove   $arg/ (tool clone)"; n_rm=$((n_rm+1)) ;;
+      gone)    echo "    skip     $arg (already gone)" ;;
+      refuse)  echo -e "    ${YELLOW}REFUSED${RESET}  '$arg' — $extra"; n_skip=$((n_skip+1)) ;;
+    esac
+  done < "$acts"
+  _LC_REFUSED=$n_skip
+
+  _lc_collect_tools
+  echo ""
+  if [[ "$HTS_LC_PURGE" == "1" ]]; then
+    echo -e "  ${BOLD}Tools to be removed (--purge-tools):${RESET}"
+  else
+    echo -e "  ${BOLD}Tools are NOT removed by default${RESET} (the manifest cannot prove you do not depend on them)."
+    echo "  Commands to remove the recorded tools by hand (or re-run with --purge-tools):"
+  fi
+  _LC_MODE=print; _lc_tools_remove
+  [[ -s "$_LC_TOOLS" ]] || echo "    (no tools recorded)"
+  echo ""
+  echo -e "  ${BOLD}Cannot be undone automatically:${RESET}"
+  echo "    - Login shell change:        chsh -s <your previous shell>   (e.g. chsh -s /bin/bash)"
+  echo "    - Homebrew itself:           /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)\""
+  echo "    - Oh My Zsh:                 uninstall_oh_my_zsh   (or remove ~/.oh-my-zsh yourself)"
+  echo "    - Added package repos/taps:  brew untap <tap>; remove files in /etc/apt/sources.list.d, /etc/apt/keyrings, /etc/yum.repos.d"
+  echo "    - npm prefix setting:        npm config delete prefix"
+  echo ""
+  _lc_confirm "Proceed with the uninstall described above?" || { rc=$?; _lc_cleanup; return $rc; }
+
+  while IFS="$_LC_US" read -r act arg extra; do
+    case "$act" in
+      restore) _lc_restore_one "$arg" "$extra" || true ;;
+      rmfile)  _lc_exec "remove $arg" rm -f -- "$arg" || true ;;
+      rmdir)   _lc_exec "remove clone $arg" rm -rf -- "$arg" || true ;;
+    esac
+  done < "$acts"
+  if [[ "$HTS_LC_PURGE" == "1" ]]; then
+    _LC_MODE=exec; _lc_tools_remove
+  fi
+  _lc_summary || rc=1
+  if [[ "$_LC_DRY" != "1" && "$rc" -eq 0 ]]; then
+    local arch="$HTS_MANIFEST.uninstalled-$(date +%Y%m%d-%H%M%S)"
+    if mv -- "$HTS_MANIFEST" "$arch"; then info "Manifest archived to $arch (backups kept in $HTS_BACKUP_ROOT)"
+    else warn "could not archive manifest"; rc=1; fi
+  elif [[ "$rc" -ne 0 ]]; then
+    warn "Uninstall had failures — manifest kept so you can re-run."
+  fi
+  _lc_cleanup
+  return $rc
+}
+
+# ─── --update ─────────────────────────────────────────────────────────────────
+_lc_ver_gt() {   # a b -> 0 if a > b (numeric dotted compare)
+  local a="${1#v}" b="${2#v}" i x y
+  local -a A B
+  a="${a%%[-+]*}"; b="${b%%[-+]*}"
+  IFS=. read -r -a A <<< "$a"; IFS=. read -r -a B <<< "$b"
+  for i in 0 1 2 3; do
+    x="${A[$i]:-0}"; y="${B[$i]:-0}"
+    case "$x$y" in *[!0-9]*) return 1 ;; esac
+    [[ "$x" -gt "$y" ]] && return 0
+    [[ "$x" -lt "$y" ]] && return 1
+  done
+  return 1
+}
+hts_lc_update() {
+  _lc_init || return 1
+  local tag out m names arr x mm name det mod rc=0
+  step "Update"
+  info "Installed version: ${HTS_VERSION:-unknown}"
+  if [[ "$_LC_DRY" == "1" ]]; then
+    echo -e "  ${DIM}[dry-run]${RESET} would query https://api.github.com/repos/$HTS_REPO_SLUG/releases/latest"
+  elif command -v curl >/dev/null 2>&1 && \
+       out="$(curl -fsS --max-time 5 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$HTS_REPO_SLUG/releases/latest" 2>/dev/null)" && \
+       tag="$(printf '%s' "$out" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)" && [[ -n "$tag" ]]; then
+    if [[ -n "${HTS_VERSION:-}" ]] && _lc_ver_gt "$tag" "$HTS_VERSION"; then
+      warn "A newer release is available: $tag (you have $HTS_VERSION)"
+      echo "      Re-run the one-line install:  curl -fsSL https://raw.githubusercontent.com/$HTS_REPO_SLUG/main/ter.sh | bash -s -- <your usual flags>"
+      echo "      or, in a clone:               git pull"
+    else
+      ok "Up to date (latest release: $tag)"
+    fi
+  else
+    warn "Could not check for a newer release (network unavailable?) — continuing."
+  fi
+
+  _lc_collect_tools
+  if [[ ! -s "$_LC_TOOLS" ]]; then info "No tools recorded in the manifest — nothing to upgrade."; _lc_cleanup; return 0; fi
+  _LC_MODE=exec
+  for m in brew pipx npm go apt dnf yum pacman zypper cargo; do
+    names="$(_lc_names_for "$m")"; [[ -n "$names" ]] || continue
+    read -r -a arr <<< "$names"
+    case "$m" in
+      brew) _lc_cmd "brew upgrade" brew upgrade "${arr[@]}" ;;
+      npm)  _lc_cmd "npm -g update" npm -g update "${arr[@]}" ;;
+      pipx) for x in "${arr[@]}"; do _lc_cmd "pipx upgrade $x" pipx upgrade "$x"; done ;;
+      go)
+        while IFS="$_LC_US" read -r mm name det; do
+          [[ "$mm" == "go" ]] || continue
+          mod="${det#go}"; mod="${mod#:}"; mod="${mod%@*}"
+          if [[ -z "$mod" ]]; then info "go tool '$name': module path not recorded — skipped (newer installs record it)"; continue; fi
+          if ! _lc_name_ok "$mod"; then warn "unsafe go module path for $name — skipped"; continue; fi
+          _lc_cmd "go install $mod@latest" go install "$mod@latest"
+        done < "$_LC_TOOLS" ;;
+      apt|dnf|yum|pacman|zypper|cargo)
+        info "$m tools (${arr[*]}) are left to the system package manager; upgrade them with your usual $m update." ;;
+    esac
+  done
+  _lc_summary || rc=1
+  _lc_cleanup
+  return $rc
+}
+
+hts_lifecycle_run() {
+  set +e
+  local rc=0
+  case "$HTS_LC_CMD" in
+    status)    hts_lc_status    || rc=$? ;;
+    restore)   hts_lc_restore   || rc=$? ;;
+    uninstall) hts_lc_uninstall || rc=$? ;;
+    update)    hts_lc_update    || rc=$? ;;
+    *) err "unknown lifecycle command '$HTS_LC_CMD'"; rc=2 ;;
+  esac
+  return $rc
+}
+
+# ─── End: lib/lifecycle.sh ────────────────────────────────────────────
 
 # ─── Begin: lib/menu.sh ──────────────────────────────────────────
 # =============================================================================
@@ -3684,8 +5682,8 @@ hts_comp_info() {
     claude)
       HTS_C_NUM=4; HTS_C_FLAG="--claude"; HTS_C_NAME="Claude Code CLI"; HTS_C_CMD="install_claude"
       HTS_C_DESC="Anthropic Claude Code agentic coding CLI tool"
-      HTS_C_INSTALLS="@anthropic-ai/claude-code (npm, global); Node.js if missing"
-      HTS_C_WRITES="~/.npm-global (npm prefix and package files)" ;;
+      HTS_C_INSTALLS="Claude Code via the official native installer (stable channel); no Node.js needed"
+      HTS_C_WRITES="~/.local/bin/claude and ~/.local/share/claude" ;;
     code)
       HTS_C_NUM=5; HTS_C_FLAG="--code"; HTS_C_NAME="VS Code & CLI"; HTS_C_CMD="install_code"
       HTS_C_DESC="Visual Studio Code editor & 'code' CLI"
@@ -4056,8 +6054,17 @@ hts_help() {
       echo "  -d, --doctor     Run system diagnostic audit (works in any position)"
       echo "  -n, --dry-run    Show what would be installed or written, change nothing"
       echo "      --list       List all components (number, flag, name, contents) and exit"
+      echo "      --json       With --doctor: machine-readable JSON output (no banner/summary)"
       echo "  -V, --version    Print the version and exit"
       echo "  -h, --help       Show this help message"
+      echo ""
+      echo "Lifecycle (run alone; no preflight, cannot be combined with components):"
+      echo "  --status             Show installed components, tracked tools/files, backup runs, log/manifest paths"
+      echo "  --restore [TS]       Restore backed-up files (default: earliest backup of each file); -y, --dry-run"
+      echo "  --uninstall          Restore backups / remove files this tool created (tools are only listed)"
+      echo "  --purge-tools        With --uninstall: also remove manifest-recorded tools via their package manager"
+      echo "  --update             Check for a newer release; upgrade manifest-recorded tools"
+      echo "  Works piped too:     curl -fsSL <url>/ter.sh | bash -s -- --status"
       echo ""
       echo "Unknown options are an error: nothing runs until the whole selection is valid."
       echo "Each component runs independently; a results summary and log"
@@ -4086,6 +6093,20 @@ _hts_main() {
       --list)          hts_list_components; exit 0 ;;
     esac
   done
+
+  # Lifecycle commands (--status/--restore/--uninstall/--update) are validated first and
+  # never reach preflight or any install function. --json is consumed here.
+  hts_lifecycle_parse "$@" || exit 2
+  if [[ -n "$HTS_LC_CMD" ]]; then
+    hts_lifecycle_run
+    exit $?
+  fi
+  set -- "${HTS_PASSTHRU[@]}"
+  if [[ "${HTS_DOCTOR_FORMAT:-}" == "json" ]] && hts_doctor_only_args "$@"; then
+    detect_os >/dev/null    # JSON on stdout only: no OS lines, banner or summary
+    sec_doctor
+    exit $?
+  fi
 
   HTS_RUN_RC=0
   HTS_SHOW_BANNER=0

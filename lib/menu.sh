@@ -130,8 +130,8 @@ hts_comp_info() {
     claude)
       HTS_C_NUM=4; HTS_C_FLAG="--claude"; HTS_C_NAME="Claude Code CLI"; HTS_C_CMD="install_claude"
       HTS_C_DESC="Anthropic Claude Code agentic coding CLI tool"
-      HTS_C_INSTALLS="@anthropic-ai/claude-code (npm, global); Node.js if missing"
-      HTS_C_WRITES="~/.npm-global (npm prefix and package files)" ;;
+      HTS_C_INSTALLS="Claude Code via the official native installer (stable channel); no Node.js needed"
+      HTS_C_WRITES="~/.local/bin/claude and ~/.local/share/claude" ;;
     code)
       HTS_C_NUM=5; HTS_C_FLAG="--code"; HTS_C_NAME="VS Code & CLI"; HTS_C_CMD="install_code"
       HTS_C_DESC="Visual Studio Code editor & 'code' CLI"
