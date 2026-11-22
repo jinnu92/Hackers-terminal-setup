@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://jinnu92.github.io/Hackers-terminal-setup/">
-    <img src="docs/demo.gif" alt="40-second tour of Hackers Terminal Setup: welcome cockpit, daily shell, Claude Code with MCP, security tooling and the profile builder" width="420">
+    <img src="docs/demo.gif" alt="Tour of Hackers Terminal Setup: welcome cockpit, daily shell, Claude Code with MCP, security tooling, the profile builder and lifecycle commands" width="420">
   </a>
 </p>
 
