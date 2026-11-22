@@ -91,14 +91,9 @@ cat >> "$TEMP_FILE" << 'EOF'
 # bash has parsed the whole script before any installer starts. This matters for
 # `curl ... | bash`: a child process that reads stdin can no longer swallow the
 # rest of the script.
-_hts_main() {
-detect_os
-
-if [[ $# -gt 0 ]]; then
-  case "$1" in
-    -h|--help|help)
+hts_help() {
       echo ""
-      echo -e "${BOLD}${CYAN}Hackers Terminal Setup 2.0 — CLI Options${RESET}"
+      echo -e "${BOLD}${CYAN}Hackers Terminal Setup ${HTS_VERSION} — CLI Options${RESET}"
       echo ""
       echo "Usage: ./ter.sh [OPTIONS] [NUMBERS...]"
       echo "   or: curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash -s -- [OPTIONS]"
@@ -127,8 +122,16 @@ if [[ $# -gt 0 ]]; then
       echo "  --workflow       Install workflow tools"
       echo "  --dashboard      Install Fastfetch & Tactical Security Welcome Cockpit"
       echo "  --config         Write configuration files (.zshrc, pentest.zsh, etc.)"
-      echo "  -d, --doctor     Run system diagnostic audit"
+      echo "  -d, --doctor     Run system diagnostic audit (works in any position)"
+      echo "  -n, --dry-run    Show what would be installed or written, change nothing"
+      echo "      --list       List all components (number, flag, name, contents) and exit"
+      echo "  -V, --version    Print the version and exit"
       echo "  -h, --help       Show this help message"
+      echo ""
+      echo "Unknown options are an error: nothing runs until the whole selection is valid."
+      echo "Each component runs independently; a results summary and log"
+      echo "(~/.local/state/hts/install.log) are produced, and the exit code is non-zero"
+      echo "if any step failed. Replaced dotfiles are backed up under ~/.local/state/hts/backups."
       echo ""
       echo "Examples:"
       echo "  ./ter.sh -y                               # Completely unattended zero-prompt install"
@@ -137,34 +140,38 @@ if [[ $# -gt 0 ]]; then
       echo "  ./ter.sh -y --fonts --dev --mcp           # Install selected tools unattended"
       echo "  ./ter.sh --ad-pivot --web-api --devsecops # Install comprehensive assessment suite"
       echo "  ./ter.sh --doctor                         # Audit current environment & tools"
+      echo "  ./ter.sh --dry-run --all                  # Preview everything, change nothing"
+      echo "  ./ter.sh --list                           # Show the component table"
       echo ""
-      exit 0
-      ;;
-    *)
-      run_selections "$@"
-      ;;
-  esac
-else
-  show_menu
-  run_selections "$choices"
-fi
+}
 
-# ─── Post-install summary ─────────────────────────────────────────────────────
-echo ""
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${BOLD}${GREEN}  Setup Complete!${RESET}"
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
-echo -e "  ${CYAN}Next steps:${RESET}"
-echo -e "  1. ${YELLOW}Set terminal font:${RESET}  'MesloLGS NF' (p10k) or 'JetBrainsMono Nerd Font'"
-echo -e "  2. ${YELLOW}Reload shell:${RESET}       ${BOLD}exec zsh${RESET}"
-echo -e "  3. ${YELLOW}Configure prompt:${RESET}   ${BOLD}p10k configure${RESET} (or Starship: ${BOLD}starship.toml${RESET})"
-echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}cc${RESET})"
-echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
-echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
-echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
-echo -e "  8. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
-echo ""
+_hts_main() {
+  # Informational flags win over everything else and touch nothing.
+  local _a
+  for _a in "$@"; do
+    case "$_a" in
+      -h|--help|help)  hts_help; exit 0 ;;
+      -V|--version)    echo "Hackers Terminal Setup $HTS_VERSION"; exit 0 ;;
+      --list)          hts_list_components; exit 0 ;;
+    esac
+  done
+
+  HTS_RUN_RC=0
+  HTS_SHOW_BANNER=0
+  if [[ $# -gt 0 ]]; then
+    # Validates the whole selection, then (for a real run) detects the OS and acts.
+    run_selections "$@"
+  else
+    detect_os
+    show_menu
+    run_selections "$choices"
+  fi
+
+  # ─── Post-install summary ───────────────────────────────────────────────────
+  if [[ "$HTS_SHOW_BANNER" -eq 1 ]]; then
+    hts_print_banner "$HTS_RUN_RC"
+  fi
+  exit "$HTS_RUN_RC"
 }
 
 _hts_main "$@"

@@ -32,11 +32,31 @@ pipx_install() {
   fi
 }
 
+# hts_node_managed — succeeds (and prints the manager name) when nvm, fnm or Volta
+# is managing Node, in which case the npm global prefix must not be overridden.
+hts_node_managed() {
+  local node_path=""
+  node_path="$(command -v node 2>/dev/null || true)"
+  case "$node_path" in
+    */.nvm/*|*/nvm/*)       echo "nvm";   return 0 ;;
+    */fnm/*|*/.fnm/*|*/fnm_multishells/*) echo "fnm"; return 0 ;;
+    */.volta/*|*/volta/*)   echo "Volta"; return 0 ;;
+  esac
+  if [[ -n "${NVM_BIN:-}" ]]; then echo "nvm"; return 0; fi
+  if [[ -n "${FNM_MULTISHELL_PATH:-}" ]]; then echo "fnm"; return 0; fi
+  if [[ -n "${VOLTA_HOME:-}" && -d "${VOLTA_HOME}" && -n "$node_path" ]]; then echo "Volta"; return 0; fi
+  return 1
+}
+
 npm_global_install() {
-  local pkg=$1
-  mkdir -p "$HOME/.npm-global"
-  npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
-  export PATH="$HOME/.npm-global/bin:$PATH"
+  local pkg=$1 mgr=""
+  if mgr="$(hts_node_managed)"; then
+    warn "Node is managed by $mgr — not overriding the npm global prefix"
+  else
+    mkdir -p "$HOME/.npm-global"
+    npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
+    export PATH="$HOME/.npm-global/bin:$PATH"
+  fi
   if npm list -g "$pkg" &>/dev/null 2>&1; then
     info "$pkg already installed via npm"
   else

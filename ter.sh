@@ -41,6 +41,207 @@ err()  { echo -e "${RED}[-]${RESET} $1"; }
 step() { echo -e "\n${BOLD}${CYAN}━━━ $1 ━━━${RESET}"; }
 ok()   { echo -e "${GREEN}✓${RESET} $1"; }
 
+# ─── Version, State, Log, Manifest ───────────────────────────────────────────
+HTS_VERSION="2.1.0"
+HTS_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hts"
+HTS_LOG="$HTS_STATE_DIR/install.log"
+HTS_MANIFEST="$HTS_STATE_DIR/manifest.tsv"
+HTS_BACKUP_ROOT="$HTS_STATE_DIR/backups"
+HTS_RUN_TS="$(date +%Y%m%d_%H%M%S)"   # one timestamp per installer run
+HTS_DRY_RUN=0
+HTS_BACKED_UP=""                      # newline-separated paths already backed up this run
+
+# Results table (parallel arrays; bash 3.2 safe — no associative arrays)
+HTS_RES_STATUS=()
+HTS_RES_LABEL=()
+HTS_RES_NOTE=()
+
+# Create state directory, log and manifest. Called once at the start of a real run.
+hts_state_init() {
+  [[ "${_HTS_STATE_READY:-0}" == "1" ]] && return 0
+  mkdir -p "$HTS_STATE_DIR" "$HTS_BACKUP_ROOT" || return 1
+  _HTS_STATE_READY=1
+  touch "$HTS_LOG" "$HTS_MANIFEST" 2>/dev/null || true
+  printf '\n===== Hackers Terminal Setup %s run %s =====\n' "$HTS_VERSION" "$HTS_RUN_TS" >> "$HTS_LOG" 2>/dev/null || true
+  return 0
+}
+
+# hts_manifest_add <kind> <name> [detail]  — kinds: component, tool, file, backup
+hts_manifest_add() {
+  local kind=${1:-} name=${2:-} detail=${3:-}
+  mkdir -p "$HTS_STATE_DIR" 2>/dev/null || return 0
+  printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$kind" "$name" "$detail" >> "$HTS_MANIFEST" 2>/dev/null || true
+  return 0
+}
+
+# hts_result <ok|fail|skip> <label> [note]
+hts_result() {
+  HTS_RES_STATUS[${#HTS_RES_STATUS[@]}]="$1"
+  HTS_RES_LABEL[${#HTS_RES_LABEL[@]}]="$2"
+  HTS_RES_NOTE[${#HTS_RES_NOTE[@]}]="${3:-}"
+  return 0
+}
+
+# run_step <label> <command> [args...]
+# Runs a function or program in the CURRENT shell (so PATH/exports persist), tees
+# its output into $HTS_LOG, never aborts the script, records ok/fail, returns the
+# command's exit status. errexit is suspended inside the step so one failing
+# command cannot kill the whole run; steps signal failure by returning non-zero.
+run_step() {
+  local label=$1; shift
+  local logf="$HTS_LOG" rc=0 start=$SECONDS fifo="" tpid=""
+  [[ -d "$HTS_STATE_DIR" ]] || logf=/dev/null
+  printf '\n--- [%s] %s ---\n' "$(date '+%H:%M:%S')" "$label" >> "$logf" 2>/dev/null || true
+
+  fifo="$(mktemp -u "${TMPDIR:-/tmp}/hts-fifo.XXXXXX")"
+  if mkfifo "$fifo" 2>/dev/null; then
+    tee -a "$logf" < "$fifo" &
+    tpid=$!
+    set +e
+    "$@" > "$fifo" 2>&1
+    rc=$?
+    set -e
+    wait "$tpid" 2>/dev/null || true
+    rm -f "$fifo"
+  else
+    set +e
+    "$@"
+    rc=$?
+    set -e
+  fi
+
+  local dur=$((SECONDS - start))
+  if [[ $rc -eq 0 ]]; then
+    hts_result ok "$label" "${dur}s"
+  else
+    hts_result fail "$label" "exit $rc after ${dur}s"
+  fi
+  return "$rc"
+}
+
+# hts_verify_cmd <label> <binary>
+hts_verify_cmd() {
+  if command -v "$2" &>/dev/null; then
+    hts_result ok "$1" "$2 found"
+    return 0
+  fi
+  hts_result fail "$1" "not found after install"
+  return 1
+}
+
+# backup_file <path> — copy an existing file/symlink to the per-run backup dir.
+# Once per run per path. Always returns 0.
+backup_file() {
+  local src=${1:-} rel dest
+  [[ -n "$src" ]] || return 0
+  if [[ ! -f "$src" && ! -L "$src" ]]; then
+    return 0
+  fi
+  case "$HTS_BACKED_UP" in
+    *$'\n'"$src"$'\n'*) return 0 ;;
+  esac
+  HTS_BACKED_UP="${HTS_BACKED_UP}"$'\n'"$src"$'\n'
+
+  case "$src" in
+    "$HOME"/*) rel="${src#"$HOME"/}" ;;
+    *)         rel="${src#/}" ;;
+  esac
+  dest="$HTS_BACKUP_ROOT/$HTS_RUN_TS/$rel"
+  if mkdir -p "$(dirname "$dest")" 2>/dev/null && cp -pP "$src" "$dest" 2>/dev/null; then
+    hts_manifest_add backup "$src" "$dest"
+    info "Backed up $src -> $dest"
+  else
+    warn "Could not back up $src (continuing)"
+  fi
+  return 0
+}
+
+# hts_track_file <path> — record a file the installer created or rewrote
+hts_track_file() {
+  hts_manifest_add file "${1:-}" ""
+  return 0
+}
+
+# hts_fetch <url> <dest> — curl with retries and timeout; no partial file on failure
+hts_fetch() {
+  local url=$1 dest=$2 tmp
+  tmp="${dest}.part.$$"
+  if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 300 -o "$tmp" "$url"; then
+    mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null
+  return 1
+}
+
+# hts_sha256 <file> — print hex digest
+hts_sha256() {
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum &>/dev/null; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    err "No sha256sum or shasum available"
+    return 1
+  fi
+}
+
+# hts_download_verify <url> <sha256> <dest>
+hts_download_verify() {
+  local url=$1 want actual dest=$3
+  want="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+  hts_fetch "$url" "$dest" || { err "Download failed: $url"; return 1; }
+  actual="$(hts_sha256 "$dest")" || { rm -f "$dest"; return 1; }
+  if [[ "$actual" != "$want" ]]; then
+    rm -f "$dest"
+    err "SHA-256 mismatch for $url (expected $want, got $actual)"
+    return 1
+  fi
+  return 0
+}
+
+# hts_run_remote_script <url> <interpreter> [args...]
+# Downloads first, fails loudly if the download fails or is empty, then runs
+# "<interpreter> <tempfile> [args...]". The interpreter may be a quoted multi-word
+# string such as "sudo bash" or "env RUNZSH=no CHSH=no sh".
+hts_run_remote_script() {
+  local url=$1 interp_str=$2; shift 2
+  local tmp rc=0
+  local -a interp
+  read -r -a interp <<< "$interp_str"
+  [[ ${#interp[@]} -gt 0 ]] || { err "hts_run_remote_script: no interpreter given"; return 1; }
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hts-remote.XXXXXX")" || return 1
+  if ! hts_fetch "$url" "$tmp"; then
+    rm -f "$tmp"; err "Download failed: $url"; return 1
+  fi
+  if [[ ! -s "$tmp" ]]; then
+    rm -f "$tmp"; err "Downloaded script is empty: $url"; return 1
+  fi
+  chmod 644 "$tmp" 2>/dev/null || true
+  "${interp[@]}" "$tmp" "$@" || rc=$?
+  rm -f "$tmp"
+  return "$rc"
+}
+
+# hts_print_summary — table of results; returns 1 if any row failed
+hts_print_summary() {
+  local i n=${#HTS_RES_STATUS[@]} nok=0 nfail=0 nskip=0 mark
+  echo ""
+  echo -e "${BOLD}${CYAN}━━━ Summary ━━━${RESET}"
+  for ((i = 0; i < n; i++)); do
+    case "${HTS_RES_STATUS[$i]}" in
+      ok)   mark="${GREEN}OK  ${RESET}"; nok=$((nok + 1)) ;;
+      fail) mark="${RED}FAIL${RESET}"; nfail=$((nfail + 1)) ;;
+      *)    mark="${YELLOW}SKIP${RESET}"; nskip=$((nskip + 1)) ;;
+    esac
+    printf '  %b  %-44s %s\n' "$mark" "${HTS_RES_LABEL[$i]}" "${HTS_RES_NOTE[$i]}"
+  done
+  echo ""
+  echo -e "  ${GREEN}ok: $nok${RESET}   ${RED}failed: $nfail${RESET}   ${YELLOW}skipped: $nskip${RESET}"
+  [[ -d "$HTS_STATE_DIR" ]] && echo -e "  ${DIM}Log: $HTS_LOG${RESET}"
+  [[ $nfail -eq 0 ]]
+}
+
 # ─── Unattended & Non-Interactive Defaults ─────────────────────────────────────
 # Prevent apt, Homebrew, npx, and scripts from halting for [y/n] or Enter prompts
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
@@ -364,11 +565,31 @@ pipx_install() {
   fi
 }
 
+# hts_node_managed — succeeds (and prints the manager name) when nvm, fnm or Volta
+# is managing Node, in which case the npm global prefix must not be overridden.
+hts_node_managed() {
+  local node_path=""
+  node_path="$(command -v node 2>/dev/null || true)"
+  case "$node_path" in
+    */.nvm/*|*/nvm/*)       echo "nvm";   return 0 ;;
+    */fnm/*|*/.fnm/*|*/fnm_multishells/*) echo "fnm"; return 0 ;;
+    */.volta/*|*/volta/*)   echo "Volta"; return 0 ;;
+  esac
+  if [[ -n "${NVM_BIN:-}" ]]; then echo "nvm"; return 0; fi
+  if [[ -n "${FNM_MULTISHELL_PATH:-}" ]]; then echo "fnm"; return 0; fi
+  if [[ -n "${VOLTA_HOME:-}" && -d "${VOLTA_HOME}" && -n "$node_path" ]]; then echo "Volta"; return 0; fi
+  return 1
+}
+
 npm_global_install() {
-  local pkg=$1
-  mkdir -p "$HOME/.npm-global"
-  npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
-  export PATH="$HOME/.npm-global/bin:$PATH"
+  local pkg=$1 mgr=""
+  if mgr="$(hts_node_managed)"; then
+    warn "Node is managed by $mgr — not overriding the npm global prefix"
+  else
+    mkdir -p "$HOME/.npm-global"
+    npm config set prefix "$HOME/.npm-global" 2>/dev/null || true
+    export PATH="$HOME/.npm-global/bin:$PATH"
+  fi
   if npm list -g "$pkg" &>/dev/null 2>&1; then
     info "$pkg already installed via npm"
   else
@@ -401,13 +622,47 @@ go_install() {
 
 # ─── Begin: lib/preflight.sh ──────────────────────────────────────────
 # =============================================================================
-#  lib/preflight.sh — Preflight System Checks & Environment Initialization
+#  lib/preflight.sh — Base Preflight + On-Demand Prerequisites
+#
+#  preflight_base   always runs for a real install (OS, state, package manager,
+#                   ~/.local/bin, disk check, .zshrc backup)
+#  ensure_zsh / ensure_omz / ensure_pipx / ensure_go / ensure_ssh_dir
+#                   run only when a selected component needs them (see
+#                   prereqs_for_component in menu.sh). All are idempotent.
+#  preflight        legacy: base + every prerequisite (used for --all)
 # =============================================================================
 
-preflight() {
-  step "Preflight checks"
+HTS_XCODE_TIMEOUT="${HTS_XCODE_TIMEOUT:-1800}"   # seconds to wait for Xcode CLT
+HTS_MIN_DISK_MB="${HTS_MIN_DISK_MB:-5120}"       # warn below this much free space
 
-  # ── 1. Xcode Command Line Tools (macOS only) ────────────────────────────
+hts_export_paths() {
+  export ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+  export GOPATH="$HOME/go"
+  export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
+}
+
+hts_check_disk_space() {
+  local avail_kb avail_mb
+  avail_kb="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {print $4}')"
+  if [[ -z "$avail_kb" || ! "$avail_kb" =~ ^[0-9]+$ ]]; then
+    warn "Could not determine free disk space — skipping check"
+    return 0
+  fi
+  avail_mb=$((avail_kb / 1024))
+  if [[ "$avail_mb" -lt "$HTS_MIN_DISK_MB" ]]; then
+    warn "Only ${avail_mb} MB free on the volume holding \$HOME (a full install wants about ${HTS_MIN_DISK_MB} MB) — continuing anyway"
+  else
+    ok "Disk space: ${avail_mb} MB free"
+  fi
+  return 0
+}
+
+# Minimal base step. Returns non-zero only when the system cannot install anything.
+preflight_base() {
+  step "Preflight checks (base)"
+  hts_state_init || { err "Cannot create state directory $HTS_STATE_DIR"; return 1; }
+
+  # ── Xcode Command Line Tools (macOS) ────────────────────────────────────
   if [[ "$OS" == "Darwin" ]]; then
     if xcode-select -p &>/dev/null; then
       ok "Xcode CLT already installed: $(xcode-select -p)"
@@ -416,91 +671,150 @@ preflight() {
       echo "  A dialog may appear — click 'Install' to continue."
       xcode-select --install 2>/dev/null || true
       echo -n "  Waiting for Xcode CLT"
+      local waited=0
       until xcode-select -p &>/dev/null; do
+        if [[ "$waited" -ge "$HTS_XCODE_TIMEOUT" ]]; then
+          echo ""
+          err "Timed out after ${HTS_XCODE_TIMEOUT}s waiting for Xcode Command Line Tools."
+          err "Finish the install dialog (or run: xcode-select --install) and re-run this script."
+          return 1
+        fi
         echo -n "."
         sleep 5
+        waited=$((waited + 5))
       done
       echo ""
       ok "Xcode CLT installed"
     fi
-  fi
 
-  # ── 2. Homebrew (macOS only) ────────────────────────────────────────────
-  if [[ "$OS" == "Darwin" ]]; then
+    # ── Homebrew ──────────────────────────────────────────────────────────
+    [[ -x /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+    [[ -x /usr/local/bin/brew && -z "$(command -v brew)" ]] && eval "$(/usr/local/bin/brew shellenv)"
     if command -v brew &>/dev/null; then
       ok "Homebrew found: $(brew --prefix)"
     else
       warn "Homebrew not found — installing..."
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
-        err "Homebrew install failed"; exit 1
-      }
-      [[ -f /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+      if ! hts_run_remote_script "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh" /bin/bash; then
+        err "Homebrew install failed"
+        return 1
+      fi
+      [[ -x /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+      [[ -x /usr/local/bin/brew ]] && eval "$(/usr/local/bin/brew shellenv)"
+      command -v brew &>/dev/null || { err "Homebrew installed but 'brew' not found in PATH"; return 1; }
       ok "Homebrew installed"
     fi
+  else
+    ok "Package manager: $PKG_MGR"
   fi
 
-  # ── 3. zsh — install and set as default shell ───────────────────────────
+  mkdir -p "$HOME/.local/bin"
+  hts_export_paths
+  hts_check_disk_space
+
+  # Back up the user's own ~/.zshrc before anything (e.g. Oh My Zsh) touches it
+  backup_file "$HOME/.zshrc"
+  return 0
+}
+
+# ── Prerequisites (on demand) ────────────────────────────────────────────────
+
+ensure_zsh() {
+  [[ "${_HTS_DID_ZSH:-0}" == "1" ]] && return 0
   if ! command -v zsh &>/dev/null; then
     warn "zsh not found — installing..."
     case "$PKG_MGR" in
+      brew)   brew install zsh ;;
       apt)    sudo apt-get install -y zsh ;;
       dnf)    sudo dnf install -y zsh ;;
       yum)    sudo yum install -y zsh ;;
       pacman) sudo pacman -S --noconfirm zsh ;;
       zypper) sudo zypper install -y zsh ;;
     esac
+    command -v zsh &>/dev/null || { err "zsh install failed"; return 1; }
     ok "zsh installed: $(zsh --version)"
   else
     ok "zsh found: $(zsh --version)"
   fi
 
-  # Set zsh as default shell if it isn't already
   local zsh_path
   zsh_path=$(command -v zsh)
-  if [[ "$SHELL" != "$zsh_path" ]]; then
-    warn "Default shell is $SHELL — changing to zsh..."
+  if [[ "${SHELL:-}" != "$zsh_path" ]]; then
+    warn "Default shell is ${SHELL:-unknown} — changing to zsh..."
     grep -qF "$zsh_path" /etc/shells || echo "$zsh_path" | sudo tee -a /etc/shells
     chsh -s "$zsh_path" || warn "chsh failed — run manually: chsh -s $zsh_path"
     ok "Default shell set to $zsh_path — takes effect on next login"
   else
     ok "Default shell is already zsh"
   fi
+  _HTS_DID_ZSH=1
+  return 0
+}
 
-  # ── 4. Oh My Zsh ────────────────────────────────────────────────────────
+ensure_omz() {
+  [[ "${_HTS_DID_OMZ:-0}" == "1" ]] && return 0
+  ensure_zsh || return 1
   if [[ -d "$HOME/.oh-my-zsh" ]]; then
     ok "Oh My Zsh already installed"
   else
     warn "Oh My Zsh not found — installing..."
-    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" || {
-      err "Oh My Zsh install failed"; exit 1
-    }
+    # Preserve the user's own .zshrc before the OMZ installer swaps in its template
+    backup_file "$HOME/.zshrc"
+    if ! hts_run_remote_script "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh" "env RUNZSH=no CHSH=no sh"; then
+      err "Oh My Zsh install failed"
+      return 1
+    fi
     ok "Oh My Zsh installed"
   fi
+  export ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+  _HTS_DID_OMZ=1
+  return 0
+}
 
-  # ── 5. Backup existing .zshrc ───────────────────────────────────────────
-  if [[ -f "$HOME/.zshrc" ]]; then
-    cp "$HOME/.zshrc" "$HOME/.zshrc.bak.$(date +%Y%m%d_%H%M%S)"
-    ok "~/.zshrc backed up"
-  fi
-
-  # ── 6. Ensure ~/.ssh exists ─────────────────────────────────────────────
-  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
-  ok "~/.ssh ready"
-
-  # ── 7. Prerequisites: Python3, pipx, and Go ─────────────────────────────
+ensure_pipx() {
+  [[ "${_HTS_DID_PIPX:-0}" == "1" ]] && return 0
   if ! command -v pipx &>/dev/null; then
     log "Checking pipx..."
     pkg_install pipx python3-venv python3-pip
     pipx ensurepath 2>/dev/null || true
   fi
+  export PATH="$HOME/.local/bin:$PATH"
+  if command -v pipx &>/dev/null; then
+    ok "pipx ready"
+    _HTS_DID_PIPX=1
+    return 0
+  fi
+  err "pipx not available after install attempt"
+  return 1
+}
 
+ensure_go() {
+  [[ "${_HTS_DID_GO:-0}" == "1" ]] && return 0
   if ! command -v go &>/dev/null; then
     install_golang
   fi
-
-  export ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
   export GOPATH="$HOME/go"
-  export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
+  export PATH="$HOME/go/bin:$PATH"
+  if command -v go &>/dev/null; then
+    _HTS_DID_GO=1
+    return 0
+  fi
+  err "Go not available after install attempt"
+  return 1
+}
+
+ensure_ssh_dir() {
+  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+  ok "~/.ssh ready"
+}
+
+# Legacy full preflight: base plus every prerequisite.
+preflight() {
+  preflight_base || return 1
+  ensure_omz
+  ensure_ssh_dir
+  ensure_pipx
+  ensure_go
+  hts_export_paths
 }
 
 # ─── End: lib/preflight.sh ────────────────────────────────────────────
@@ -3275,102 +3589,399 @@ show_menu() {
   fi
 }
 
-run_selections() {
-  local input="$*"
-  if [[ -z "$input" ]]; then
-    input="A"
-  fi
 
-  local upper
-  upper=$(echo "$input" | tr '[:lower:]' '[:upper:]')
+# ─── Component table ──────────────────────────────────────────────────────────
+# Install order for --all (dev and seclists are covered by other components).
+HTS_ALL_IDS="core fonts node claude code terminals shell-tools mcp pentest bugbounty ad-pivot web-api cloud mobile ai workflow dashboard config doctor"
+# Full list for --list (includes the components that have no menu number).
+HTS_LIST_IDS="core fonts node claude code dev terminals shell-tools mcp pentest seclists bugbounty ad-pivot web-api cloud mobile ai workflow dashboard config doctor"
 
-  for token in $upper; do
-    if [[ "$token" == "Q" || "$token" == "QUIT" || "$token" == "EXIT" ]]; then
-      echo "Exiting."; exit 0
-    fi
-  done
+# Install function for the combined Cloud & DevSecOps component.
+hts_install_cloud_suite() {
+  local rc=0
+  install_cloud || rc=1
+  install_cloud_devsec || rc=1
+  return "$rc"
+}
 
-  for token in $upper; do
-    if [[ "$token" == "D" || "$token" == "DOC" || "$token" == "DOCTOR" || "$token" == "--DOCTOR" ]]; then
-      sec_doctor
-      exit 0
-    fi
-  done
+# Map one (lower-case) token to a component id. Prints the id; fails if unknown.
+hts_resolve_token() {
+  case "$1" in
+    1|--core|core)                          echo core ;;
+    2|--fonts)                              echo fonts ;;
+    3|--node)                               echo node ;;
+    4|--claude)                             echo claude ;;
+    5|--code)                               echo code ;;
+    dev|--dev)                              echo dev ;;
+    6|--terminals|--gpu)                    echo terminals ;;
+    7|--shell-tools|--history)              echo shell-tools ;;
+    8|--mcp)                                echo mcp ;;
+    9|--pentest)                            echo pentest ;;
+    --seclists|--wordlists)                 echo seclists ;;
+    10|--bugbounty)                         echo bugbounty ;;
+    11|--ad-pivot|--ad|--pivoting)          echo ad-pivot ;;
+    12|--web-api|--api-sec|--api)           echo web-api ;;
+    13|--cloud|--devsecops|--cloud-sec)     echo cloud ;;
+    14|--mobile|--reverse|--re)             echo mobile ;;
+    15|--ai)                                echo ai ;;
+    16|--workflow)                          echo workflow ;;
+    17|--dashboard|--fastfetch)             echo dashboard ;;
+    18|--config|--configs)                  echo config ;;
+    19|d|doc|doctor|--doctor|-d)            echo doctor ;;
+    *) return 1 ;;
+  esac
+}
 
-  # Check if user asked for ALL or entered 'y' / 'yes' / '-y' / '--yes'
-  local has_all=0
-  local has_yes=0
-  local has_other_components=0
+# Fill HTS_C_* for a component id:
+#   NUM FLAG NAME DESC CMD (function + args) INSTALLS WRITES
+hts_comp_info() {
+  HTS_C_NUM="-"; HTS_C_FLAG=""; HTS_C_NAME=""; HTS_C_DESC=""; HTS_C_CMD=""; HTS_C_INSTALLS=""; HTS_C_WRITES=""
+  case "$1" in
+    core)
+      HTS_C_NUM=1; HTS_C_FLAG="--core"; HTS_C_NAME="Core terminal"; HTS_C_CMD="install_core"
+      HTS_C_DESC="OMZ plugins, p10k, fzf, bat, eza, tmux"
+      HTS_C_INSTALLS="fzf bat eza zoxide git-delta tmux fd ripgrep tldr; Meslo Nerd Font; zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions; Powerlevel10k; lazygit via Go on Linux"
+      HTS_C_WRITES="~/.oh-my-zsh/custom/plugins/*, ~/.oh-my-zsh/custom/themes/powerlevel10k, font files" ;;
+    fonts)
+      HTS_C_NUM=2; HTS_C_FLAG="--fonts"; HTS_C_NAME="Hacker Fonts"; HTS_C_CMD="install_fonts all"
+      HTS_C_DESC="MesloLGS, JetBrains Mono, Fira Code, Hack..."
+      HTS_C_INSTALLS="Nerd Fonts: Meslo, JetBrains Mono, Fira Code, Hack and others"
+      HTS_C_WRITES="font files (macOS casks / ~/Library/Fonts, Linux ~/.local/share/fonts/NerdFonts)" ;;
+    node)
+      HTS_C_NUM=3; HTS_C_FLAG="--node"; HTS_C_NAME="Node.js & npm"; HTS_C_CMD="install_node"
+      HTS_C_DESC="Modern LTS Node.js + safe non-root npm prefix"
+      HTS_C_INSTALLS="Node.js (18+) and npm via the system package manager"
+      HTS_C_WRITES="npm global prefix ~/.npm-global (npm config), ~/.npm-global/bin" ;;
+    claude)
+      HTS_C_NUM=4; HTS_C_FLAG="--claude"; HTS_C_NAME="Claude Code CLI"; HTS_C_CMD="install_claude"
+      HTS_C_DESC="Anthropic Claude Code agentic coding CLI tool"
+      HTS_C_INSTALLS="@anthropic-ai/claude-code (npm, global); Node.js if missing"
+      HTS_C_WRITES="~/.npm-global (npm prefix and package files)" ;;
+    code)
+      HTS_C_NUM=5; HTS_C_FLAG="--code"; HTS_C_NAME="VS Code & CLI"; HTS_C_CMD="install_code"
+      HTS_C_DESC="Visual Studio Code editor & 'code' CLI"
+      HTS_C_INSTALLS="Visual Studio Code (cask or distro package)"
+      HTS_C_WRITES="~/.local/bin/code symlink" ;;
+    dev)
+      HTS_C_NUM="-"; HTS_C_FLAG="--dev"; HTS_C_NAME="Developer stack"; HTS_C_CMD="install_dev"
+      HTS_C_DESC="Node.js + Claude Code + VS Code"
+      HTS_C_INSTALLS="Node.js, @anthropic-ai/claude-code, Visual Studio Code"
+      HTS_C_WRITES="~/.npm-global, ~/.local/bin/code symlink" ;;
+    terminals)
+      HTS_C_NUM=6; HTS_C_FLAG="--terminals"; HTS_C_NAME="GPU Terminals"; HTS_C_CMD="install_terminals"
+      HTS_C_DESC="Ghostty, WezTerm, Kitty + aesthetic configs"
+      HTS_C_INSTALLS="Ghostty (macOS) or Kitty/WezTerm/Ghostty depending on distro"
+      HTS_C_WRITES="~/.config/ghostty/config and themes/catppuccin-mocha, ~/.config/wezterm/wezterm.lua, ~/.config/kitty/kitty.conf, ~/.config/alacritty/alacritty.toml" ;;
+    shell-tools)
+      HTS_C_NUM=7; HTS_C_FLAG="--shell-tools"; HTS_C_NAME="Shell History"; HTS_C_CMD="install_shell_tools"
+      HTS_C_DESC="Atuin SQLite history, direnv, uv, btop, yazi, Starship"
+      HTS_C_INSTALLS="atuin, direnv, uv, btop, yazi, git-delta, eza, zoxide, ripgrep, fzf, bat, fd, starship"
+      HTS_C_WRITES="~/.config/atuin/config.toml, ~/.config/direnv/direnv.toml, ~/.config/starship.toml" ;;
+    mcp)
+      HTS_C_NUM=8; HTS_C_FLAG="--mcp"; HTS_C_NAME="MCP Server Suite"; HTS_C_CMD="setup_mcp_suite"
+      HTS_C_DESC="Preconfigured Claude Code & Desktop MCP suite"
+      HTS_C_INSTALLS="Node.js if missing; @modelcontextprotocol/inspector (npm); semgrep and detect-secrets (pipx)"
+      HTS_C_WRITES="~/workspace and ~/pentest directories, Claude Desktop claude_desktop_config.json (macOS: ~/Library/Application Support/Claude, Linux: ~/.config/Claude), ~/pentest/.mcp.json, ~/.local/bin/sec-mcp" ;;
+    pentest)
+      HTS_C_NUM=9; HTS_C_FLAG="--pentest"; HTS_C_NAME="Pentest tools"; HTS_C_CMD="install_pentest"
+      HTS_C_DESC="nmap, sqlmap, hydra, john, gobuster, SecLists"
+      HTS_C_INSTALLS="nmap netcat wget curl httpie gobuster hydra sqlmap masscan tcpdump openssl gpg python3 pipx john hashcat (wireshark-cli on Linux); impacket, pwntools, scapy, netexec (pipx); SecLists"
+      HTS_C_WRITES="~/pentest/wordlists/seclists" ;;
+    seclists)
+      HTS_C_NUM="-"; HTS_C_FLAG="--seclists"; HTS_C_NAME="SecLists"; HTS_C_CMD="install_seclists"
+      HTS_C_DESC="Download SecLists wordlists from GitHub"
+      HTS_C_INSTALLS="SecLists wordlist collection (git clone)"
+      HTS_C_WRITES="~/pentest/wordlists/seclists" ;;
+    bugbounty)
+      HTS_C_NUM=10; HTS_C_FLAG="--bugbounty"; HTS_C_NAME="Bug bounty"; HTS_C_CMD="install_bugbounty"
+      HTS_C_DESC="subfinder, httpx, nuclei, amass, ffuf, katana"
+      HTS_C_INSTALLS="subfinder httpx nuclei katana dnsx interactsh-client gau hakrawler waybackurls amass dalfox (go install); Burp Suite and Caido (macOS casks); arjun (pipx)"
+      HTS_C_WRITES="~/go/bin, nuclei templates" ;;
+    ad-pivot)
+      HTS_C_NUM=11; HTS_C_FLAG="--ad-pivot"; HTS_C_NAME="Active Directory"; HTS_C_CMD="install_ad_pivoting"
+      HTS_C_DESC="Ligolo-ng, Chisel, NetExec, BloodHound, Certipy"
+      HTS_C_INSTALLS="Ligolo-ng, Chisel (go install), NetExec, BloodHound, Certipy (uv or pipx)"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin" ;;
+    web-api)
+      HTS_C_NUM=12; HTS_C_FLAG="--web-api"; HTS_C_NAME="Web & API Sec"; HTS_C_CMD="install_web_api"
+      HTS_C_DESC="Schemathesis, Kiterunner, Caido, Arjun, FFUF"
+      HTS_C_INSTALLS="Schemathesis, Arjun (uv or pipx); Kiterunner (go install); Caido; ffuf, feroxbuster"
+      HTS_C_WRITES="~/go/bin, ~/.local/bin" ;;
+    cloud)
+      HTS_C_NUM=13; HTS_C_FLAG="--cloud"; HTS_C_NAME="Cloud & DevSecOps"; HTS_C_CMD="hts_install_cloud_suite"
+      HTS_C_DESC="AWS/Azure/gcloud CLIs, Trivy, Syft, Grype, Checkov, Kube-hunter, prowler"
+      HTS_C_INSTALLS="awscli, azure-cli, google-cloud-sdk; cloudfox, gitleaks, trufflehog (go install); prowler, pacu, s3scanner, checkov, kube-hunter (pipx/uv); Trivy, Syft, Grype"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin" ;;
+    mobile)
+      HTS_C_NUM=14; HTS_C_FLAG="--mobile"; HTS_C_NAME="Mobile & Reverse"; HTS_C_CMD="install_mobile_re"
+      HTS_C_DESC="Jadx, Apktool (DEX/APK decompilation & analysis)"
+      HTS_C_INSTALLS="jadx, apktool"
+      HTS_C_WRITES="~/.local/share/jadx and ~/.local/bin links (Linux fallback only)" ;;
+    ai)
+      HTS_C_NUM=15; HTS_C_FLAG="--ai"; HTS_C_NAME="AI / LLM sec"; HTS_C_CMD="install_ai_llm"
+      HTS_C_DESC="garak, promptfoo, jwt_tool, ollama..."
+      HTS_C_INSTALLS="garak, llm, jwt_tool (pipx); promptfoo (npm); Node.js if missing; Ollama"
+      HTS_C_WRITES="~/.npm-global" ;;
+    workflow)
+      HTS_C_NUM=16; HTS_C_FLAG="--workflow"; HTS_C_NAME="Workflow tools"; HTS_C_CMD="install_workflow"
+      HTS_C_DESC="lazygit, jq, yq, gh, pandoc, obsidian..."
+      HTS_C_INSTALLS="jq gh pandoc yq lazygit xh yazi, Obsidian (macOS cask)"
+      HTS_C_WRITES="git global config (delta pager settings in ~/.gitconfig), ~/.local/bin" ;;
+    dashboard)
+      HTS_C_NUM=17; HTS_C_FLAG="--dashboard"; HTS_C_NAME="Tactical Cockpit"; HTS_C_CMD="install_dashboard"
+      HTS_C_DESC="Fastfetch + Modern Welcome Terminal Cockpit"
+      HTS_C_INSTALLS="fastfetch"
+      HTS_C_WRITES="~/.config/fastfetch/config.jsonc, ~/.oh-my-zsh/custom/welcome.zsh" ;;
+    config)
+      HTS_C_NUM=18; HTS_C_FLAG="--config"; HTS_C_NAME="Config files"; HTS_C_CMD="write_configs"
+      HTS_C_DESC=".zshrc, pentest.zsh, welcome.zsh, .tmux.conf"
+      HTS_C_INSTALLS="(nothing; writes configuration only)"
+      HTS_C_WRITES="~/.zshrc (existing file is backed up first), ~/.oh-my-zsh/custom/pentest.zsh, advanced_pentest.zsh, welcome.zsh, ~/.tmux.conf" ;;
+    doctor)
+      HTS_C_NUM=19; HTS_C_FLAG="--doctor"; HTS_C_NAME="System Doctor"; HTS_C_CMD="sec_doctor"
+      HTS_C_DESC="Audit and verify all installed tools"
+      HTS_C_INSTALLS="(nothing; read-only audit)"
+      HTS_C_WRITES="(nothing)" ;;
+    *) return 1 ;;
+  esac
+}
 
-  for token in $upper; do
-    if [[ "$token" == "A" || "$token" == "ALL" || "$token" == "--ALL" || "$token" == "-A" ]]; then
-      has_all=1
-    elif [[ "$token" == "Y" || "$token" == "YES" || "$token" == "-Y" || "$token" == "--YES" ]]; then
-      has_yes=1
-    else
-      has_other_components=1
-    fi
-  done
+# Prerequisites (ensure_* functions) a component needs, space separated, from:
+# omz ssh pipx go. Derived by reading each install_* function.
+hts_prereqs_for() {
+  local os="${OS:-$(uname -s)}"
+  case "$1" in
+    core)      if [[ "$os" == "Linux" ]]; then echo "omz go"; else echo "omz"; fi ;;
+    workflow)  if [[ "$os" == "Linux" ]]; then echo "go"; fi ;;
+    mcp|pentest|ai)  echo "pipx" ;;
+    bugbounty|ad-pivot|web-api|cloud) echo "pipx go" ;;
+    dashboard) echo "omz" ;;
+    config)    echo "omz ssh" ;;
+    *)         : ;;   # fonts node claude code dev terminals shell-tools seclists mobile doctor
+  esac
+  return 0
+}
 
-  # If "all" was chosen, OR if "yes/-y" was given without specifying individual component numbers:
-  if [[ "$has_all" -eq 1 ]] || [[ "$has_yes" -eq 1 && "$has_other_components" -eq 0 ]]; then
-    preflight
-    install_core
-    install_fonts "all"
-    install_node
-    install_claude
-    install_code
-    install_terminals
-    install_shell_tools
-    setup_mcp_suite
-    install_pentest
-    install_bugbounty
-    install_ad_pivoting
-    install_web_api
-    install_cloud
-    install_cloud_devsec
-    install_mobile_re
-    install_ai_llm
-    install_workflow
-    install_dashboard
-    write_configs
-    sec_doctor
-    return
-  fi
-
-  preflight
-
-  # Process individual items
-  for item in $input; do
-    case "$item" in
-      -y|--yes|y|Y|yes|YES)              ;; # Unattended flag handled, ignore in loop
-      1|--core)                          install_core ;;
-      2|--fonts)                         install_fonts "all" ;;
-      3|--node)                          install_node ;;
-      4|--claude)                        install_claude ;;
-      5|--code)                          install_code ;;
-      dev|--dev)                         install_dev ;;
-      6|--terminals|--gpu)               install_terminals ;;
-      7|--shell-tools|--history)         install_shell_tools ;;
-      8|--mcp)                           setup_mcp_suite ;;
-      9|--pentest)                       install_pentest ;;
-      --seclists|--wordlists)            install_seclists ;;
-      10|--bugbounty)                    install_bugbounty ;;
-      11|--ad-pivot|--ad|--pivoting)     install_ad_pivoting ;;
-      12|--web-api|--api-sec|--api)      install_web_api ;;
-      13|--cloud|--devsecops|--cloud-sec)
-        install_cloud
-        install_cloud_devsec
-        ;;
-      14|--mobile|--reverse|--re)        install_mobile_re ;;
-      15|--ai)                           install_ai_llm ;;
-      16|--workflow)                     install_workflow ;;
-      17|--dashboard|--fastfetch)        install_dashboard ;;
-      18|--config|--configs)             write_configs ;;
-      19|d|D|--doctor)                   sec_doctor ;;
-      *) warn "Unknown option: '$item' — skipping" ;;
+# Parse tokens into: HTS_SEL (ids, ordered, unique), HTS_SEL_ALL, HTS_SEL_YES,
+# HTS_SEL_QUIT, HTS_BAD (unknown tokens). Sets HTS_DRY_RUN for --dry-run / -n.
+hts_parse_selection() {
+  HTS_SEL=""; HTS_SEL_ALL=0; HTS_SEL_YES=0; HTS_SEL_QUIT=0; HTS_BAD=""
+  local tok low id
+  for tok in "$@"; do
+    low="$(printf '%s' "$tok" | tr '[:upper:]' '[:lower:]')"
+    case "$low" in
+      "")                          continue ;;
+      -y|--yes|y|yes)              HTS_SEL_YES=1; continue ;;
+      a|all|-a|--all)              HTS_SEL_ALL=1; continue ;;
+      q|quit|exit)                 HTS_SEL_QUIT=1; continue ;;
+      -n|--dry-run|dry-run)        HTS_DRY_RUN=1; continue ;;
     esac
+    if id="$(hts_resolve_token "$low")"; then
+      case " $HTS_SEL " in
+        *" $id "*) ;;
+        *) HTS_SEL="${HTS_SEL:+$HTS_SEL }$id" ;;
+      esac
+    else
+      HTS_BAD="${HTS_BAD:+$HTS_BAD }$tok"
+    fi
   done
+}
+
+# Drop node/claude/code from a selection that already contains dev.
+hts_dedupe_dev() {
+  case " $1 " in
+    *" dev "*)
+      local out="" id
+      for id in $1; do
+        case "$id" in node|claude|code) continue ;; esac
+        out="${out:+$out }$id"
+      done
+      echo "$out" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# --list: component table, touches nothing
+hts_list_components() {
+  local id
+  echo ""
+  echo -e "${BOLD}${CYAN}Hackers Terminal Setup $HTS_VERSION — components${RESET}"
+  echo ""
+  printf '  %-3s  %-14s  %-20s  %s\n' "No." "Flag" "Name" "Contents"
+  printf '  %-3s  %-14s  %-20s  %s\n' "---" "--------------" "--------------------" "--------"
+  for id in $HTS_LIST_IDS; do
+    hts_comp_info "$id"
+    printf '  %-3s  %-14s  %-20s  %s\n' "$HTS_C_NUM" "$HTS_C_FLAG" "$HTS_C_NAME" "$HTS_C_DESC"
+  done
+  echo ""
+  echo "  --all installs every numbered component. Combine with --dry-run to preview."
+  echo ""
+}
+
+# --dry-run: describe, change nothing
+hts_dry_run_report() {
+  local id pre p
+  echo ""
+  echo -e "${BOLD}${CYAN}Hackers Terminal Setup $HTS_VERSION — DRY RUN${RESET}"
+  echo -e "${DIM}Nothing will be installed, written or changed.${RESET}"
+  echo ""
+  echo -e "  ${BOLD}Base preflight${RESET} (runs before any real install)"
+  echo "    checks Xcode CLT / Homebrew (macOS) or the package manager, free disk space;"
+  echo "    creates ~/.local/bin and the state dir (${HTS_STATE_DIR}); backs up ~/.zshrc"
+  for id in $1; do
+    hts_comp_info "$id" || continue
+    echo ""
+    echo -e "  ${BOLD}${GREEN}${HTS_C_NAME}${RESET} (${HTS_C_FLAG})"
+    pre="$(hts_prereqs_for "$id")"
+    if [[ -n "$pre" ]]; then
+      echo -n "    prerequisites:"
+      for p in $pre; do
+        case "$p" in
+          omz)  echo -n " zsh+Oh-My-Zsh" ;;
+          ssh)  echo -n " ~/.ssh" ;;
+          pipx) echo -n " pipx" ;;
+          go)   echo -n " Go" ;;
+        esac
+      done
+      echo ""
+    fi
+    echo "    would install: $HTS_C_INSTALLS"
+    echo "    would write:   $HTS_C_WRITES"
+  done
+  echo ""
+  echo -e "  ${BOLD}${YELLOW}Dry run complete — nothing was changed.${RESET}"
+  echo ""
+}
+
+# Run one prerequisite through run_step
+hts_run_prereq() {
+  case "$1" in
+    omz)  run_step "Prerequisite: zsh + Oh My Zsh" ensure_omz ;;
+    ssh)  run_step "Prerequisite: ~/.ssh" ensure_ssh_dir ;;
+    pipx) run_step "Prerequisite: pipx" ensure_pipx ;;
+    go)   run_step "Prerequisite: Go" ensure_go ;;
+  esac
+}
+
+# Run one component through run_step, record a manifest line on success
+hts_run_component() {
+  local id=$1 rc=0
+  local -a cmd
+  hts_comp_info "$id" || return 1
+  read -r -a cmd <<< "$HTS_C_CMD"
+  run_step "$HTS_C_NAME" "${cmd[@]}" || rc=$?
+  if [[ $rc -eq 0 && "$id" != "doctor" ]]; then
+    hts_manifest_add component "$HTS_C_FLAG" "$HTS_C_NAME"
+  fi
+  return "$rc"
+}
+
+# Final banner; reflects the result
+hts_print_banner() {
+  local rc=${1:-0}
+  echo ""
+  if [[ "$rc" -eq 0 ]]; then
+    echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${BOLD}${GREEN}  Setup Complete!${RESET}"
+    echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
+  else
+    echo -e "${BOLD}${YELLOW}════════════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${BOLD}${YELLOW}  Setup finished, but some steps failed — see the summary above${RESET}"
+    echo -e "${BOLD}${YELLOW}  Details: ${HTS_LOG}${RESET}"
+    echo -e "${BOLD}${YELLOW}════════════════════════════════════════════════════════════════════${RESET}"
+  fi
+  echo ""
+  echo -e "  ${CYAN}Next steps:${RESET}"
+  echo -e "  1. ${YELLOW}Set terminal font:${RESET}  'MesloLGS NF' (p10k) or 'JetBrainsMono Nerd Font'"
+  echo -e "  2. ${YELLOW}Reload shell:${RESET}       ${BOLD}exec zsh${RESET}"
+  echo -e "  3. ${YELLOW}Configure prompt:${RESET}   ${BOLD}p10k configure${RESET} (or Starship: ${BOLD}starship.toml${RESET})"
+  echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}cc${RESET})"
+  echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
+  echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
+  echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
+  echo -e "  8. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
+  echo ""
+}
+
+# Resolve + validate the whole selection first, then act.
+# Sets HTS_RUN_RC (exit status for the script) and HTS_SHOW_BANNER (0/1).
+run_selections() {
+  HTS_RUN_RC=0
+  HTS_SHOW_BANNER=0
+  local -a toks
+  read -r -a toks <<< "$*"
+  [[ ${#toks[@]} -gt 0 ]] || toks=(A)
+
+  hts_parse_selection "${toks[@]}"
+
+  if [[ "$HTS_SEL_QUIT" -eq 1 ]]; then
+    echo "Exiting."; exit 0
+  fi
+
+  if [[ -n "$HTS_BAD" ]]; then
+    local bad
+    for bad in $HTS_BAD; do
+      err "Unknown option: '$bad'"
+    done
+    err "Nothing was changed. Run with --help to see valid options, or --list for components."
+    exit 2
+  fi
+
+  # Resolve the selection to a list of component ids
+  local ids
+  if [[ "$HTS_SEL_ALL" -eq 1 || -z "$HTS_SEL" ]]; then
+    ids="$HTS_ALL_IDS"
+  else
+    ids="$(hts_dedupe_dev "$HTS_SEL")"
+    # The doctor audit always runs last, wherever it was given
+    case " $ids " in
+      *" doctor "*)
+        local _rest="" _i
+        for _i in $ids; do
+          [[ "$_i" == "doctor" ]] || _rest="${_rest:+$_rest }$_i"
+        done
+        ids="${_rest:+$_rest }doctor" ;;
+    esac
+  fi
+
+  # Dry run is a hard short-circuit: no preflight, no install function, no state dir.
+  if [[ "$HTS_DRY_RUN" -eq 1 ]]; then
+    hts_dry_run_report "$ids"
+    exit 0
+  fi
+
+  [[ -n "${OS:-}" ]] || detect_os
+
+  local id pre p prereqs="" doctor_only=1
+  for id in $ids; do
+    [[ "$id" == "doctor" ]] || doctor_only=0
+    for p in $(hts_prereqs_for "$id"); do
+      case " $prereqs " in *" $p "*) ;; *) prereqs="${prereqs:+$prereqs }$p" ;; esac
+    done
+  done
+
+  if [[ "$doctor_only" -eq 0 ]]; then
+    hts_state_init
+    if ! run_step "Preflight: base system" preflight_base; then
+      err "Base preflight failed — cannot continue."
+      hts_print_summary || true
+      HTS_RUN_RC=1
+      return 0
+    fi
+    # Canonical order, only what the selection needs
+    for p in omz ssh pipx go; do
+      case " $prereqs " in *" $p "*) hts_run_prereq "$p" || true ;; esac
+    done
+    hts_export_paths
+    HTS_SHOW_BANNER=1
+  fi
+
+  for id in $ids; do
+    hts_run_component "$id" || true
+  done
+
+  hts_print_summary || HTS_RUN_RC=1
+  return 0
 }
 
 # ─── End: lib/menu.sh ────────────────────────────────────────────
@@ -3382,14 +3993,9 @@ run_selections() {
 # bash has parsed the whole script before any installer starts. This matters for
 # `curl ... | bash`: a child process that reads stdin can no longer swallow the
 # rest of the script.
-_hts_main() {
-detect_os
-
-if [[ $# -gt 0 ]]; then
-  case "$1" in
-    -h|--help|help)
+hts_help() {
       echo ""
-      echo -e "${BOLD}${CYAN}Hackers Terminal Setup 2.0 — CLI Options${RESET}"
+      echo -e "${BOLD}${CYAN}Hackers Terminal Setup ${HTS_VERSION} — CLI Options${RESET}"
       echo ""
       echo "Usage: ./ter.sh [OPTIONS] [NUMBERS...]"
       echo "   or: curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash -s -- [OPTIONS]"
@@ -3418,8 +4024,16 @@ if [[ $# -gt 0 ]]; then
       echo "  --workflow       Install workflow tools"
       echo "  --dashboard      Install Fastfetch & Tactical Security Welcome Cockpit"
       echo "  --config         Write configuration files (.zshrc, pentest.zsh, etc.)"
-      echo "  -d, --doctor     Run system diagnostic audit"
+      echo "  -d, --doctor     Run system diagnostic audit (works in any position)"
+      echo "  -n, --dry-run    Show what would be installed or written, change nothing"
+      echo "      --list       List all components (number, flag, name, contents) and exit"
+      echo "  -V, --version    Print the version and exit"
       echo "  -h, --help       Show this help message"
+      echo ""
+      echo "Unknown options are an error: nothing runs until the whole selection is valid."
+      echo "Each component runs independently; a results summary and log"
+      echo "(~/.local/state/hts/install.log) are produced, and the exit code is non-zero"
+      echo "if any step failed. Replaced dotfiles are backed up under ~/.local/state/hts/backups."
       echo ""
       echo "Examples:"
       echo "  ./ter.sh -y                               # Completely unattended zero-prompt install"
@@ -3428,34 +4042,38 @@ if [[ $# -gt 0 ]]; then
       echo "  ./ter.sh -y --fonts --dev --mcp           # Install selected tools unattended"
       echo "  ./ter.sh --ad-pivot --web-api --devsecops # Install comprehensive assessment suite"
       echo "  ./ter.sh --doctor                         # Audit current environment & tools"
+      echo "  ./ter.sh --dry-run --all                  # Preview everything, change nothing"
+      echo "  ./ter.sh --list                           # Show the component table"
       echo ""
-      exit 0
-      ;;
-    *)
-      run_selections "$@"
-      ;;
-  esac
-else
-  show_menu
-  run_selections "$choices"
-fi
+}
 
-# ─── Post-install summary ─────────────────────────────────────────────────────
-echo ""
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${BOLD}${GREEN}  Setup Complete!${RESET}"
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════════════════${RESET}"
-echo ""
-echo -e "  ${CYAN}Next steps:${RESET}"
-echo -e "  1. ${YELLOW}Set terminal font:${RESET}  'MesloLGS NF' (p10k) or 'JetBrainsMono Nerd Font'"
-echo -e "  2. ${YELLOW}Reload shell:${RESET}       ${BOLD}exec zsh${RESET}"
-echo -e "  3. ${YELLOW}Configure prompt:${RESET}   ${BOLD}p10k configure${RESET} (or Starship: ${BOLD}starship.toml${RESET})"
-echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}cc${RESET})"
-echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
-echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
-echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
-echo -e "  8. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
-echo ""
+_hts_main() {
+  # Informational flags win over everything else and touch nothing.
+  local _a
+  for _a in "$@"; do
+    case "$_a" in
+      -h|--help|help)  hts_help; exit 0 ;;
+      -V|--version)    echo "Hackers Terminal Setup $HTS_VERSION"; exit 0 ;;
+      --list)          hts_list_components; exit 0 ;;
+    esac
+  done
+
+  HTS_RUN_RC=0
+  HTS_SHOW_BANNER=0
+  if [[ $# -gt 0 ]]; then
+    # Validates the whole selection, then (for a real run) detects the OS and acts.
+    run_selections "$@"
+  else
+    detect_os
+    show_menu
+    run_selections "$choices"
+  fi
+
+  # ─── Post-install summary ───────────────────────────────────────────────────
+  if [[ "$HTS_SHOW_BANNER" -eq 1 ]]; then
+    hts_print_banner "$HTS_RUN_RC"
+  fi
+  exit "$HTS_RUN_RC"
 }
 
 _hts_main "$@"
