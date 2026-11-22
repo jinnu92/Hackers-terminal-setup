@@ -295,7 +295,64 @@ detect_os() {
 # ─── Security tool suites (ad_pivoting, mobile_re, bugbounty, pentest, web_api) ──
 # (security-suite pins go below this line)
 
+# Direct downloads (digests verified by hts_download_verify)
+# ligolo-ng: digests from upstream ligolo-ng_0.9.2_checksums.txt
+LIGOLO_VERSION="0.9.2"
+LIGOLO_SHA256_DARWIN_AMD64="94f395296b824d2f9e6aa9791f6afab5ae59d0fda62f874f3a22e0cb572ba9d0"
+LIGOLO_SHA256_DARWIN_ARM64="00f2a60e6c9ddfaa5c921e86f270ce33a1447ae52d24b35a352143fb529d3e94"
+LIGOLO_SHA256_LINUX_AMD64="6c683c403502d366276595197749e620c975908dae7314c21079ec8ebee4e5d0"
+LIGOLO_SHA256_LINUX_ARM64="6430178776bb9efc451a62f6c468fa482c2aded84d10f64f637bfabd0fd8e7ac"
+# chisel: digests from upstream chisel_1.12.0_checksums.txt (single binary, gzip)
+CHISEL_VERSION="1.12.0"
+CHISEL_SHA256_DARWIN_AMD64="4aeae36c867f11c8e8c3f2b913a0e063ea3c6d29e1c14a52ed2e6eef8cfc4395"
+CHISEL_SHA256_DARWIN_ARM64="707a4b932eea214765146504a0df246cefc415b4297af65a80dd67cf69ba85a9"
+CHISEL_SHA256_LINUX_AMD64="f3f180f1d93aa72cce4e6386f98cc06569a0146fbd65eb4423cf83e6434bcfe6"
+CHISEL_SHA256_LINUX_ARM64="2ec6152cd2c74fe0146d4d79e4e7aa174521368c56e433d55e023a92ea404ec3"
+# kiterunner: digests from upstream kiterunner_1.0.2_checksums.txt; no darwin arm64 build upstream
+KITERUNNER_VERSION="1.0.2"
+KITERUNNER_SHA256_DARWIN_AMD64="1aa1844d1c1fcbe5f0ac87e47d30ff4833e430fd456a156d59dbff03f4e3f4dd"
+KITERUNNER_SHA256_LINUX_AMD64="6f0b70aabf747de592445a690281897eebbc45927e9264185d34ffb11637613b"
+KITERUNNER_SHA256_LINUX_ARM64="ec763297e1a9da49c06fc7853418e5839b03b2326204e7d2dde592f521eddd28"
+# jadx: platform-independent zip (needs a JRE); upstream publishes no checksum file, digest computed from the downloaded asset and matching GitHub's release digest
+JADX_VERSION="1.5.7"
+JADX_SHA256_ZIP="1755e4242ade71a077438723689f404079592ec7764a3a0572f98fef94ebcbf3"
+# Caido CLI: digests computed from the downloaded assets; they match the SHA-512 hashes published by api.caido.io/releases/latest
+CAIDO_VERSION="0.59.1"
+CAIDO_SHA256_DARWIN_AMD64="6dd94ff91b0b2beb83cbb67f94c277381b6f9155f1da90b76a0463990e22624c"
+CAIDO_SHA256_DARWIN_ARM64="6809601545a768cd43de203023e1cf253d1d18e6c6d68cd38394809e682e204c"
+CAIDO_SHA256_LINUX_AMD64="9d0a9a7b3c0e597fbcd0e4a7ee4eca24c831391abab7997144d5a8ab61ec3ffc"
+CAIDO_SHA256_LINUX_ARM64="b71f51940b275993b2d734ade63d24c94cd5f028c8f9e47cda556653541fee15"
+# feroxbuster (Linux fallback when no distro package): upstream publishes no checksum file; digests computed from downloaded assets (match GitHub release digests)
+FEROXBUSTER_VERSION="2.14.0"
+FEROXBUSTER_SHA256_LINUX_AMD64="3ab2cefdb03af090bcf11c4b82bd85a7e8a2b4439237ac06993568eade28ee96"
+FEROXBUSTER_SHA256_LINUX_ARM64="8b3c30a2baf249963331ac1f9417e44eeadc00774b127e2452786a4f32a9a7ea"
+# BloodHound CE CLI: upstream publishes only .md5 files; sha256 computed from downloaded assets (match GitHub release digests)
+BLOODHOUND_CLI_VERSION="0.2.1"
+BLOODHOUND_CLI_SHA256_DARWIN_AMD64="2c26e8736a24cbcff97e0e54e4fc6d999203c40b175ba33001f7f35310d5fb5c"
+BLOODHOUND_CLI_SHA256_DARWIN_ARM64="6b46ec1bef4b4e05d3c5b631d4afae7346d8a76abd069292aaab9831a9e82cd0"
+BLOODHOUND_CLI_SHA256_LINUX_AMD64="2f932d8174f3ed69adf38a8ae94fa58f56d92fadecae8e240f767bb88d449983"
+BLOODHOUND_CLI_SHA256_LINUX_ARM64="fd7197939c40fd8dc4b239d2696b610b8aa2f2fc5480bb834ff52e204458a18e"
 
+# Git clones pinned to release tags
+RESPONDER_TAG="v3.2.2.0"
+SECLISTS_TAG="2026.2"
+NIKTO_TAG="2.6.1"
+NETEXEC_TAG="v1.5.1"   # NetExec is not on PyPI; installed with pipx/uv from its git tag
+
+# Go tools (go install <path>@v${<TOOL>_VERSION}); versions without the leading v
+SUBFINDER_VERSION="2.17.0"
+HTTPX_VERSION="1.12.0"
+NUCLEI_VERSION="3.11.1"
+KATANA_VERSION="1.8.0"
+DNSX_VERSION="1.3.1"
+INTERACTSH_VERSION="1.4.1"
+GAU_VERSION="2.2.4"
+HAKRAWLER_VERSION="0.0.0-20260805040537-52a16fe61bd1"   # no release tags upstream; pseudo-version of HEAD
+WAYBACKURLS_VERSION="0.1.0"
+AMASS_VERSION="5.1.3"
+DALFOX_VERSION="2.13.0"                                 # last Go release (dalfox 3.x is a Rust rewrite)
+FFUF_VERSION="2.3.0"
+GOBUSTER_VERSION="3.8.2"
 
 # ─── end security tool suites ─────────────────────────────────────────────────
 
@@ -2041,111 +2098,332 @@ install_shell_tools() {
 # ─── Begin: lib/ad_pivoting.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/ad_pivoting.sh — Internal Network, Active Directory & Pivoting Tools
-#  Includes: Ligolo-ng, Chisel, NetExec (nxc), BloodHound, Responder, Certipy
+#  Includes: Ligolo-ng, Chisel, NetExec (nxc), BloodHound (python ingestors and
+#  the BloodHound CE CLI), Responder, Certipy
+#
+#  This file also holds the _sec_* helpers shared by the other security suites
+#  (web_api, mobile_re, pentest, bugbounty). They are only called at run time,
+#  so module load order does not matter.
 # =============================================================================
+
+# ─── Shared helpers for the security suites ──────────────────────────────────
+
+_sec_have() { command -v "$1" &>/dev/null; }
+
+# Sets _SEC_OS / _SEC_ARCH (DARWIN|LINUX, AMD64|ARM64, used for the pinned digest
+# variable names) and _SEC_OS_LC / _SEC_ARCH_LC (lower case, used in asset names).
+_sec_platform() {
+  case "$OS" in
+    Darwin) _SEC_OS=DARWIN; _SEC_OS_LC=darwin ;;
+    Linux)  _SEC_OS=LINUX;  _SEC_OS_LC=linux ;;
+    *) return 1 ;;
+  esac
+  case "$ARCH" in
+    x86_64|amd64)  _SEC_ARCH=AMD64; _SEC_ARCH_LC=amd64 ;;
+    arm64|aarch64) _SEC_ARCH=ARM64; _SEC_ARCH_LC=arm64 ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
+# _sec_pin <TOOL> — print the pinned SHA-256 of <TOOL> for the current platform
+_sec_pin() {
+  local var="${1}_SHA256_${_SEC_OS}_${_SEC_ARCH}"
+  printf '%s' "${!var:-}"
+}
+
+# Make sure ~/.local/bin exists and is on PATH for this run.
+_sec_bin_dir() {
+  mkdir -p "$HOME/.local/bin" 2>/dev/null || true
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+  esac
+}
+
+# _sec_download <label> <url> <sha256> <dest> — verified download; warns on failure
+_sec_download() {
+  local label=$1 url=$2 sha=$3 dest=$4
+  if [[ -z "$sha" ]]; then
+    warn "$label: no pinned SHA-256 for $OS/$ARCH — refusing an unverified download"
+    return 1
+  fi
+  if ! hts_download_verify "$url" "$sha" "$dest"; then
+    warn "$label: download or checksum verification failed ($url)"
+    return 1
+  fi
+  return 0
+}
+
+# _sec_install_bin <label> <TOOLKEY> <url> <tgz|zip|gz> <member> <dest-name>
+# Downloads a pinned release asset, verifies it, extracts <member> and installs
+# it as ~/.local/bin/<dest-name>. Returns non-zero (after a warning) on failure.
+_sec_install_bin() {
+  local label=$1 key=$2 url=$3 kind=$4 member=$5 name=$6 tmp dest rc=0
+  _sec_bin_dir
+  dest="$HOME/.local/bin/$name"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/hts-sec.XXXXXX")" || { warn "$label: could not create a temp directory"; return 1; }
+  if ! _sec_download "$label" "$url" "$(_sec_pin "$key")" "$tmp/asset"; then
+    rm -rf "$tmp"; return 1
+  fi
+  case "$kind" in
+    tgz) tar -xzf "$tmp/asset" -C "$tmp" || rc=1 ;;
+    zip) unzip -q -o "$tmp/asset" -d "$tmp" || rc=1 ;;
+    gz)  gzip -dc "$tmp/asset" > "$tmp/$member" || rc=1 ;;
+    *)   rc=1 ;;
+  esac
+  if [[ $rc -ne 0 || ! -f "$tmp/$member" ]]; then
+    warn "$label: could not unpack the downloaded archive"
+    rm -rf "$tmp"; return 1
+  fi
+  backup_file "$dest"
+  if ! cp "$tmp/$member" "$dest" || ! chmod 0755 "$dest"; then
+    warn "$label: could not write $dest"
+    rm -rf "$tmp"; return 1
+  fi
+  rm -rf "$tmp"
+  hts_track_file "$dest"
+  hts_manifest_add tool "$name" "release-download"
+  return 0
+}
+
+# _sec_write_wrapper <name> — write stdin to ~/.local/bin/<name> as an executable
+_sec_write_wrapper() {
+  local name=$1 dest
+  _sec_bin_dir
+  dest="$HOME/.local/bin/$name"
+  backup_file "$dest"
+  if cat > "$dest" && chmod 0755 "$dest"; then
+    hts_track_file "$dest"
+    hts_manifest_add tool "$name" "wrapper"
+    return 0
+  fi
+  warn "Could not write $dest"
+  return 1
+}
+
+# _sec_git_clone_tag <label> <repo-url> <tag> <dest-dir> [full]
+# Shallow clone pinned to a release tag. Warns and returns 1 on any failure.
+_sec_git_clone_tag() {
+  local label=$1 url=$2 tag=$3 dest=$4
+  if [[ -d "$dest/.git" ]]; then
+    info "$label already cloned at $dest"
+    return 0
+  fi
+  if [[ -d "$dest" && -n "$(ls -A "$dest" 2>/dev/null)" ]]; then
+    warn "$label: $dest exists and is not a git clone — leaving it alone"
+    return 1
+  fi
+  if ! _sec_have git; then
+    warn "$label: git is not installed — cannot clone $url"
+    return 1
+  fi
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || true
+  log "Cloning $label ($tag) to $dest..."
+  if git clone --depth=1 --branch "$tag" "$url" "$dest"; then
+    hts_track_file "$dest"
+    hts_manifest_add tool "$label" "git-clone $tag"
+    return 0
+  fi
+  warn "$label: git clone of $url ($tag) failed"
+  return 1
+}
+
+# _sec_py_tool <pypi-package-or-pip-spec> <binary> [alt-binary]
+# uv tool install, falling back to pipx. Unpinned (latest from PyPI).
+_sec_py_tool() {
+  local pkg=$1 bin=$2 alt=${3:-}
+  if _sec_have "$bin" || { [[ -n "$alt" ]] && _sec_have "$alt"; }; then
+    ok "$bin already installed"
+    return 0
+  fi
+  _sec_bin_dir
+  case "$pkg" in
+    git+*) _sec_have git || { warn "$bin: git is required to install $pkg"; return 1; } ;;
+  esac
+  log "Installing $pkg..."
+  if _sec_have uv && uv tool install "$pkg"; then
+    hts_manifest_add tool "$pkg" "uv tool"
+  elif _sec_have pipx; then
+    pipx_install "$pkg"
+  else
+    warn "$pkg: neither uv nor pipx is available"
+    return 1
+  fi
+  hash -r 2>/dev/null || true
+  if ! _sec_have "$bin"; then
+    warn "$bin not found after installing $pkg"
+    return 1
+  fi
+  return 0
+}
+
+# _sec_pkg_or_go <package> <binary> <go-import-path@version>
+# Distro/brew package when one is mapped, otherwise (or if it did not land) go install.
+_sec_pkg_or_go() {
+  local pkg=$1 bin=$2 gopkg=$3
+  if _sec_have "$bin"; then ok "$bin already installed"; return 0; fi
+  if [[ -n "$(resolve_pkg "$pkg")" ]]; then
+    pkg_install "$pkg"
+    hash -r 2>/dev/null || true
+  fi
+  if ! _sec_have "$bin"; then
+    info "$bin: no usable $PKG_MGR package — falling back to go install"
+    go_install "$gopkg" "$bin"
+    hash -r 2>/dev/null || true
+  fi
+  if ! _sec_have "$bin"; then
+    warn "$bin could not be installed"
+    return 1
+  fi
+  return 0
+}
+
+# _sec_go_tool <go-import-path@version> <binary> — pinned go install, verified afterwards
+_sec_go_tool() {
+  local gopkg=$1 bin=$2
+  if _sec_have "$bin"; then ok "$bin already installed"; return 0; fi
+  go_install "$gopkg" "$bin"
+  hash -r 2>/dev/null || true
+  if ! _sec_have "$bin"; then
+    warn "$bin could not be installed ($gopkg)"
+    return 1
+  fi
+  return 0
+}
+
+# _sec_verify <label> <binary> [alt-binary...] — record a real result for the summary
+_sec_verify() {
+  local label=$1 first=$2 b
+  shift
+  for b in "$@"; do
+    if _sec_have "$b"; then
+      hts_verify_cmd "$label" "$b"
+      return $?
+    fi
+  done
+  hts_verify_cmd "$label" "$first"
+}
+
+# ─── Individual tools ────────────────────────────────────────────────────────
+
+_sec_install_ligolo() {
+  if _sec_have ligolo-proxy || _sec_have ligolo; then
+    ok "Ligolo-ng already installed"
+    return 0
+  fi
+  if ! _sec_platform; then warn "Ligolo-ng: unsupported platform $OS/$ARCH"; return 1; fi
+  log "Installing Ligolo-ng proxy v${LIGOLO_VERSION}..."
+  local url="https://github.com/nicocha30/ligolo-ng/releases/download/v${LIGOLO_VERSION}/ligolo-ng_proxy_${LIGOLO_VERSION}_${_SEC_OS_LC}_${_SEC_ARCH_LC}.tar.gz"
+  _sec_install_bin "Ligolo-ng" LIGOLO "$url" tgz proxy ligolo-proxy || return 1
+  ln -sf "$HOME/.local/bin/ligolo-proxy" "$HOME/.local/bin/ligolo" 2>/dev/null && hts_track_file "$HOME/.local/bin/ligolo"
+  ok "Ligolo-ng installed to ~/.local/bin/ligolo-proxy (alias: ligolo)"
+  return 0
+}
+
+_sec_install_chisel() {
+  if _sec_have chisel; then
+    ok "Chisel already installed: $(chisel --version 2>/dev/null || echo 'ready')"
+    return 0
+  fi
+  log "Installing Chisel v${CHISEL_VERSION}..."
+  if _sec_platform; then
+    local url="https://github.com/jpillora/chisel/releases/download/v${CHISEL_VERSION}/chisel_${CHISEL_VERSION}_${_SEC_OS_LC}_${_SEC_ARCH_LC}.gz"
+    if _sec_install_bin "Chisel" CHISEL "$url" gz chisel chisel; then
+      ok "Chisel installed to ~/.local/bin/chisel"
+      return 0
+    fi
+  else
+    warn "Chisel: no prebuilt binary for $OS/$ARCH"
+  fi
+  # The Homebrew 'chisel' formula is an unrelated lldb helper, so only go install is used as a fallback.
+  info "Chisel: falling back to go install"
+  go_install "github.com/jpillora/chisel@v${CHISEL_VERSION}" chisel
+  hash -r 2>/dev/null || true
+  if ! _sec_have chisel; then warn "Chisel could not be installed"; return 1; fi
+  return 0
+}
+
+_sec_install_responder() {
+  local dir="$HOME/.local/share/Responder" rc=0
+  if _sec_have responder; then
+    ok "Responder already installed"
+    return 0
+  fi
+  if [[ "$OS" == "Linux" && -n "$(resolve_pkg responder)" ]]; then
+    pkg_install responder
+    hash -r 2>/dev/null || true
+    _sec_have responder && return 0
+    info "Responder: no usable $PKG_MGR package — cloning lgandx/Responder instead"
+  fi
+  _sec_git_clone_tag "Responder" "https://github.com/lgandx/Responder.git" "$RESPONDER_TAG" "$dir" || return 1
+  if [[ ! -x "$dir/.venv/bin/python" ]]; then
+    if _sec_have python3 && python3 -m venv "$dir/.venv" \
+       && "$dir/.venv/bin/pip" install -q -r "$dir/requirements.txt"; then
+      :
+    else
+      warn "Responder: could not install its Python dependencies (aioquic, netifaces) into $dir/.venv"
+      rc=1
+    fi
+  fi
+  _sec_write_wrapper responder << 'RESP_RUNNER' || return 1
+d="$HOME/.local/share/Responder"
+py=python3
+[ -x "$d/.venv/bin/python" ] && py="$d/.venv/bin/python"
+exec sudo "$py" "$d/Responder.py" "$@"
+RESP_RUNNER
+  ok "Responder runner installed to ~/.local/bin/responder"
+  return $rc
+}
+
+# NetExec is not published on PyPI; upstream installs it from its git repository.
+_sec_install_netexec() {
+  _sec_py_tool "git+https://github.com/Pennyw0rth/NetExec@${NETEXEC_TAG}" nxc netexec
+}
+
+_sec_install_bloodhound_ce() {
+  if _sec_have bloodhound-cli; then
+    ok "BloodHound CE CLI already installed"
+    return 0
+  fi
+  if ! _sec_platform; then warn "bloodhound-cli: unsupported platform $OS/$ARCH"; return 1; fi
+  log "Installing BloodHound CE CLI v${BLOODHOUND_CLI_VERSION}..."
+  local url="https://github.com/SpecterOps/bloodhound-cli/releases/download/v${BLOODHOUND_CLI_VERSION}/bloodhound-cli-${_SEC_OS_LC}-${_SEC_ARCH_LC}.tar.gz"
+  _sec_install_bin "bloodhound-cli" BLOODHOUND_CLI "$url" tgz bloodhound-cli bloodhound-cli || return 1
+  info "BloodHound CE itself runs in Docker and is not started by this installer."
+  info "To start it (needs Docker + Docker Compose): bloodhound-cli install"
+  return 0
+}
 
 install_ad_pivoting() {
   step "Internal Network, Active Directory & Pivoting Suite"
+  local fail=0
+  _sec_bin_dir
 
-  # 1. Ligolo-ng (Modern Layer 3 TUN-interface pivoting)
-  if ! command -v ligolo-proxy &>/dev/null && ! command -v ligolo &>/dev/null; then
-    log "Installing Ligolo-ng proxy..."
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install ligolo-ng 2>/dev/null || {
-        local tmpdir
-        tmpdir=$(mktemp -d)
-        local arch="arm64"
-        [[ "$ARCH" != "arm64" ]] && arch="amd64"
-        curl -fsSL "https://github.com/nicocha30/ligolo-ng/releases/latest/download/ligolo-ng_proxy_0.6.2_darwin_${arch}.tar.gz" -o "$tmpdir/ligolo.tar.gz" 2>/dev/null || true
-        if [[ -f "$tmpdir/ligolo.tar.gz" ]]; then
-          tar -xzf "$tmpdir/ligolo.tar.gz" -C "$HOME/.local/bin" 2>/dev/null || true
-          chmod +x "$HOME/.local/bin/proxy" 2>/dev/null || true
-          ln -sf "$HOME/.local/bin/proxy" "$HOME/.local/bin/ligolo" 2>/dev/null || true
-          ok "Ligolo-ng installed to ~/.local/bin/ligolo"
-        fi
-        rm -rf "$tmpdir"
-      }
-    else
-      local tmpdir
-      tmpdir=$(mktemp -d)
-      local arch="amd64"
-      [[ "$ARCH" == "aarch64" ]] && arch="arm64"
-      curl -fsSL "https://github.com/nicocha30/ligolo-ng/releases/latest/download/ligolo-ng_proxy_0.6.2_linux_${arch}.tar.gz" -o "$tmpdir/ligolo.tar.gz" 2>/dev/null || true
-      if [[ -f "$tmpdir/ligolo.tar.gz" ]]; then
-        tar -xzf "$tmpdir/ligolo.tar.gz" -C "$HOME/.local/bin" 2>/dev/null || true
-        chmod +x "$HOME/.local/bin/proxy" 2>/dev/null || true
-        ln -sf "$HOME/.local/bin/proxy" "$HOME/.local/bin/ligolo" 2>/dev/null || true
-        ok "Ligolo-ng installed to ~/.local/bin/ligolo"
-      fi
-      rm -rf "$tmpdir"
-    fi
-  else
-    ok "Ligolo-ng already installed"
+  _sec_install_ligolo        || fail=1   # 1. Ligolo-ng (Layer 3 TUN pivoting)
+  _sec_install_chisel        || fail=1   # 2. Chisel (TCP/UDP tunnel over HTTP)
+  _sec_install_netexec       || fail=1   # 3. NetExec (CrackMapExec successor)
+  _sec_py_tool bloodhound bloodhound-python  || fail=1   # 4. BloodHound.py (legacy ingestor)
+  _sec_py_tool bloodhound-ce bloodhound-ce-python || fail=1   # BloodHound CE ingestor
+  _sec_install_bloodhound_ce || fail=1   # BloodHound CE CLI (launcher only)
+  _sec_py_tool certipy-ad certipy            || fail=1   # 5. Certipy (AD CS auditing)
+  _sec_install_responder     || fail=1   # 6. Responder (LLMNR/NBT-NS poisoner)
+
+  _sec_verify "Ligolo-ng"            ligolo-proxy ligolo             || fail=1
+  _sec_verify "Chisel"               chisel                           || fail=1
+  _sec_verify "NetExec"              nxc netexec                      || fail=1
+  _sec_verify "BloodHound.py"        bloodhound-python                || fail=1
+  _sec_verify "BloodHound CE ingestor" bloodhound-ce-python           || fail=1
+  _sec_verify "BloodHound CE CLI"    bloodhound-cli                   || fail=1
+  _sec_verify "Certipy"              certipy                          || fail=1
+  _sec_verify "Responder"            responder                        || fail=1
+
+  if [[ $fail -ne 0 ]]; then
+    warn "Active Directory & Pivoting suite finished with failures (see warnings above)"
+    return 1
   fi
-
-  # 2. Chisel (Fast TCP/UDP tunnel over HTTP/WebSockets)
-  if ! command -v chisel &>/dev/null; then
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install chisel
-    else
-      go_install "github.com/jpillora/chisel@latest" chisel
-    fi
-  else
-    ok "Chisel already installed: $(chisel --version 2>/dev/null || echo 'ready')"
-  fi
-
-  # 3. NetExec (nxc — modern CrackMapExec successor)
-  if ! command -v nxc &>/dev/null && ! command -v netexec &>/dev/null; then
-    log "Installing NetExec (nxc)..."
-    if command -v uv &>/dev/null; then
-      uv tool install netexec || pipx_install netexec
-    else
-      pipx_install netexec
-    fi
-  else
-    ok "NetExec already installed"
-  fi
-
-  # 4. BloodHound Python & RustHound-CE
-  if ! command -v bloodhound-python &>/dev/null; then
-    log "Installing BloodHound-python..."
-    if command -v uv &>/dev/null; then
-      uv tool install bloodhound || pipx_install bloodhound
-    else
-      pipx_install bloodhound
-    fi
-  else
-    ok "BloodHound-python already installed"
-  fi
-
-  # 5. Certipy (Active Directory Certificate Services AD CS auditing)
-  if ! command -v certipy &>/dev/null; then
-    log "Installing Certipy..."
-    if command -v uv &>/dev/null; then
-      uv tool install certipy-ad || pipx_install certipy-ad
-    else
-      pipx_install certipy-ad
-    fi
-  else
-    ok "Certipy already installed"
-  fi
-
-  # 6. Responder (LLMNR/NBT-NS Poisoner)
-  if [[ "$OS" == "Linux" ]]; then
-    pkg_install responder
-  else
-    if [[ ! -d "$HOME/.local/share/Responder" ]]; then
-      log "Cloning Responder to ~/.local/share/Responder..."
-      git clone --depth=1 https://github.com/lgandx/Responder.git "$HOME/.local/share/Responder" 2>/dev/null || true
-      cat > "$HOME/.local/bin/responder" << 'RESP_RUNNER'
-sudo python3 "$HOME/.local/share/Responder/Responder.py" "$@"
-RESP_RUNNER
-      chmod +x "$HOME/.local/bin/responder"
-      ok "Responder runner installed to ~/.local/bin/responder"
-    fi
-  fi
-
   ok "Active Directory & Pivoting suite complete"
+  return 0
 }
 
 # ─── End: lib/ad_pivoting.sh ────────────────────────────────────────────
@@ -2154,63 +2432,120 @@ RESP_RUNNER
 # =============================================================================
 #  lib/web_api.sh — Modern Web & API Security Assessment Suite
 #  Includes: Schemathesis, Kiterunner, Caido CLI, Arjun, FFUF, Feroxbuster
+#  (uses the _sec_* helpers defined in lib/ad_pivoting.sh)
 # =============================================================================
+
+# Kiterunner (Assetnote API route discovery): pinned release asset, go install fallback.
+_sec_install_kiterunner() {
+  if _sec_have kr; then
+    ok "Kiterunner already installed: $(kr version 2>/dev/null || echo 'ready')"
+    return 0
+  fi
+  log "Installing Kiterunner (kr) v${KITERUNNER_VERSION}..."
+  if _sec_platform && [[ -n "$(_sec_pin KITERUNNER)" ]]; then
+    local url="https://github.com/assetnote/kiterunner/releases/download/v${KITERUNNER_VERSION}/kiterunner_${KITERUNNER_VERSION}_${_SEC_OS_LC}_${_SEC_ARCH_LC}.tar.gz"
+    if _sec_install_bin "Kiterunner" KITERUNNER "$url" tgz kr kr; then
+      ok "Kiterunner installed to ~/.local/bin/kr"
+      return 0
+    fi
+  else
+    warn "Kiterunner: upstream publishes no build for $OS/$ARCH"
+  fi
+  # The main package is cmd/kiterunner (binary 'kiterunner'); the release archives name it 'kr'.
+  info "Kiterunner: building from source with go install"
+  go_install "github.com/assetnote/kiterunner/cmd/kiterunner@v${KITERUNNER_VERSION}" kiterunner
+  if _sec_have kiterunner && ! _sec_have kr; then
+    _sec_bin_dir
+    ln -sf "$(command -v kiterunner)" "$HOME/.local/bin/kr" && hts_track_file "$HOME/.local/bin/kr"
+  fi
+  hash -r 2>/dev/null || true
+  if ! _sec_have kr; then warn "Kiterunner could not be installed"; return 1; fi
+  return 0
+}
+
+# Caido CLI (Rust proxy daemon). It is not on crates.io; upstream publishes
+# caido-cli archives at caido.download (the same list api.caido.io/releases/latest serves).
+install_caido_cli() {
+  if _sec_have caido-cli; then
+    ok "Caido CLI already installed"
+    return 0
+  fi
+  if ! _sec_platform; then warn "Caido CLI: unsupported platform $OS/$ARCH"; return 1; fi
+  log "Installing Caido CLI v${CAIDO_VERSION}..."
+  local plat kind
+  case "$_SEC_OS" in
+    DARWIN) kind=zip; plat="mac" ;;
+    *)      kind=tgz; plat="linux" ;;
+  esac
+  case "$_SEC_ARCH" in
+    AMD64) plat="${plat}-x86_64" ;;
+    *)     plat="${plat}-aarch64" ;;
+  esac
+  local ext="tar.gz"
+  [[ "$kind" == "zip" ]] && ext="zip"
+  local url="https://caido.download/releases/v${CAIDO_VERSION}/caido-cli-v${CAIDO_VERSION}-${plat}.${ext}"
+  _sec_install_bin "Caido CLI" CAIDO "$url" "$kind" caido-cli caido-cli || return 1
+  ok "Caido CLI installed to ~/.local/bin/caido-cli (see: caido-cli --help)"
+  return 0
+}
+
+# Feroxbuster: brew/distro package when available, otherwise the pinned Linux release binary.
+_sec_install_feroxbuster() {
+  if _sec_have feroxbuster; then ok "feroxbuster already installed"; return 0; fi
+  if [[ -n "$(resolve_pkg feroxbuster)" ]]; then
+    pkg_install feroxbuster
+    hash -r 2>/dev/null || true
+    _sec_have feroxbuster && return 0
+  fi
+  if [[ "$OS" == "Linux" ]] && _sec_platform; then
+    info "feroxbuster: no usable $PKG_MGR package — using the pinned release binary"
+    local base="https://github.com/epi052/feroxbuster/releases/download/v${FEROXBUSTER_VERSION}"
+    if [[ "$_SEC_ARCH" == "AMD64" ]]; then
+      _sec_install_bin "feroxbuster" FEROXBUSTER "$base/x86_64-linux-feroxbuster.tar.gz" tgz feroxbuster feroxbuster || return 1
+    else
+      _sec_install_bin "feroxbuster" FEROXBUSTER "$base/aarch64-linux-feroxbuster.zip" zip feroxbuster feroxbuster || return 1
+    fi
+    return 0
+  fi
+  warn "feroxbuster could not be installed on $OS/$ARCH"
+  return 1
+}
 
 install_web_api() {
   step "Modern Web Application & API Security Assessment Suite"
+  local fail=0
+  _sec_bin_dir
 
-  # 1. Schemathesis (Property-based API Testing for OpenAPI/Swagger/GraphQL)
-  if ! command -v schemathesis &>/dev/null && ! command -v st &>/dev/null; then
-    log "Installing Schemathesis..."
-    if [[ "$OS" == "Darwin" ]] && brew list schemathesis &>/dev/null; then
-      ok "Schemathesis already installed via brew"
-    else
-      if command -v uv &>/dev/null; then
-        uv tool install schemathesis || pipx_install schemathesis
-      else
-        pipx_install schemathesis
-      fi
-    fi
-  else
-    ok "Schemathesis already installed: $(schemathesis --version 2>/dev/null || echo 'ready')"
-  fi
+  # 1. Schemathesis (property-based API testing for OpenAPI/Swagger/GraphQL)
+  _sec_py_tool schemathesis schemathesis st || fail=1
 
   # 2. Kiterunner (Assetnote API route and endpoint discovery)
-  if ! command -v kr &>/dev/null; then
-    log "Installing Kiterunner (kr)..."
-    go_install "github.com/assetnote/kiterunner/cmd/kr@latest" kr
-  else
-    ok "Kiterunner already installed: $(kr version 2>/dev/null || echo 'ready')"
+  _sec_install_kiterunner || fail=1
+
+  # 3. Caido CLI (Rust interception proxy, headless daemon; the desktop app is a GUI and is not installed here)
+  install_caido_cli || fail=1
+
+  # 4. Arjun (HTTP parameter discovery). Upstream is quiet: last release 2.2.7 (Nov 2024),
+  #    last push Feb 2025. It still resolves from PyPI (sdist only), so it is kept.
+  _sec_py_tool arjun arjun || fail=1
+
+  # 5. FFUF & Feroxbuster (no apt package for ffuf, so go install is the fallback)
+  _sec_pkg_or_go ffuf ffuf "github.com/ffuf/ffuf/v2@v${FFUF_VERSION}" || fail=1
+  _sec_install_feroxbuster || fail=1
+
+  _sec_verify "Schemathesis" schemathesis st || fail=1
+  _sec_verify "Kiterunner"   kr              || fail=1
+  _sec_verify "Caido CLI"    caido-cli       || fail=1
+  _sec_verify "Arjun"        arjun           || fail=1
+  _sec_verify "ffuf"         ffuf            || fail=1
+  _sec_verify "feroxbuster"  feroxbuster     || fail=1
+
+  if [[ $fail -ne 0 ]]; then
+    warn "Web & API Security suite finished with failures (see warnings above)"
+    return 1
   fi
-
-  # 3. Caido CLI / Daemon (Modern Rust Web Security Interception Proxy)
-  if ! command -v caido-cli &>/dev/null && ! command -v caido &>/dev/null; then
-    log "Installing Caido CLI..."
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install_cask caido
-    elif command -v cargo &>/dev/null; then
-      cargo install caido-cli 2>/dev/null || true
-    fi
-  else
-    ok "Caido already installed"
-  fi
-
-  # 4. Arjun (HTTP Parameter Discovery)
-  if ! command -v arjun &>/dev/null; then
-    log "Installing Arjun..."
-    if command -v uv &>/dev/null; then
-      uv tool install arjun || pipx_install arjun
-    else
-      pipx_install arjun
-    fi
-  else
-    ok "Arjun already installed"
-  fi
-
-  # 5. FFUF & Feroxbuster
-  pkg_install ffuf feroxbuster
-
   ok "Web & API Security Assessment suite complete"
+  return 0
 }
 
 # ─── End: lib/web_api.sh ────────────────────────────────────────────
@@ -2379,53 +2714,91 @@ install_cloud_devsec() {
 # ─── Begin: lib/mobile_re.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/mobile_re.sh — Mobile & Binary Reverse Engineering Assessment Suite
-#  Includes: Jadx, Apktool
+#  Includes: Jadx, Apktool, frida-tools, objection
+#  (uses the _sec_* helpers defined in lib/ad_pivoting.sh)
 # =============================================================================
 
+# Jadx: brew/apt/pacman package when it lands, otherwise the pinned release zip
+# (platform independent, needs a Java runtime).
+_sec_install_jadx() {
+  if _sec_have jadx; then
+    ok "Jadx already installed: $(jadx --version 2>/dev/null | head -1)"
+    return 0
+  fi
+  log "Installing Jadx..."
+  case "$PKG_MGR" in
+    brew|apt|pacman)
+      pkg_install jadx
+      hash -r 2>/dev/null || true
+      ;;
+  esac
+  _sec_have jadx && return 0
+
+  info "Jadx: no usable $PKG_MGR package — using the pinned release zip v${JADX_VERSION}"
+  local url="https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip"
+  local tmp dest="$HOME/.local/share/jadx"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/hts-sec.XXXXXX")" || { warn "Jadx: could not create a temp directory"; return 1; }
+  if ! _sec_download "Jadx" "$url" "$JADX_SHA256_ZIP" "$tmp/jadx.zip"; then
+    rm -rf "$tmp"; return 1
+  fi
+  mkdir -p "$dest" "$HOME/.local/bin"
+  if ! unzip -q -o "$tmp/jadx.zip" -d "$dest" || [[ ! -f "$dest/bin/jadx" ]]; then
+    warn "Jadx: could not unpack the release zip into $dest"
+    rm -rf "$tmp"; return 1
+  fi
+  rm -rf "$tmp"
+  chmod +x "$dest/bin/jadx" "$dest/bin/jadx-gui" 2>/dev/null || true
+  ln -sf "$dest/bin/jadx" "$HOME/.local/bin/jadx"
+  ln -sf "$dest/bin/jadx-gui" "$HOME/.local/bin/jadx-gui"
+  hts_track_file "$dest"
+  hts_track_file "$HOME/.local/bin/jadx"
+  hts_track_file "$HOME/.local/bin/jadx-gui"
+  hts_manifest_add tool jadx "release-download v${JADX_VERSION}"
+  _sec_bin_dir
+  _sec_have java || warn "Jadx needs a Java runtime (JRE 11+) — install one (e.g. openjdk) before running it"
+  ok "Jadx installed to ~/.local/bin/jadx"
+  return 0
+}
+
 install_mobile_re() {
-  step "Mobile & Binary Reverse Engineering Suite (Jadx, Apktool)"
+  step "Mobile & Binary Reverse Engineering Suite (Jadx, Apktool, Frida, objection)"
+  local fail=0
+  _sec_bin_dir
 
   # 1. Jadx (DEX to Java decompiler + GUI)
-  if ! command -v jadx &>/dev/null; then
-    log "Installing Jadx..."
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install jadx
-    else
-      case "$PKG_MGR" in
-        apt)    pkg_install jadx ;;
-        pacman) pkg_install jadx ;;
-        *)
-          local tmpdir
-          tmpdir=$(mktemp -d)
-          curl -fsSL "https://github.com/skylot/jadx/releases/latest/download/jadx-1.5.0.zip" -o "$tmpdir/jadx.zip" 2>/dev/null || true
-          if [[ -f "$tmpdir/jadx.zip" ]]; then
-            mkdir -p "$HOME/.local/share/jadx"
-            unzip -q "$tmpdir/jadx.zip" -d "$HOME/.local/share/jadx" 2>/dev/null || true
-            ln -sf "$HOME/.local/share/jadx/bin/jadx" "$HOME/.local/bin/jadx"
-            ln -sf "$HOME/.local/share/jadx/bin/jadx-gui" "$HOME/.local/bin/jadx-gui"
-            ok "Jadx installed to ~/.local/bin/jadx"
-          fi
-          rm -rf "$tmpdir"
-          ;;
-      esac
-    fi
-  else
-    ok "Jadx already installed: $(jadx --version 2>/dev/null | head -1)"
-  fi
+  _sec_install_jadx || fail=1
 
   # 2. Apktool (APK resource disassembler & patcher)
-  if ! command -v apktool &>/dev/null; then
-    log "Installing Apktool..."
-    if [[ "$OS" == "Darwin" ]]; then
-      pkg_install apktool
-    else
-      pkg_install apktool
-    fi
-  else
+  if _sec_have apktool; then
     ok "Apktool already installed: $(apktool --version 2>/dev/null | head -1)"
+  else
+    log "Installing Apktool..."
+    pkg_install apktool
+    hash -r 2>/dev/null || true
+    if ! _sec_have apktool; then
+      warn "Apktool: no usable $PKG_MGR package. Install it manually: https://apktool.org/docs/install"
+      fail=1
+    fi
   fi
 
+  # 3. Frida tooling and objection (runtime instrumentation; pipx, unpinned)
+  _sec_py_tool frida-tools frida || fail=1
+  _sec_py_tool objection objection || fail=1
+
+  # MobSF is intentionally not installed: it needs Docker or a full Django/Python
+  # stack plus Android SDK pieces, which is not a light scriptable install.
+
+  _sec_verify "Jadx"        jadx    || fail=1
+  _sec_verify "Apktool"     apktool || fail=1
+  _sec_verify "Frida tools" frida   || fail=1
+  _sec_verify "objection"   objection || fail=1
+
+  if [[ $fail -ne 0 ]]; then
+    warn "Mobile & Reverse Engineering suite finished with failures (see warnings above)"
+    return 1
+  fi
   ok "Mobile & Binary Reverse Engineering suite complete"
+  return 0
 }
 
 # ─── End: lib/mobile_re.sh ────────────────────────────────────────────
@@ -2433,12 +2806,13 @@ install_mobile_re() {
 # ─── Begin: lib/pentest.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/pentest.sh — Core Offensive Security & Penetration Testing Tools
+#  (uses the _sec_* helpers defined in lib/ad_pivoting.sh)
 # =============================================================================
 
 install_seclists() {
   step "SecLists Wordlists (danielmiessler/SecLists)"
 
-  local target_dir=""
+  local target_dir="" rc=0 d
   for d in "$HOME/pentest/wordlists/seclists" "/opt/seclists" "/usr/share/seclists" "/opt/homebrew/share/seclists"; do
     if [[ -d "$d/Discovery" ]]; then
       target_dir="$d"
@@ -2450,24 +2824,35 @@ install_seclists() {
     ok "SecLists already installed at: $target_dir"
   else
     local seclists_dir="$HOME/pentest/wordlists/seclists"
-    mkdir -p "$HOME/pentest/wordlists"
+    local repo="https://github.com/danielmiessler/SecLists.git"
+    mkdir -p "$HOME/pentest/wordlists" || { warn "Could not create $HOME/pentest/wordlists"; return 1; }
 
-    log "Cloning danielmiessler/SecLists from GitHub (shallow --depth=1)..."
-    if git clone --depth=1 https://github.com/danielmiessler/SecLists.git "$seclists_dir"; then
+    log "Cloning SecLists $SECLISTS_TAG from GitHub (shallow --depth=1)..."
+    if _sec_git_clone_tag "SecLists" "$repo" "$SECLISTS_TAG" "$seclists_dir"; then
       ok "SecLists cloned successfully into $seclists_dir"
     else
-      warn "git clone failed. Falling back to curl tarball download..."
+      warn "git clone failed. Falling back to a tarball download of tag $SECLISTS_TAG..."
+      local tmp
+      tmp="$(mktemp -d "${TMPDIR:-/tmp}/hts-sec.XXXXXX")" || tmp=""
       mkdir -p "$seclists_dir"
-      if curl -fsSL https://codeload.github.com/danielmiessler/SecLists/tar.gz/refs/heads/master | tar -xz -C "$seclists_dir" --strip-components=1; then
+      if [[ -n "$tmp" ]] \
+         && hts_fetch "https://codeload.github.com/danielmiessler/SecLists/tar.gz/refs/tags/${SECLISTS_TAG}" "$tmp/seclists.tar.gz" \
+         && tar -xzf "$tmp/seclists.tar.gz" -C "$seclists_dir" --strip-components=1 \
+         && [[ -d "$seclists_dir/Discovery" ]]; then
         ok "SecLists downloaded and unpacked into $seclists_dir"
+        hts_track_file "$seclists_dir"
+        hts_manifest_add tool SecLists "tarball $SECLISTS_TAG"
       else
-        warn "Could not download SecLists. Clone manually: git clone --depth=1 https://github.com/danielmiessler/SecLists.git $seclists_dir"
+        warn "Could not download SecLists. Clone manually: git clone --depth=1 --branch $SECLISTS_TAG $repo $seclists_dir"
+        rc=1
+        rmdir "$seclists_dir" 2>/dev/null || true
       fi
+      [[ -n "$tmp" ]] && rm -rf "$tmp"
     fi
   fi
 
   # Setup standard symlink /opt/seclists if accessible without blocking
-  if [[ -d "$HOME/pentest/wordlists/seclists" && ! -e "/opt/seclists" ]]; then
+  if [[ -d "$HOME/pentest/wordlists/seclists/Discovery" && ! -e "/opt/seclists" ]]; then
     if [[ -w "/opt" ]]; then
       ln -sfn "$HOME/pentest/wordlists/seclists" /opt/seclists 2>/dev/null || true
     elif sudo -n true 2>/dev/null; then
@@ -2483,15 +2868,24 @@ install_seclists() {
     export SECLISTS="/opt/seclists"
     export WORDLISTS="/opt/seclists"
   fi
+
+  if [[ -z "$target_dir" && ! -d "${SECLISTS:-/nonexistent}/Discovery" ]]; then
+    warn "SecLists wordlists not found after install"
+    rc=1
+  fi
+  return $rc
 }
 
 install_pentest() {
   step "Pentest tools"
+  local fail=0 pkg
+  _sec_bin_dir
 
   for pkg in nmap netcat wget curl httpie gobuster hydra sqlmap \
              masscan tcpdump openssl gpg python3 pipx john; do
     pkg_install "$pkg"
   done
+  hash -r 2>/dev/null || true
 
   if [[ "$OS" == "Linux" ]]; then
     pkg_install hashcat wireshark-cli
@@ -2499,18 +2893,55 @@ install_pentest() {
     pkg_install hashcat
   fi
 
-  # Python pentest tools
-  export PATH="$HOME/.local/bin:$PATH"
+  # Fallbacks where the package manager did not provide the tool
+  _sec_have gobuster || _sec_go_tool "github.com/OJ/gobuster/v3@v${GOBUSTER_VERSION}" gobuster || fail=1
+  _sec_have http     || _sec_py_tool httpie http || fail=1
+  _sec_have sqlmap   || _sec_py_tool sqlmap sqlmap || fail=1
+
+  # Python pentest tools (unpinned, latest from PyPI; NetExec comes from its pinned git tag)
+  _sec_bin_dir
   pipx ensurepath 2>/dev/null || true
-  for tool in impacket pwntools scapy; do
-    pipx_install "$tool"
-  done
-  pipx list 2>/dev/null | grep -qE "crackmapexec|netexec" || pipx_install netexec || true
+  _sec_py_tool impacket secretsdump.py || fail=1
+  _sec_py_tool pwntools pwn            || fail=1
+  _sec_py_tool scapy scapy             || fail=1
+  _sec_install_netexec                 || fail=1
 
   # Download SecLists directly from GitHub (not available in brew)
-  install_seclists
+  if install_seclists; then
+    hts_result ok "SecLists" "${SECLISTS:-installed}"
+  else
+    hts_result fail "SecLists" "wordlists not found after install"
+    fail=1
+  fi
 
+  _sec_verify "nmap"       nmap       || fail=1
+  _sec_verify "netcat"     nc netcat  || fail=1
+  _sec_verify "wget"       wget       || fail=1
+  _sec_verify "curl"       curl       || fail=1
+  _sec_verify "httpie"     http       || fail=1
+  _sec_verify "gobuster"   gobuster   || fail=1
+  _sec_verify "hydra"      hydra      || fail=1
+  _sec_verify "sqlmap"     sqlmap     || fail=1
+  _sec_verify "masscan"    masscan    || fail=1
+  _sec_verify "tcpdump"    tcpdump    || fail=1
+  _sec_verify "openssl"    openssl    || fail=1
+  _sec_verify "gpg"        gpg        || fail=1
+  _sec_verify "python3"    python3    || fail=1
+  _sec_verify "pipx"       pipx       || fail=1
+  _sec_verify "john"       john       || fail=1
+  _sec_verify "hashcat"    hashcat    || fail=1
+  [[ "$OS" == "Linux" ]] && { _sec_verify "tshark" tshark || fail=1; }
+  _sec_verify "impacket"   secretsdump.py || fail=1
+  _sec_verify "pwntools"   pwn        || fail=1
+  _sec_verify "scapy"      scapy      || fail=1
+  _sec_verify "NetExec"    nxc netexec || fail=1
+
+  if [[ $fail -ne 0 ]]; then
+    warn "Pentest suite finished with failures (see warnings above)"
+    return 1
+  fi
   ok "Pentest tools done"
+  return 0
 }
 
 # ─── End: lib/pentest.sh ────────────────────────────────────────────
@@ -2518,48 +2949,106 @@ install_pentest() {
 # ─── Begin: lib/bugbounty.sh ──────────────────────────────────────────
 # =============================================================================
 #  lib/bugbounty.sh — Web Recon, OSINT, and Bug Bounty Automation
+#  (uses the _sec_* helpers defined in lib/ad_pivoting.sh and the Caido /
+#  feroxbuster installers in lib/web_api.sh)
 # =============================================================================
+
+# Nikto: brew/distro package when available, otherwise a clone pinned to a release tag.
+_sec_install_nikto() {
+  local dir="$HOME/.local/share/nikto"
+  if _sec_have nikto; then ok "nikto already installed"; return 0; fi
+  if [[ -n "$(resolve_pkg nikto)" ]]; then
+    pkg_install nikto
+    hash -r 2>/dev/null || true
+    _sec_have nikto && return 0
+  fi
+  info "nikto: no usable $PKG_MGR package — cloning sullo/nikto ($NIKTO_TAG)"
+  _sec_git_clone_tag "nikto" "https://github.com/sullo/nikto.git" "$NIKTO_TAG" "$dir" || return 1
+  _sec_write_wrapper nikto << 'NIKTO_RUNNER' || return 1
+exec perl "$HOME/.local/share/nikto/program/nikto.pl" "$@"
+NIKTO_RUNNER
+  _sec_have perl || warn "nikto needs perl, which was not found"
+  hash -r 2>/dev/null || true
+  _sec_have nikto
+}
 
 install_bugbounty() {
   step "Bug bounty tools"
+  local fail=0
+  _sec_bin_dir
 
-  # Brew/apt installable
-  for pkg in ffuf mitmproxy nikto feroxbuster; do
-    pkg_install "$pkg"
-  done
-
-  # Go-based ProjectDiscovery & community tools
-  go_install "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"       subfinder
-  go_install "github.com/projectdiscovery/httpx/cmd/httpx@latest"                  httpx
-  go_install "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"             nuclei
-  go_install "github.com/projectdiscovery/katana/cmd/katana@latest"                katana
-  go_install "github.com/projectdiscovery/dnsx/cmd/dnsx@latest"                    dnsx
-  go_install "github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest" interactsh-client
-  go_install "github.com/lc/gau/v2/cmd/gau@latest"                                 gau
-  go_install "github.com/hakluke/hakrawler@latest"                                 hakrawler
-  go_install "github.com/tomnomnom/waybackurls@latest"                             waybackurls
-  go_install "github.com/owasp-amass/amass/v4/...@latest"                          amass
-  go_install "github.com/hahwul/dalfox/v2@latest"                                 dalfox
-
-  # macOS cask tools
-  if [[ "$OS" == "Darwin" ]]; then
-    pkg_install_cask burp-suite
-    pkg_install_cask caido "" "https://caido.io"
+  # Package-manager tools, each with a fallback where the package manager has no package
+  _sec_pkg_or_go ffuf ffuf "github.com/ffuf/ffuf/v2@v${FFUF_VERSION}" || fail=1
+  _sec_install_feroxbuster || fail=1
+  _sec_install_nikto       || fail=1
+  if _sec_have mitmproxy; then
+    ok "mitmproxy already installed"
   else
-    warn "Burp Suite: download .sh installer from portswigger.net/burp/releases"
-    warn "caido: download AppImage from caido.io"
+    [[ -n "$(resolve_pkg mitmproxy)" ]] && pkg_install mitmproxy
+    hash -r 2>/dev/null || true
+    if ! _sec_have mitmproxy; then
+      info "mitmproxy: no usable $PKG_MGR package — falling back to pipx"
+      _sec_py_tool mitmproxy mitmproxy || fail=1
+    fi
   fi
 
-  # Python tools
-  pipx_install arjun
+  # Go-based ProjectDiscovery & community tools, pinned in lib/versions.sh
+  _sec_go_tool "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@v${SUBFINDER_VERSION}"          subfinder         || fail=1
+  _sec_go_tool "github.com/projectdiscovery/httpx/cmd/httpx@v${HTTPX_VERSION}"                         httpx             || fail=1
+  _sec_go_tool "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v${NUCLEI_VERSION}"                   nuclei            || fail=1
+  _sec_go_tool "github.com/projectdiscovery/katana/cmd/katana@v${KATANA_VERSION}"                      katana            || fail=1
+  _sec_go_tool "github.com/projectdiscovery/dnsx/cmd/dnsx@v${DNSX_VERSION}"                            dnsx              || fail=1
+  _sec_go_tool "github.com/projectdiscovery/interactsh/cmd/interactsh-client@v${INTERACTSH_VERSION}"   interactsh-client || fail=1
+  _sec_go_tool "github.com/lc/gau/v2/cmd/gau@v${GAU_VERSION}"                                          gau               || fail=1
+  _sec_go_tool "github.com/hakluke/hakrawler@v${HAKRAWLER_VERSION}"                                    hakrawler         || fail=1
+  _sec_go_tool "github.com/tomnomnom/waybackurls@v${WAYBACKURLS_VERSION}"                              waybackurls       || fail=1
+  _sec_go_tool "github.com/owasp-amass/amass/v5/cmd/amass@v${AMASS_VERSION}"                           amass             || fail=1
+  # dalfox 3.x is a Rust rewrite published through brew; on Linux the last Go release (2.x) is installed
+  _sec_pkg_or_go dalfox dalfox "github.com/hahwul/dalfox/v2@v${DALFOX_VERSION}"                                          || fail=1
+
+  # Caido CLI (headless proxy) and Burp Suite
+  install_caido_cli || fail=1
+  if [[ "$OS" == "Darwin" ]]; then
+    pkg_install_cask burp-suite
+  else
+    warn "Burp Suite: download the installer from portswigger.net/burp/releases (not scriptable)"
+  fi
+
+  # Python tools (unpinned, latest from PyPI)
+  _sec_py_tool arjun arjun || fail=1   # upstream last pushed Feb 2025; still installs from PyPI
+  _sec_py_tool bbot bbot   || fail=1   # BBOT recon framework
 
   # Update nuclei templates
-  command -v nuclei &>/dev/null && {
+  if _sec_have nuclei; then
     log "Updating nuclei templates..."
-    nuclei -update-templates -silent 2>/dev/null || true
-  }
+    nuclei -update-templates -silent 2>/dev/null || warn "nuclei template update failed (run 'nuclei -update-templates' later)"
+  fi
 
+  _sec_verify "ffuf"            ffuf || fail=1
+  _sec_verify "feroxbuster"     feroxbuster || fail=1
+  _sec_verify "nikto"           nikto || fail=1
+  _sec_verify "mitmproxy"       mitmproxy || fail=1
+  _sec_verify "subfinder"       subfinder || fail=1
+  _sec_verify "httpx"           httpx || fail=1
+  _sec_verify "nuclei"          nuclei || fail=1
+  _sec_verify "katana"          katana || fail=1
+  _sec_verify "dnsx"            dnsx || fail=1
+  _sec_verify "interactsh"      interactsh-client || fail=1
+  _sec_verify "gau"             gau || fail=1
+  _sec_verify "hakrawler"       hakrawler || fail=1
+  _sec_verify "waybackurls"     waybackurls || fail=1
+  _sec_verify "amass"           amass || fail=1
+  _sec_verify "dalfox"          dalfox || fail=1
+  _sec_verify "Caido CLI"       caido-cli || fail=1
+  _sec_verify "arjun"           arjun || fail=1
+  _sec_verify "bbot"            bbot || fail=1
+
+  if [[ $fail -ne 0 ]]; then
+    warn "Bug bounty suite finished with failures (see warnings above)"
+    return 1
+  fi
   ok "Bug bounty tools done"
+  return 0
 }
 
 # ─── End: lib/bugbounty.sh ────────────────────────────────────────────
