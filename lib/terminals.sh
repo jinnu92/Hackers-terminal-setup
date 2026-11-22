@@ -1,93 +1,169 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  lib/terminals.sh — Modern GPU Terminal Emulators & Aesthetic Configs
-#  Supports: Ghostty (recommended macOS/Wayland), WezTerm, Kitty, Alacritty
+#  lib/terminals.sh — GPU Terminal Emulators & Aesthetic Configs
+#  Supports: Ghostty, WezTerm, Kitty, Alacritty
+#
+#  Install matrix (what this module actually installs):
+#    terminal   macOS(cask)  apt                       dnf                 pacman
+#    Ghostty    yes          skip (no official pkg)    skip (no official)  yes
+#    WezTerm    yes          yes (upstream apt repo)   yes (upstream COPR) yes
+#    Kitty      yes          yes                       yes                 yes
+#    Alacritty  yes          yes if the release has it yes                 yes
+#  zypper: Kitty and Alacritty only. yum and others: nothing installed.
+#  WSL and headless Linux (no DISPLAY/WAYLAND_DISPLAY): no GUI installs at all.
+#  A terminal's config file is written only when that terminal is installed.
 # =============================================================================
+
+_term_is_wsl() {
+  [[ -r /proc/version ]] && grep -qi microsoft /proc/version 2>/dev/null
+}
+
+# _term_gui_ok — succeeds when GUI terminals make sense here; warns otherwise
+_term_gui_ok() {
+  [[ "$OS" == "Darwin" ]] && return 0
+  if _term_is_wsl; then
+    warn "WSL detected — skipping GUI terminal installs (use Windows Terminal or install terminals on the Windows side)"
+    return 1
+  fi
+  if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    warn "Headless Linux (no DISPLAY/WAYLAND_DISPLAY) — skipping GUI terminal installs"
+    return 1
+  fi
+  return 0
+}
+
+# _term_present <command> <MacApp.app>
+_term_present() {
+  command -v "$1" &>/dev/null || [[ -d "/Applications/$2" ]]
+}
+
+# _term_linux_install <package> — install via the distro package manager
+_term_linux_install() {
+  local pkg=$1 rc=1
+  case "$PKG_MGR" in
+    apt)    sudo apt-get install -y "$pkg" && rc=0 ;;
+    dnf)    sudo dnf install -y "$pkg" && rc=0 ;;
+    pacman) sudo pacman -S --noconfirm --needed "$pkg" && rc=0 ;;
+    zypper) sudo zypper install -y "$pkg" && rc=0 ;;
+  esac
+  if [[ $rc -eq 0 ]]; then
+    hts_manifest_add tool "$pkg" "$PKG_MGR"
+  else
+    warn "$PKG_MGR install $pkg failed"
+  fi
+  return $rc
+}
 
 install_ghostty() {
   step "Ghostty Terminal Emulator"
-  if command -v ghostty &>/dev/null || [[ -d "/Applications/Ghostty.app" ]]; then
-    ok "Ghostty already installed"
-  else
+  if ! _term_present ghostty Ghostty.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask ghostty
     else
-      # Linux installation
       case "$PKG_MGR" in
-        pacman) sudo pacman -S --noconfirm --needed ghostty || warn "pacman install ghostty failed" ;;
-        dnf)    sudo dnf copr enable -y pgdev/ghostty 2>/dev/null && sudo dnf install -y ghostty || warn "dnf install ghostty failed" ;;
-        apt)
-          log "Ghostty on Debian/Ubuntu: checking for snap/flatpak..."
-          if command -v flatpak &>/dev/null; then
-            flatpak install -y flathub com.mitchellh.ghostty 2>/dev/null || warn "flatpak install ghostty failed"
-          elif command -v snap &>/dev/null; then
-            sudo snap install ghostty --classic 2>/dev/null || warn "snap install ghostty failed"
-          else
-            warn "Ghostty: install via Flatpak (com.mitchellh.ghostty) or download from ghostty.org"
-          fi
-          ;;
-        *) warn "Ghostty: see https://ghostty.org for your Linux distribution package" ;;
+        pacman) _term_linux_install ghostty || return 1 ;;
+        *) warn "Ghostty: skipped on $PKG_MGR — no official package (only community repos); see https://ghostty.org/docs/install/binary-preview"
+           return 0 ;;
       esac
     fi
+  else
+    ok "Ghostty already installed"
   fi
-  write_ghostty_config
+  if _term_present ghostty Ghostty.app; then write_ghostty_config; fi
+  return 0
 }
 
 install_wezterm() {
   step "WezTerm Terminal Emulator"
-  if command -v wezterm &>/dev/null || [[ -d "/Applications/WezTerm.app" ]]; then
-    ok "WezTerm already installed"
-  else
+  if ! _term_present wezterm WezTerm.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask wezterm
     else
       case "$PKG_MGR" in
-        pacman) sudo pacman -S --noconfirm --needed wezterm || warn "pacman install wezterm failed" ;;
-        dnf)    sudo dnf copr enable -y wezfurlong/wezterm-nightly 2>/dev/null && sudo dnf install -y wezterm || warn "dnf install wezterm failed" ;;
+        pacman) _term_linux_install wezterm || return 1 ;;
+        dnf)
+          warn "WezTerm has no Fedora package — enabling upstream COPR wezfurlong/wezterm-nightly (nightly builds by the WezTerm author)"
+          if sudo dnf copr enable -y wezfurlong/wezterm-nightly && sudo dnf install -y wezterm; then
+            hts_manifest_add tool wezterm "dnf (copr wezfurlong/wezterm-nightly)"
+          else
+            warn "dnf install wezterm failed"; return 1
+          fi ;;
         apt)
-          log "Setting up WezTerm apt repository..."
-          curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /etc/apt/keyrings/wezterm.gpg 2>/dev/null || true
-          echo 'deb [signed-by=/etc/apt/keyrings/wezterm.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list >/dev/null
-          sudo apt-get update -qq && sudo apt-get install -y wezterm || warn "apt install wezterm failed"
-          ;;
-        *) warn "WezTerm: download from wezfurlong.org/wezterm" ;;
+          warn "WezTerm has no Debian/Ubuntu package — adding upstream apt repository https://apt.fury.io/wez/ (maintained by the WezTerm author)"
+          local keytmp
+          keytmp="$(mktemp "${TMPDIR:-/tmp}/wezkey.XXXXXX")" || return 1
+          if hts_fetch "https://apt.fury.io/wez/gpg.key" "$keytmp" && \
+             sudo mkdir -p /etc/apt/keyrings && \
+             sudo gpg --yes --dearmor -o /etc/apt/keyrings/wezterm.gpg "$keytmp"; then
+            echo 'deb [signed-by=/etc/apt/keyrings/wezterm.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list >/dev/null
+            if sudo apt-get update -qq && sudo apt-get install -y wezterm; then
+              hts_manifest_add tool wezterm "apt (apt.fury.io/wez)"
+            else
+              warn "apt install wezterm failed"; rm -f "$keytmp"; return 1
+            fi
+          else
+            warn "Could not fetch/install the WezTerm apt signing key — skipping WezTerm"
+            rm -f "$keytmp"; return 1
+          fi
+          rm -f "$keytmp" ;;
+        *) warn "WezTerm: skipped on $PKG_MGR — no package; see https://wezfurlong.org/wezterm/install/linux.html"
+           return 0 ;;
       esac
     fi
+  else
+    ok "WezTerm already installed"
   fi
-  write_wezterm_config
+  if _term_present wezterm WezTerm.app; then write_wezterm_config; fi
+  return 0
 }
 
 install_kitty() {
   step "Kitty Terminal Emulator"
-  if command -v kitty &>/dev/null || [[ -d "/Applications/kitty.app" ]]; then
-    ok "Kitty already installed"
-  else
+  if ! _term_present kitty kitty.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask kitty
     else
       case "$PKG_MGR" in
-        apt)    sudo apt-get install -y kitty || warn "apt install kitty failed" ;;
-        dnf)    sudo dnf install -y kitty || warn "dnf install kitty failed" ;;
-        pacman) sudo pacman -S --noconfirm --needed kitty || warn "pacman install kitty failed" ;;
-        *)      curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin || warn "kitty installer script failed" ;;
+        apt|dnf|pacman|zypper) _term_linux_install kitty || return 1 ;;
+        *) warn "Kitty: skipped on $PKG_MGR — no distro package (the upstream curl installer is deliberately not used)"
+           return 0 ;;
       esac
     fi
+  else
+    ok "Kitty already installed"
   fi
-  write_kitty_config
+  if _term_present kitty kitty.app; then write_kitty_config; fi
+  return 0
 }
 
 install_alacritty() {
   step "Alacritty Terminal Emulator"
-  if command -v alacritty &>/dev/null || [[ -d "/Applications/Alacritty.app" ]]; then
-    ok "Alacritty already installed"
-  else
+  if ! _term_present alacritty Alacritty.app; then
+    _term_gui_ok || return 0
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install_cask alacritty
     else
-      pkg_install alacritty
+      case "$PKG_MGR" in
+        apt)
+          if apt-cache show alacritty >/dev/null 2>&1; then
+            _term_linux_install alacritty || return 1
+          else
+            warn "Alacritty: skipped — not in this release's apt repositories (needs Debian 13+/Ubuntu 24.04+ or cargo install)"
+            return 0
+          fi ;;
+        dnf|pacman|zypper) _term_linux_install alacritty || return 1 ;;
+        *) warn "Alacritty: skipped on $PKG_MGR — no package mapping"
+           return 0 ;;
+      esac
     fi
+  else
+    ok "Alacritty already installed"
   fi
-  write_alacritty_config
+  if _term_present alacritty Alacritty.app; then write_alacritty_config; fi
+  return 0
 }
 
 write_ghostty_config() {
@@ -95,6 +171,7 @@ write_ghostty_config() {
   mkdir -p "$cfg_dir/themes"
 
   # Write fallback catppuccin-mocha theme file so both casing styles work seamlessly
+  backup_file "$cfg_dir/themes/catppuccin-mocha"
   cat > "$cfg_dir/themes/catppuccin-mocha" << 'MOCHA_THEME'
 palette = 0=#45475a
 palette = 1=#f38ba8
@@ -119,8 +196,10 @@ cursor-text = #1e1e2e
 selection-background = #585b70
 selection-foreground = #cdd6f4
 MOCHA_THEME
+  hts_track_file "$cfg_dir/themes/catppuccin-mocha"
 
   log "Writing Ghostty aesthetic configuration ($cfg_dir/config)..."
+  backup_file "$cfg_dir/config"
   cat > "$cfg_dir/config" << 'GHOSTTY_CFG'
 # =============================================================================
 # Ghostty Terminal Configuration — Catppuccin Mocha & Hacker Ergonomics
@@ -154,6 +233,7 @@ keybind = super+plus=increase_font_size:1
 keybind = super+minus=decrease_font_size:1
 keybind = super+zero=reset_font_size
 GHOSTTY_CFG
+  hts_track_file "$cfg_dir/config"
   ok "Ghostty configuration deployed"
 }
 
@@ -161,6 +241,7 @@ write_wezterm_config() {
   local cfg_dir="$HOME/.config/wezterm"
   mkdir -p "$cfg_dir"
   log "Writing WezTerm configuration ($cfg_dir/wezterm.lua)..."
+  backup_file "$cfg_dir/wezterm.lua"
   cat > "$cfg_dir/wezterm.lua" << 'WEZTERM_CFG'
 -- =============================================================================
 -- WezTerm Configuration — Cross-Platform Lua Multiplexer
@@ -201,6 +282,7 @@ config.keys = {
 
 return config
 WEZTERM_CFG
+  hts_track_file "$cfg_dir/wezterm.lua"
   ok "WezTerm configuration deployed"
 }
 
@@ -208,6 +290,7 @@ write_kitty_config() {
   local cfg_dir="$HOME/.config/kitty"
   mkdir -p "$cfg_dir"
   log "Writing Kitty configuration ($cfg_dir/kitty.conf)..."
+  backup_file "$cfg_dir/kitty.conf"
   cat > "$cfg_dir/kitty.conf" << 'KITTY_CFG'
 # =============================================================================
 # Kitty Terminal Configuration — Catppuccin Mocha
@@ -239,6 +322,7 @@ map cmd+w close_tab
 map cmd+d launch --location=vsplit --cwd=current
 map cmd+shift+d launch --location=hsplit --cwd=current
 KITTY_CFG
+  hts_track_file "$cfg_dir/kitty.conf"
   ok "Kitty configuration deployed"
 }
 
@@ -246,6 +330,7 @@ write_alacritty_config() {
   local cfg_dir="$HOME/.config/alacritty"
   mkdir -p "$cfg_dir"
   log "Writing Alacritty configuration ($cfg_dir/alacritty.toml)..."
+  backup_file "$cfg_dir/alacritty.toml"
   cat > "$cfg_dir/alacritty.toml" << 'ALACRITTY_CFG'
 # =============================================================================
 # Alacritty Configuration — Catppuccin Mocha
@@ -275,32 +360,22 @@ magenta = "#f5c2e7"
 cyan    = "#94e2d5"
 white   = "#bac2de"
 ALACRITTY_CFG
+  hts_track_file "$cfg_dir/alacritty.toml"
   ok "Alacritty configuration deployed"
 }
 
 install_terminals() {
   step "GPU-Accelerated Modern Terminal Emulators"
-  echo ""
-  info "Available GPU terminals: Ghostty (recommended for macOS), WezTerm, Kitty, Alacritty"
-  
-  if [[ "$OS" == "Darwin" ]]; then
-    # Default to Ghostty and WezTerm on macOS
-    install_ghostty
-    write_wezterm_config
-    write_kitty_config
-    write_alacritty_config
-  else
-    # Linux: deploy configs and install available
-    write_ghostty_config
-    write_wezterm_config
-    write_kitty_config
-    write_alacritty_config
-    if command -v pacman &>/dev/null; then
-      install_ghostty
-      install_wezterm
-    else
-      install_kitty
-    fi
+  info "Terminals: Ghostty, WezTerm, Kitty, Alacritty (installed only where a reliable package exists)"
+  local failed=0
+  install_ghostty   || failed=1
+  install_wezterm   || failed=1
+  install_kitty     || failed=1
+  install_alacritty || failed=1
+  if [[ $failed -eq 1 ]]; then
+    warn "One or more terminal installs failed (see messages above)"
+    return 1
   fi
-  ok "GPU Terminal configurations installed to ~/.config/"
+  ok "Terminal step complete (configs written only for installed terminals)"
+  return 0
 }

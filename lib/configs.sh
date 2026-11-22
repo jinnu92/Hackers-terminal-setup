@@ -25,23 +25,53 @@ write_configs() {
   fi
 
   # ─────────────────────────────────────────────────────────────────────────
-  # ~/.zshrc
+  # ~/.zshrc  (prompt: exactly one of Powerlevel10k / Starship, chosen by HTS_PROMPT)
   # ─────────────────────────────────────────────────────────────────────────
-  log "Writing ~/.zshrc..."
-  cat > "$HOME/.zshrc" << ZSHRC
+  local PROMPT_CHOICE PROMPT_TOP PROMPT_THEME PROMPT_TAIL
+  PROMPT_CHOICE="$(_hts_prompt_choice)"
+  if [[ "$PROMPT_CHOICE" == "starship" ]]; then
+    PROMPT_TOP='# Prompt: Starship (HTS_PROMPT=starship) — Powerlevel10k is not loaded'
+    PROMPT_THEME='ZSH_THEME=""'
+    read -r -d '' PROMPT_TAIL << 'TAIL_STARSHIP' || true
+# =============================================================================
+# Starship prompt (config: ~/.config/starship.toml) — keep at the end
+# =============================================================================
+if command -v starship &>/dev/null; then
+  eval "$(starship init zsh)"
+else
+  echo "starship not found in PATH — install it or rerun the installer with HTS_PROMPT=p10k" >&2
+fi
+TAIL_STARSHIP
+  else
+    read -r -d '' PROMPT_TOP << 'TOP_P10K' || true
 # =============================================================================
 # Powerlevel10k instant prompt — MUST stay at the very top
 # =============================================================================
 typeset -g POWERLEVEL9K_INSTANT_PROMPT=off
-if [[ -r "\${XDG_CACHE_HOME:-\$HOME/.cache}/p10k-instant-prompt-\${(%):-%n}.zsh" ]]; then
-  source "\${XDG_CACHE_HOME:-\$HOME/.cache}/p10k-instant-prompt-\${(%):-%n}.zsh"
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
+TOP_P10K
+    PROMPT_THEME='ZSH_THEME="powerlevel10k/powerlevel10k"'
+    read -r -d '' PROMPT_TAIL << 'TAIL_P10K' || true
+# =============================================================================
+# p10k config
+# =============================================================================
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+TAIL_P10K
+  fi
+  info "Prompt: $PROMPT_CHOICE (set HTS_PROMPT=starship|p10k to choose)"
+
+  log "Writing ~/.zshrc..."
+  backup_file "$HOME/.zshrc"
+  cat > "$HOME/.zshrc" << ZSHRC
+${PROMPT_TOP}
 
 # =============================================================================
 # Oh My Zsh core
 # =============================================================================
 export ZSH="\$HOME/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
+${PROMPT_THEME}
 
 # =============================================================================
 # History — security-hardened
@@ -130,16 +160,13 @@ if command -v npm &>/dev/null; then
 fi
 
 # =============================================================================
-# Ergonomics Hooks: Atuin, direnv, Starship
+# Ergonomics Hooks: Atuin, direnv
 # =============================================================================
-# Atuin shell history (SQLite + secrets scrub)
+# Atuin shell history (local SQLite, secrets filtered; DB is not encrypted at rest)
 command -v atuin &>/dev/null && eval "\$(atuin init zsh)"
 
 # direnv (.envrc isolation)
 command -v direnv &>/dev/null && eval "\$(direnv hook zsh)"
-
-# Optional Starship prompt (active if starship.toml exists and p10k not preferred)
-# command -v starship &>/dev/null && eval "\$(starship init zsh)"
 
 # =============================================================================
 # Key bindings
@@ -181,17 +208,16 @@ command -v zoxide &>/dev/null && eval "\$(zoxide init zsh)"
 export EDITOR="vim"
 export VISUAL="vim"
 
-# =============================================================================
-# p10k config
-# =============================================================================
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+${PROMPT_TAIL}
 ZSHRC
+  hts_track_file "$HOME/.zshrc"
   ok "~/.zshrc written"
 
   # ─────────────────────────────────────────────────────────────────────────
   # ~/.oh-my-zsh/custom/pentest.zsh
   # ─────────────────────────────────────────────────────────────────────────
   log "Writing pentest.zsh..."
+  backup_file "$ZSH_CUSTOM/pentest.zsh"
   cat > "$ZSH_CUSTOM/pentest.zsh" << 'PENTEST'
 # =============================================================================
 # Pentest aliases & functions — cross-platform (macOS + Linux)
@@ -265,7 +291,7 @@ alias yaml2json='yq -o json .'
 alias json2yaml='yq -P .'
 alias http='xh'
 
-alias cc='claude'
+alias ccode='claude'
 alias claude-yolo='claude --dangerously-skip-permissions'
 alias c='code'
 alias c.='code .'
@@ -387,8 +413,17 @@ subdomains() {
 }
 
 sec-doctor() {
+  # '--full' delegates to the installer's complete audit when its script is known
+  if [[ "$1" == "--full" ]]; then
+    if [[ -n "${HTS_TER_SH:-}" && -f "$HTS_TER_SH" ]]; then
+      bash "$HTS_TER_SH" --doctor
+    else
+      echo "Full audit: run 'bash ter.sh --doctor' from the installer checkout (or set HTS_TER_SH=/path/to/ter.sh)."
+    fi
+    return
+  fi
   echo ""
-  echo "  ╔══ Security Terminal Health & Environment Audit ════════════╗"
+  echo "  ╔══ Quick Tool Check (~30 tools) — not the full installer audit ═╗"
   _doc() {
     local label=$1 cmd=$2
     if command -v "$cmd" &>/dev/null; then
@@ -428,15 +463,18 @@ sec-doctor() {
   _doc "zoxide" "zoxide"
   _doc "ripgrep" "rg"
   echo "  ╚════════════════════════════════════════════════════════════╝"
+  echo "  Full audit (versions, config, PATH, state): 'bash ter.sh --doctor' or 'doctor --full'"
   echo ""
 }
 PENTEST
+  hts_track_file "$ZSH_CUSTOM/pentest.zsh"
   ok "pentest.zsh written"
 
   # ─────────────────────────────────────────────────────────────────────────
   # ~/.oh-my-zsh/custom/advanced_pentest.zsh
   # ─────────────────────────────────────────────────────────────────────────
   log "Writing advanced_pentest.zsh..."
+  backup_file "$ZSH_CUSTOM/advanced_pentest.zsh"
   cat > "$ZSH_CUSTOM/advanced_pentest.zsh" << 'ADVPENTEST'
 # =============================================================================
 # Advanced Security — Bug Bounty / Cloud / AI / MCP — cross-platform
@@ -523,46 +561,60 @@ mcp_audit() {
     jq -r '.mcpServers | to_entries[] | "  ║   Server: \(.key)"' "$cfg" 2>/dev/null || true
     grep -qE "(allow-all|--privileged|network=host)" "$cfg" 2>/dev/null && \
       echo "  ║   [!] WARNING: Dangerous permission flags"
-    grep -qE "(API_KEY|SECRET|password)" "$cfg" 2>/dev/null && \
-      echo "  ║   [!] WARNING: Possible hardcoded secrets"
+    # Only a non-empty literal value counts; empty placeholders and ${VAR} references do not.
+    local _hits
+    if command -v jq &>/dev/null; then
+      _hits=$(jq -r '[.. | objects | to_entries[]
+        | select((.key | test("api[_-]?key|secret|token|passw"; "i"))
+          and (.value | type == "string") and (.value | length > 0)
+          and (.value | test("^\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?$") | not))] | length' "$cfg" 2>/dev/null)
+    else
+      _hits=$(grep -ciE '"[A-Za-z0-9_-]*(api[_-]?key|secret|token|passw)[A-Za-z0-9_-]*"[[:space:]]*:[[:space:]]*"[^"$]+"' "$cfg" 2>/dev/null)
+    fi
+    [[ "${_hits:-0}" -gt 0 ]] && \
+      echo "  ║   [!] WARNING: Possible hardcoded secrets ($_hits non-empty key/token/password value(s))"
   done
   [[ $found -eq 0 ]] && echo "  ║  No MCP config files found"
   echo "  ╚══════════════════════════════════════════════════════════╝"
 }
 
 agentscan() {
-  local dir="${1:-.}"
+  local dir="${1:-.}" out
+  local -a gargs
+  gargs=(-rnI --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv --exclude-dir=venv --exclude-dir=__pycache__)
   echo "[*] Agent security scan: $dir"
   echo ""
   echo "── Hardcoded Secrets ────────────────────────────────────────────"
-  grep -rn --include="*.py" --include="*.ts" --include="*.js" --include="*.json" \
-    -E "(api_key|secret|password|token)\s*=\s*['\"][^'\"]{8,}" "$dir" 2>/dev/null | \
-    grep -v ".git" | head -20 || echo "  None found"
+  out=$(grep "${gargs[@]}" --include="*.py" --include="*.ts" --include="*.js" --include="*.json" \
+    -E "(api_key|secret|password|token)[[:space:]]*=[[:space:]]*['\"][^'\"]{8,}" "$dir" 2>/dev/null | head -20)
+  [[ -n "$out" ]] && echo "$out" || echo "  None found"
   echo ""
   echo "── Shell Injection Risk ─────────────────────────────────────────"
-  grep -rn --include="*.py" --include="*.ts" --include="*.js" \
-    -E "(subprocess|exec|eval|shell=True|os\.system)" "$dir" 2>/dev/null | \
-    grep -v ".git" | head -20 || echo "  None found"
+  out=$(grep "${gargs[@]}" --include="*.py" --include="*.ts" --include="*.js" \
+    -E "(subprocess|exec|eval|shell=True|os\.system)" "$dir" 2>/dev/null | head -20)
+  [[ -n "$out" ]] && echo "$out" || echo "  None found"
   echo ""
   echo "── Prompt Injection Risk ────────────────────────────────────────"
-  grep -rn --include="*.py" --include="*.ts" --include="*.js" \
+  out=$(grep "${gargs[@]}" --include="*.py" --include="*.ts" --include="*.js" \
     -E "(f\"|f'|\.format\(|\`.*\$\{)" "$dir" 2>/dev/null | \
-    grep -iE "(prompt|message|content|system)" | grep -v ".git" | head -20 || echo "  None found"
+    grep -iE "(prompt|message|content|system)" | head -20)
+  [[ -n "$out" ]] && echo "$out" || echo "  None found"
   echo ""
   echo "[+] Scan complete"
 }
 
 jwtinspect() {
-  local token=$1
+  local token=$1 seg label
   [[ -z "$token" ]] && { echo "Usage: jwtinspect <jwt>"; return 1; }
-  echo "[*] Header:"
-  echo "$token" | cut -d. -f1 | \
-    python3 -c "import sys,base64,json; d=sys.stdin.read().strip(); \
-    print(json.dumps(json.loads(base64.b64decode(d+'==')),indent=2))" 2>/dev/null
-  echo "[*] Payload:"
-  echo "$token" | cut -d. -f2 | \
-    python3 -c "import sys,base64,json; d=sys.stdin.read().strip(); \
-    print(json.dumps(json.loads(base64.b64decode(d+'==')),indent=2))" 2>/dev/null
+  for seg in 1 2; do
+    [[ $seg -eq 1 ]] && label="Header" || label="Payload"
+    echo "[*] $label:"
+    printf '%s' "$token" | cut -d. -f"$seg" | python3 -c '
+import sys, base64, json
+d = sys.stdin.read().strip().replace("-", "+").replace("_", "/")
+d += "=" * (-len(d) % 4)
+print(json.dumps(json.loads(base64.b64decode(d)), indent=2))' 2>/dev/null || echo "[-] could not decode segment $seg (not valid base64url JSON)"
+  done
 }
 
 awscheck() {
@@ -655,6 +707,7 @@ REPORT
   ${EDITOR:-vim} "$outfile"
 }
 ADVPENTEST
+  hts_track_file "$ZSH_CUSTOM/advanced_pentest.zsh"
   ok "advanced_pentest.zsh written"
 
   # ─────────────────────────────────────────────────────────────────────────
@@ -670,6 +723,7 @@ ADVPENTEST
   # ~/.tmux.conf
   # ─────────────────────────────────────────────────────────────────────────
   log "Writing ~/.tmux.conf..."
+  backup_file "$HOME/.tmux.conf"
   cat > "$HOME/.tmux.conf" << 'TMUXCONF'
 # =============================================================================
 # tmux config — security terminal (macOS + Linux)
@@ -719,6 +773,7 @@ set -sg escape-time 10
 setw -g monitor-activity on
 set -g visual-activity off
 TMUXCONF
+  hts_track_file "$HOME/.tmux.conf"
   ok "~/.tmux.conf written"
 
   # ─── Workspace ────────────────────────────────────────────────────────────

@@ -5,6 +5,24 @@
 #            btop, yazi, delta, and Starship prompt
 # =============================================================================
 
+# Pinned installer versions (override with HTS_ATUIN_VERSION / HTS_UV_VERSION).
+HTS_ATUIN_VERSION_DEFAULT="18.25.1"
+HTS_UV_VERSION_DEFAULT="0.13.9"
+
+# _hts_url_exists <url> — HEAD request; succeeds on a 2xx after redirects
+_hts_url_exists() {
+  curl -fsSLI --connect-timeout 10 --max-time 30 -o /dev/null "$1" 2>/dev/null
+}
+
+# _hts_prompt_choice — print the validated prompt choice (p10k|starship)
+_hts_prompt_choice() {
+  case "${HTS_PROMPT:-p10k}" in
+    starship) echo "starship" ;;
+    p10k|"")  echo "p10k" ;;
+    *) warn "HTS_PROMPT='${HTS_PROMPT}' is not 'starship' or 'p10k' — using p10k" >&2; echo "p10k" ;;
+  esac
+}
+
 install_atuin() {
   step "Atuin (SQLite Shell History & Secrets Scrubbing)"
 
@@ -14,8 +32,19 @@ install_atuin() {
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install atuin
     else
-      log "Installing Atuin via official install script..."
-      curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh || warn "Atuin install script failed"
+      local av="${HTS_ATUIN_VERSION:-$HTS_ATUIN_VERSION_DEFAULT}"
+      local aurl="https://github.com/atuinsh/atuin/releases/download/v${av}/atuin-installer.sh"
+      if _hts_url_exists "$aurl"; then
+        log "Installing Atuin v${av} via its pinned release installer ($aurl)..."
+        if hts_run_remote_script "$aurl" "sh"; then
+          export PATH="$HOME/.cargo/bin:$HOME/.atuin/bin:$PATH"
+          hts_manifest_add tool atuin "release-installer v${av}"
+        else
+          warn "Atuin installer failed"
+        fi
+      else
+        warn "Atuin installer for v${av} not reachable ($aurl) — skipping Atuin install"
+      fi
     fi
   fi
 
@@ -23,6 +52,7 @@ install_atuin() {
   local cfg_dir="$HOME/.config/atuin"
   mkdir -p "$cfg_dir"
   log "Writing Atuin privacy configuration ($cfg_dir/config.toml)..."
+  backup_file "$cfg_dir/config.toml"
   cat > "$cfg_dir/config.toml" << 'ATUIN_CFG'
 # =============================================================================
 # Atuin Shell History — Security & Privacy Configuration
@@ -34,10 +64,13 @@ inline_height = 20
 show_preview = true
 enter_accept = false
 
-# Security: Scrub sensitive credentials from SQLite history
+# Security: do not record commands that contain recognised secrets (cloud keys,
+# GitHub/Slack tokens, ...). NOTE: the local history database itself is plain
+# SQLite and is NOT encrypted at rest; only optional sync is end-to-end
+# encrypted (and sync is disabled above).
 secrets_filter = true
 
-# Regex filter for tokens, passwords, and API keys
+# Commands matching these regexes are never saved to history
 history_filter = [
   "^export .*KEY=.*",
   "^export .*SECRET=.*",
@@ -48,7 +81,8 @@ history_filter = [
   "^curl .*Authorization: Bearer.*",
 ]
 ATUIN_CFG
-  ok "Atuin configured with secrets_filter = true"
+  hts_track_file "$cfg_dir/config.toml"
+  ok "Atuin configured with secrets_filter = true (local history DB is not encrypted at rest)"
 }
 
 install_direnv() {
@@ -60,18 +94,19 @@ install_direnv() {
     pkg_install direnv
   fi
 
-  # Deploy whitelist and security config
+  # Deploy security config (no blanket trust of any directory)
   local cfg_dir="$HOME/.config/direnv"
   mkdir -p "$cfg_dir"
+  backup_file "$cfg_dir/direnv.toml"
   cat > "$cfg_dir/direnv.toml" << 'DIRENV_CFG'
 [global]
 bash_path = "bash"
 disable_stdin = true
 warn_timeout = "5s"
-[whitelist]
-prefix = [ "~/pentest", "~/workspace", "~/projects" ]
 DIRENV_CFG
+  hts_track_file "$cfg_dir/direnv.toml"
   ok "direnv configured"
+  info "direnv trusts no directory automatically: review a .envrc, then run 'direnv allow' in that directory."
 }
 
 install_uv() {
@@ -84,9 +119,19 @@ install_uv() {
       pkg_install uv
     fi
     if ! command -v uv &>/dev/null; then
-      log "Installing uv via official installer..."
-      curl -LsSf https://astral.sh/uv/install.sh | sh || warn "uv installer failed"
-      export PATH="$HOME/.cargo/bin:$PATH"
+      local uvv="${HTS_UV_VERSION:-$HTS_UV_VERSION_DEFAULT}"
+      local uvurl="https://astral.sh/uv/${uvv}/install.sh"
+      if _hts_url_exists "$uvurl"; then
+        log "Installing uv ${uvv} via its pinned installer ($uvurl)..."
+        if hts_run_remote_script "$uvurl" "sh"; then
+          export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+          hts_manifest_add tool uv "release-installer ${uvv}"
+        else
+          warn "uv installer failed"
+        fi
+      else
+        warn "uv installer for ${uvv} not reachable ($uvurl) — skipping uv install"
+      fi
     fi
   fi
 
@@ -111,7 +156,9 @@ install_modern_cli() {
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install yazi
     elif command -v cargo &>/dev/null; then
-      cargo install --locked yazi-fm yazi-cli 2>/dev/null || true
+      if cargo install --locked yazi-fm yazi-cli 2>/dev/null; then
+        hts_manifest_add tool yazi "cargo"
+      fi
     fi
   fi
 
@@ -135,8 +182,13 @@ install_starship() {
     if [[ "$OS" == "Darwin" ]]; then
       pkg_install starship
     else
-      log "Installing Starship prompt..."
-      curl -sS https://starship.rs/install.sh | sh -s -- -y 2>/dev/null || warn "Starship install failed"
+      log "Installing Starship prompt (upstream installer into ~/.local/bin; no pinned URL exists)..."
+      mkdir -p "$HOME/.local/bin"
+      if hts_run_remote_script "https://starship.rs/install.sh" "sh" -y -b "$HOME/.local/bin"; then
+        hts_manifest_add tool starship "upstream-installer"
+      else
+        warn "Starship install failed"
+      fi
     fi
   fi
 
@@ -144,6 +196,7 @@ install_starship() {
   local cfg_file="$HOME/.config/starship.toml"
   mkdir -p "$HOME/.config"
   log "Writing Starship configuration ($cfg_file)..."
+  backup_file "$cfg_file"
   cat > "$cfg_file" << 'STARSHIP_CFG'
 # =============================================================================
 # Starship Prompt Configuration — Minimal & Sub-Millisecond Latency
@@ -204,7 +257,12 @@ min_time = 2_000
 style = "dimmed yellow"
 format = "took [$duration]($style) "
 STARSHIP_CFG
-  ok "Starship configuration deployed to ~/.config/starship.toml"
+  hts_track_file "$cfg_file"
+  if [[ "$(_hts_prompt_choice)" == "starship" ]]; then
+    ok "Starship configuration deployed; HTS_PROMPT=starship will activate it in ~/.zshrc"
+  else
+    ok "Starship configuration deployed (inactive: prompt is p10k; rerun with HTS_PROMPT=starship to switch)"
+  fi
 }
 
 install_shell_tools() {

@@ -12,11 +12,24 @@ install_dashboard() {
     case "$PKG_MGR" in
       brew)   pkg_install fastfetch ;;
       apt)
-        sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch 2>/dev/null && \
-          sudo apt-get update -qq && sudo apt-get install -y fastfetch || warn "fastfetch ppa install failed"
+        # Official distro package first (Debian 13+/Ubuntu 24.10+); the PPA is only a fallback.
+        if apt-cache show fastfetch >/dev/null 2>&1; then
+          sudo apt-get install -y fastfetch && hts_manifest_add tool fastfetch "apt" || warn "apt install fastfetch failed"
+        elif command -v add-apt-repository &>/dev/null && grep -qi ubuntu /etc/os-release 2>/dev/null; then
+          warn "fastfetch has no package in this release's official repositories"
+          warn "Adding third-party PPA ppa:zhangsongcui3371/fastfetch (maintained by the community, not Ubuntu)"
+          if sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch && \
+             sudo apt-get update -qq && sudo apt-get install -y fastfetch; then
+            hts_manifest_add tool fastfetch "apt (ppa:zhangsongcui3371/fastfetch)"
+          else
+            warn "fastfetch ppa install failed"
+          fi
+        else
+          warn "fastfetch: not packaged for this apt distro and no PPA applies — skipping (see github.com/fastfetch-cli/fastfetch)"
+        fi
         ;;
-      dnf)    sudo dnf install -y fastfetch || warn "dnf install fastfetch failed" ;;
-      pacman) sudo pacman -S --noconfirm --needed fastfetch || warn "pacman install fastfetch failed" ;;
+      dnf)    sudo dnf install -y fastfetch && hts_manifest_add tool fastfetch "dnf" || warn "dnf install fastfetch failed" ;;
+      pacman) sudo pacman -S --noconfirm --needed fastfetch && hts_manifest_add tool fastfetch "pacman" || warn "pacman install fastfetch failed" ;;
       *)      warn "fastfetch: install from github.com/fastfetch-cli/fastfetch" ;;
     esac
   else
@@ -27,6 +40,7 @@ install_dashboard() {
   local ff_dir="$HOME/.config/fastfetch"
   mkdir -p "$ff_dir"
   log "Writing Fastfetch configuration ($ff_dir/config.jsonc)..."
+  backup_file "$ff_dir/config.jsonc"
   cat > "$ff_dir/config.jsonc" << 'FF_CFG'
 {
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
@@ -54,6 +68,7 @@ install_dashboard() {
   ]
 }
 FF_CFG
+  hts_track_file "$ff_dir/config.jsonc"
   ok "Fastfetch configuration deployed"
 
   # 3. Deploy modern welcome.zsh script
@@ -66,6 +81,7 @@ write_modern_welcome() {
   mkdir -p "$ZSH_CUSTOM"
 
   log "Deploying modernized Tactical Security Cockpit to welcome.zsh..."
+  backup_file "$ZSH_CUSTOM/welcome.zsh"
   cat > "$ZSH_CUSTOM/welcome.zsh" << 'WELCOME_SCRIPT'
 # =============================================================================
 # Modern Tactical Security Cockpit — High Performance (<15ms), Zero-Lag Welcome
@@ -89,14 +105,14 @@ _PENTEST_TIPS=(
   "Run 'scan <target>' for a full nmap scan saved into ./scans/."
   "Use 'secrets_scan_local' to scan current dir with TruffleHog."
   "Run 'awscheck' to inspect active AWS identity and attached IAM policies."
-  "Ctrl+R opens Atuin encrypted SQLite history search with token scrubbing."
+  "Ctrl+R opens Atuin history search; commands containing secrets are not recorded."
   "Run 'schematest <spec.json>' to property-fuzz APIs with Schemathesis."
   "Run 'nxc smb <subnet> -u user -p pass' for high-speed AD credential auditing."
   "Use 'ligolo_start' to scaffold kernel TUN pivoting instead of proxychains."
   "Run 'trivy fs .' to audit container, filesystem, and IaC vulnerabilities."
   "Run 'sbom_audit <image>' to generate Syft SBOM and cross-scan with Grype."
-  "Run 'claude' (or 'cc') to start Claude Code for terminal agentic coding."
-  "Run 'doctor' (or 'sec-doctor') to audit all installed security & dev tools."
+  "Run 'claude' (or 'ccode') to start Claude Code for terminal agentic coding."
+  "Run 'doctor' for a quick tool check ('./ter.sh --doctor' runs the full audit)."
   "Use 'yazi' for lightning-fast async terminal file management with image previews."
   "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
   "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
@@ -184,7 +200,7 @@ _show_welcome() {
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
   printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
-  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(cc)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
+  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
   printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}nxc${_W_RESET}\n"
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   
@@ -214,4 +230,5 @@ _welcome_once() {
 }
 add-zsh-hook precmd _welcome_once
 WELCOME_SCRIPT
+  hts_track_file "$ZSH_CUSTOM/welcome.zsh"
 }
