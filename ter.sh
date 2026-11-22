@@ -3392,6 +3392,7 @@ if [[ $# -gt 0 ]]; then
       echo -e "${BOLD}${CYAN}Hackers Terminal Setup 2.0 — CLI Options${RESET}"
       echo ""
       echo "Usage: ./ter.sh [OPTIONS] [NUMBERS...]"
+      echo "   or: curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash -s -- [OPTIONS]"
       echo ""
       echo "Options:"
       echo "  -y, --yes        Unattended mode (install all with zero [y/n] prompts)"
