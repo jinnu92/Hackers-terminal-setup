@@ -3,6 +3,7 @@
 [![ShellCheck](https://github.com/jinnu92/Hackers-terminal-setup/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/jinnu92/Hackers-terminal-setup/actions/workflows/shellcheck.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![LinkedIn post](https://img.shields.io/badge/LinkedIn-Watch%20the%2040s%20demo-0A66C2?logo=linkedin&logoColor=white)](https://lnkd.in/p/gfTJVKKD)
+[![Medium article](https://img.shields.io/badge/Medium-Read%20the%20write--up-000000?logo=medium&logoColor=white)](https://medium.com/@jinnu92/one-script-to-build-a-complete-security-dev-and-ai-terminal-df9806f71fba)
 
 <p align="center">
   <a href="https://jinnu92.github.io/Hackers-terminal-setup/">
