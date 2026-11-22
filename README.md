@@ -1,5 +1,7 @@
 # Hackers Terminal Setup — Best-in-Class 2.0
 
+[![LinkedIn post](https://img.shields.io/badge/LinkedIn-Watch%20the%2040s%20demo-0A66C2?logo=linkedin&logoColor=white)](https://lnkd.in/p/gfTJVKKD)
+
 A high-performance security testing, development, and agentic AI terminal environment for macOS and Linux.
 
 Featuring modular architecture (`lib/`), an interactive visual simulator (`terminal_preview.html`), modern GPU terminal emulators (Ghostty, WezTerm, Kitty), encrypted SQLite shell history with secret scrubbing (Atuin), directory environment isolation (direnv), ultra-fast tool execution (Astral `uv`/`uvx`), preconfigured Model Context Protocol (MCP) servers for Claude Code, and complete offensive security & bug bounty pipelines.
