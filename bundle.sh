@@ -87,6 +87,11 @@ cat >> "$TEMP_FILE" << 'EOF'
 # =============================================================================
 # ENTRY POINT
 # =============================================================================
+# Everything runs inside one function that is called on the very last line, so
+# bash has parsed the whole script before any installer starts. This matters for
+# `curl ... | bash`: a child process that reads stdin can no longer swallow the
+# rest of the script.
+_hts_main() {
 detect_os
 
 if [[ $# -gt 0 ]]; then
@@ -159,6 +164,9 @@ echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs
 echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
 echo -e "  8. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
 echo ""
+}
+
+_hts_main "$@"
 EOF
 
 mv "$TEMP_FILE" "$OUTPUT_FILE"

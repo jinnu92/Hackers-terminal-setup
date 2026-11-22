@@ -1,6 +1,14 @@
 # Hackers Terminal Setup — Best-in-Class 2.0
 
+[![ShellCheck](https://github.com/jinnu92/Hackers-terminal-setup/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/jinnu92/Hackers-terminal-setup/actions/workflows/shellcheck.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![LinkedIn post](https://img.shields.io/badge/LinkedIn-Watch%20the%2040s%20demo-0A66C2?logo=linkedin&logoColor=white)](https://lnkd.in/p/gfTJVKKD)
+
+<p align="center">
+  <a href="https://jinnu92.github.io/Hackers-terminal-setup/">
+    <img src="docs/demo.gif" alt="40-second tour of Hackers Terminal Setup: welcome cockpit, daily shell, Claude Code with MCP, security tooling and the profile builder" width="420">
+  </a>
+</p>
 
 A high-performance security testing, development, and agentic AI terminal environment for macOS and Linux.
 
@@ -34,7 +42,27 @@ The interactive preview includes:
 
 ## 🚀 Quick Start
 
-### Interactive Menu
+### One-Line Install
+```bash
+# Interactive menu
+curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash
+
+# Non-interactive: pass any CLI flags after `-s --`
+curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash -s -- --fonts --dev --mcp
+
+# Audit an existing machine without installing anything
+curl -fsSL https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh | bash -s -- --doctor
+```
+
+This script installs packages and rewrites dotfiles such as `~/.zshrc`. If you prefer to read it first:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/jinnu92/Hackers-terminal-setup/main/ter.sh
+less ter.sh
+bash ter.sh
+```
+
+### Interactive Menu (from a clone)
 ```bash
 git clone https://github.com/jinnu92/Hackers-terminal-setup.git
 cd Hackers-terminal-setup

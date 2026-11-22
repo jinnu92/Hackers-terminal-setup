@@ -18,9 +18,10 @@ jobs:
         run: shellcheck --version
 
       # Modules are sourced together, so cross-file variables (SC2034/SC2154)
-      # and unresolvable source paths (SC1090/SC1091) are expected.
+      # and unresolvable source paths (SC1090/SC1091) are expected. SC2088 fires
+      # on "~/.zshrc written" style log messages, where the tilde is display text.
       - name: Lint modules and bundler
-        run: shellcheck -s bash -S warning -e SC2034,SC2154,SC1090,SC1091 lib/*.sh bundle.sh
+        run: shellcheck -s bash -S warning -e SC2034,SC2154,SC1090,SC1091,SC2088 lib/*.sh bundle.sh
 
       - name: Syntax-check generated installer
         run: bash -n ter.sh
