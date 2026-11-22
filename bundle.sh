@@ -31,7 +31,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
   _HTS_PIPED=0
   _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [[ -d "$_HTS_ROOT/lib" ]]; then
-    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs lifecycle menu; do
+    for _mod in common versions pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow hts_cli dashboard doctor configs_pentest configs_advanced configs_misc configs lifecycle menu; do
       [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
     done
   fi
@@ -62,8 +62,12 @@ MODULES=(
   "lib/cloud.sh"
   "lib/ai_mcp.sh"
   "lib/workflow.sh"
+  "lib/hts_cli.sh"
   "lib/dashboard.sh"
   "lib/doctor.sh"
+  "lib/configs_pentest.sh"
+  "lib/configs_advanced.sh"
+  "lib/configs_misc.sh"
   "lib/configs.sh"
   "lib/lifecycle.sh"
   "lib/menu.sh"

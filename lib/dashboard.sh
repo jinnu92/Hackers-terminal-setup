@@ -71,7 +71,10 @@ FF_CFG
   hts_track_file "$ff_dir/config.jsonc"
   ok "Fastfetch configuration deployed"
 
-  # 3. Deploy modern welcome.zsh script
+  # 3. Settings file + `hts` command (the welcome script reads ~/.config/hts/config)
+  install_hts_cli || warn "hts command install had problems (see above)"
+
+  # 4. Deploy modern welcome.zsh script
   write_modern_welcome
   ok "Tactical Security Welcome Cockpit deployed to ~/.oh-my-zsh/custom/welcome.zsh"
 }
@@ -86,6 +89,23 @@ write_modern_welcome() {
 # =============================================================================
 # Modern Tactical Security Cockpit — High Performance (<15ms), Zero-Lag Welcome
 # =============================================================================
+
+# Settings: welcome=full|compact|off  welcome_ip=show|hide  tips=on|off
+# Read line by line from ~/.config/hts/config; never sourced or eval'd. Only exact
+# known key=value pairs are accepted, anything else keeps the default.
+# Change with: hts config <key> <value>
+_W_MODE=full; _W_IPMODE=show; _W_TIPS=on
+if [[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/hts/config" ]]; then
+  while IFS= read -r _hts_l || [[ -n $_hts_l ]]; do
+    case $_hts_l in
+      welcome=full|welcome=compact|welcome=off) _W_MODE=${_hts_l#welcome=} ;;
+      welcome_ip=show|welcome_ip=hide)          _W_IPMODE=${_hts_l#welcome_ip=} ;;
+      tips=on|tips=off)                         _W_TIPS=${_hts_l#tips=} ;;
+    esac
+  done < "${XDG_CONFIG_HOME:-$HOME/.config}/hts/config"
+  unset _hts_l
+fi
+[[ $_W_MODE == off ]] && return 0
 
 _W_RED='\033[38;5;203m';    _W_GREEN='\033[38;5;120m';  _W_YELLOW='\033[38;5;221m'
 _W_CYAN='\033[38;5;117m';   _W_BLUE='\033[38;5;111m';   _W_MAGENTA='\033[38;5;183m'
@@ -116,6 +136,7 @@ _PENTEST_TIPS=(
   "Use 'yazi' for lightning-fast async terminal file management with image previews."
   "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
   "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
+  "Run 'hts config' to switch the welcome screen (full/compact/off) or the prompt."
 )
 
 _random_tip() {
@@ -137,6 +158,7 @@ _get_vpn_info() {
     if ifconfig "$iface" 2>/dev/null | grep -q "inet "; then
       local vpn_ip
       vpn_ip=$(ifconfig "$iface" 2>/dev/null | grep "inet " | awk '{print $2}' | head -1)
+      [[ $_W_IPMODE == hide ]] && vpn_ip="x.x.x.x"
       echo -e "${_W_GREEN}● ACTIVE${_W_RESET} ${_W_DIM}(${iface}: ${vpn_ip})${_W_RESET}"
       return
     fi
@@ -178,14 +200,30 @@ _show_welcome() {
   [[ $- != *i* ]] && return
   [[ -n "$VSCODE_INJECTION" ]] && return
 
+  setopt localoptions extendedglob
   local local_ip vpn_info proxy_info ram_info uptime_str the_date tip_text os_label arch_label
-  local_ip=$(_get_local_ip)
+  if [[ $_W_IPMODE == hide ]]; then
+    local_ip="x.x.x.x"
+  else
+    local_ip=$(_get_local_ip)
+  fi
   vpn_info=$(_get_vpn_info)
   proxy_info=$(_get_proxy_info)
+  if [[ $_W_IPMODE == hide ]]; then   # mask any IPv4 address (tunnel, proxy URL)
+    vpn_info=${vpn_info//[0-9]##.[0-9]##.[0-9]##.[0-9]##/x.x.x.x}
+    proxy_info=${proxy_info//[0-9]##.[0-9]##.[0-9]##.[0-9]##/x.x.x.x}
+  fi
+  if [[ $_W_MODE == compact ]]; then
+    local c_tip=""
+    [[ $_W_TIPS == on ]] && c_tip=$(_random_tip)
+    echo -e "${_W_BOLD}${_W_PURPLE}⚡ HTS${_W_RESET} ${_W_DIM}IP${_W_RESET} ${local_ip} ${_W_DIM}• Tunnel${_W_RESET} ${vpn_info} ${_W_DIM}• Proxy${_W_RESET} ${proxy_info}"
+    [[ -n $c_tip ]] && echo -e "${_W_MAGENTA}💡${_W_RESET} ${_W_YELLOW}${c_tip}${_W_RESET}"
+    return 0
+  fi
   ram_info=$(_get_ram_info)
   uptime_str=$(_get_uptime_clean)
   the_date=$(date "+%a %d %b %H:%M")
-  tip_text=$(_random_tip)
+  [[ $_W_TIPS == on ]] && tip_text=$(_random_tip)
   os_label="$(uname -s)"
   arch_label="$(uname -m)"
 
@@ -201,20 +239,22 @@ _show_welcome() {
   printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
   printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
   printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
-  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}nxc${_W_RESET}\n"
-  echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
-  
-  local tip_wrapped
-  tip_wrapped=$(echo "$tip_text" | fold -s -w 67)
-  local first=1
-  while IFS= read -r line; do
-    if [[ $first -eq 1 ]]; then
-      printf "  ${_W_MAGENTA}${_W_BOLD}💡 TIP:${_W_RESET} ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
-      first=0
-    else
-      printf "         ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
-    fi
-  done <<< "$tip_wrapped"
+  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}hts config${_W_RESET}\n"
+  if [[ $_W_TIPS == on ]]; then
+    echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
+
+    local tip_wrapped
+    tip_wrapped=$(echo "$tip_text" | fold -s -w 67)
+    local first=1
+    while IFS= read -r line; do
+      if [[ $first -eq 1 ]]; then
+        printf "  ${_W_MAGENTA}${_W_BOLD}💡 TIP:${_W_RESET} ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
+        first=0
+      else
+        printf "         ${_W_YELLOW}%-67s${_W_RESET}\n" "$line"
+      fi
+    done <<< "$tip_wrapped"
+  fi
 
   echo -e "${_W_BOLD}${_W_CYAN}╰─────────────────────────────────────────────────────────────────────────────╯${_W_RESET}"
   echo ""
