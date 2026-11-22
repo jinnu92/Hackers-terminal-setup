@@ -1,0 +1,120 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # (b) bats suite on both supported OS families. Package managers and network
+  # commands are stubbed inside the tests; nothing is installed by the suite.
+  bats:
+    name: bats (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            test_bash: bash
+          # macOS: run the code under test with the system bash 3.2
+          - os: macos-latest
+            test_bash: /bin/bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bats
+
+      - name: Install bats (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bats-core
+
+      - name: Run bats suite
+        env:
+          TEST_BASH: ${{ matrix.test_bash }}
+          HTS_TEST_RUN_DOCTOR: "1"
+        run: |
+          bats --version
+          bats tests/
+
+  # (c) read-only commands under the macOS system bash 3.2, explicitly.
+  bash32:
+    name: macOS system bash 3.2
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show bash version
+        run: /bin/bash --version
+
+      - name: Syntax-check every module under bash 3.2
+        run: |
+          for f in lib/*.sh bundle.sh ter.sh; do
+            echo "bash -n $f"
+            /bin/bash -n "$f"
+          done
+
+      - name: Read-only commands under bash 3.2
+        env:
+          HOME: ${{ runner.temp }}/hts-home
+          XDG_STATE_HOME: ${{ runner.temp }}/hts-state
+          XDG_CONFIG_HOME: ${{ runner.temp }}/hts-config
+        run: |
+          mkdir -p "$HOME" "$XDG_STATE_HOME" "$XDG_CONFIG_HOME"
+          /bin/bash ter.sh --version
+          /bin/bash ter.sh --list
+          /bin/bash ter.sh --dry-run --all
+          /bin/bash ter.sh --status
+          # Piped, as in "curl | bash"
+          /bin/bash -s -- --version < ter.sh
+
+  # (d) Linux distro containers. Only what the tests need is installed.
+  containers:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:stable
+            install: apt-get update -qq && apt-get install -y --no-install-recommends bash git curl ca-certificates coreutils findutils diffutils gawk sed grep bats python3
+          - image: fedora:latest
+            install: dnf install -y bash git curl coreutils findutils diffutils gawk sed grep which bats python3
+          - image: archlinux:latest
+            install: pacman -Syu --noconfirm bash git curl coreutils findutils diffutils gawk sed grep which bats python
+    steps:
+      - name: Install test dependencies
+        run: ${{ matrix.install }}
+
+      - uses: actions/checkout@v4
+
+      - name: Read-only commands
+        env:
+          HOME: /tmp/hts-home
+          XDG_STATE_HOME: /tmp/hts-state
+          XDG_CONFIG_HOME: /tmp/hts-config
+        run: |
+          mkdir -p "$HOME" "$XDG_STATE_HOME" "$XDG_CONFIG_HOME"
+          bash ter.sh --version
+          bash ter.sh --list
+          bash ter.sh --dry-run --all
+
+      - name: Run bats suite
+        env:
+          HTS_TEST_RUN_DOCTOR: "1"
+        run: |
+          bats --version
+          bats tests/

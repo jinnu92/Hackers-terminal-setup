@@ -1,0 +1,75 @@
+name: Install smoke test
+
+# A real end-to-end install on a disposable GitHub-hosted runner. It is slow and
+# touches the network, so it is not part of the lint badge or the PR test matrix:
+# it runs on demand and when the installer itself changes on main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "bundle.sh"
+      - "ter.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record pre-install dotfile state
+        run: |
+          mkdir -p "$RUNNER_TEMP/pre"
+          for f in .zshrc .tmux.conf; do
+            if [ -e "$HOME/$f" ]; then
+              cp -p "$HOME/$f" "$RUNNER_TEMP/pre/$f"
+              echo "$f existed before install"
+            else
+              echo "$f absent before install"
+            fi
+          done
+
+      - name: Real install (shell-tools, workflow, config)
+        run: ./ter.sh -y --shell-tools --workflow --config
+
+      - name: Status
+        run: ./ter.sh --status
+
+      - name: Doctor (JSON output must be valid JSON)
+        run: |
+          # The doctor may exit non-zero when a tool is missing; only the JSON matters here.
+          ./ter.sh --doctor --json > "$RUNNER_TEMP/doctor.json" || echo "doctor exit code: $?"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("valid JSON,", type(d).__name__)' "$RUNNER_TEMP/doctor.json"
+
+      - name: Uninstall
+        run: ./ter.sh --uninstall -y
+
+      - name: Tracked dotfiles are gone or restored
+        run: |
+          for f in .zshrc .tmux.conf; do
+            if [ -e "$RUNNER_TEMP/pre/$f" ]; then
+              cmp "$RUNNER_TEMP/pre/$f" "$HOME/$f" && echo "$f restored to its original content"
+            else
+              if [ -e "$HOME/$f" ]; then echo "$f should have been removed by uninstall"; exit 1; fi
+              echo "$f removed"
+            fi
+          done
+
+      - name: Upload install log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-log
+          path: |
+            ~/.local/state/hts/install.log
+            ~/.local/state/hts/manifest.tsv*
+          if-no-files-found: warn

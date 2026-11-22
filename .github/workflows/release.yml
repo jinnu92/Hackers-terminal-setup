@@ -1,0 +1,48 @@
+name: Release integrity
+
+on:
+  release:
+    types: [published]
+
+# Each permission is the minimum for one step:
+#   contents: write      attach ter.sh and SHA256SUMS to the release (gh release upload)
+#   id-token: write      let actions/attest-build-provenance request a Sigstore signing identity
+#   attestations: write  store the provenance attestation on the repository
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: ter.sh matches the bundler output
+        run: |
+          cp ter.sh "$RUNNER_TEMP/ter.committed"
+          ./bundle.sh
+          cmp ter.sh "$RUNNER_TEMP/ter.committed" || {
+            echo "ter.sh at this tag is out of date relative to lib/*.sh" >&2
+            exit 1
+          }
+
+      - name: Generate SHA256SUMS
+        run: sha256sum ter.sh > SHA256SUMS && cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ter.sh
+            SHA256SUMS
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" ter.sh SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"

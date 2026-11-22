@@ -1,0 +1,57 @@
+name: Pin freshness
+
+# Weekly check that the pinned versions in lib/versions.sh and lib/ai_mcp.sh are
+# not behind upstream. Opens or updates a single issue when they are.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Needed to open/update the "Pinned versions are behind upstream" issue.
+  issues: write
+
+concurrency:
+  group: pins
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check pins against upstream
+        id: pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINS_REPORT: ${{ runner.temp }}/pins.md
+        run: |
+          rc=0
+          bash scripts/check-pins.sh || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # rc 1 = pins behind (handled below); anything else non-zero is a script error
+          if [ "$rc" -gt 1 ]; then exit "$rc"; fi
+
+      - name: Open or update the tracking issue
+        if: steps.pins.outputs.rc == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Pinned versions are behind upstream
+        run: |
+          {
+            echo "The weekly pin check found pinned versions that are behind upstream."
+            echo "Review each release, update \`lib/versions.sh\` / \`lib/ai_mcp.sh\` (versions and SHA-256 digests), run \`./bundle.sh\`."
+            echo
+            cat "$RUNNER_TEMP/pins.md"
+            echo
+            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > "$RUNNER_TEMP/body.md"
+          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty")"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file "$RUNNER_TEMP/body.md"
+            echo "Updated issue #$existing"
+          else
+            gh issue create --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
