@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hackers Terminal Setup — Best-in-Class Showcase & Capabilities Explorer</title>
+  <title>Hackers Terminal Setup — Interactive Preview</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -632,6 +632,11 @@
     ::-webkit-scrollbar-thumb { background: #313244; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #45475a; }
 
+    .plain-list li { display: block; }
+    .plain-list li code { display: inline; }
+    .credit-links a { color: var(--accent-blue); text-decoration: none; }
+    .credit-links a:hover { text-decoration: underline; }
+
     /* Responsive */
     html, body { max-width: 100%; overflow-x: hidden; }
     .terminal-window { max-width: 100%; }
@@ -641,6 +646,7 @@
       .cards-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important; }
     }
     @media (max-width: 900px) {
+      .split-grid { grid-template-columns: 1fr !important; height: auto !important; }
       header { flex-wrap: wrap; gap: 8px; height: auto !important; padding: 10px 14px !important; }
       .header-actions { flex-wrap: wrap; gap: 8px; }
       .app-container { flex-direction: column; height: auto !important; }
@@ -666,9 +672,9 @@
   <!-- Header -->
   <header>
     <div class="logo-group">
-      <span class="logo-badge">HTS 2.0</span>
+      <span class="logo-badge">HTS 2.1</span>
       <h1 class="title-h1">Hackers Terminal Setup</h1>
-      <span class="badge-sub">Best-in-Class Assessment & Dev Environment</span>
+      <span class="badge-sub">Security, Dev &amp; AI Terminal Setup</span>
     </div>
     <div class="header-actions">
       <button class="pill-btn" onclick="switchTab('welcome-cockpit')">⚡ View Welcome Cockpit</button>
@@ -689,7 +695,7 @@
       </div>
       <div class="nav-item" onclick="switchTab('daily-shell')">
         <span class="icon">⚡</span> Daily Dev Shell
-        <span class="badge-count">Starship</span>
+        <span class="badge-count">Prompt</span>
       </div>
       <div class="nav-item" onclick="switchTab('claude-ai')">
         <span class="icon">🤖</span> Claude Code & MCP
@@ -717,23 +723,33 @@
         <span class="icon">📦</span> Modular Architecture
         <span class="badge-count">lib/</span>
       </div>
+
+      <div class="nav-section-title">Safety & Credits</div>
+      <div class="nav-item" onclick="switchTab('lifecycle')">
+        <span class="icon">🧰</span> Lifecycle Commands
+        <span class="badge-count">undo</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('credits')">
+        <span class="icon">🤝</span> Acknowledgements
+        <span class="badge-count">credits</span>
+      </div>
     </aside>
 
     <!-- Main Content Area -->
     <main>
 
-      <!-- VIEW 0: Modernized Tactical Welcome Cockpit -->
+      <!-- VIEW 0: Tactical Welcome Cockpit -->
       <section id="view-welcome-cockpit" class="view-pane active">
         <div class="hero-banner">
           <div class="hero-info">
-            <h2>🚀 Modern Tactical Welcome Cockpit</h2>
-            <p>Every time you open a new terminal window or tab, this sub-15ms, zero-lag cockpit loads immediately. It tracks your network identities, active TUN/VPN pivoting connections, proxy status, system telemetry, and rotating security pro-tips.</p>
+            <h2>🚀 Tactical Welcome Cockpit</h2>
+            <p>A banner shown when a new terminal tab opens: local IP, active tunnel/VPN interface, proxy status, uptime and memory, and a rotating tip. It runs a few local commands and makes no network requests. Make it smaller or switch it off with <code>hts config welcome compact</code> or <code>hts config welcome off</code>; hide addresses with <code>hts config welcome_ip hide</code>. Changes apply in the next tab.</p>
             <div class="tag-row">
-              <span class="tech-tag">Sub-15ms Launch</span>
-              <span class="tech-tag">Fastfetch Integration</span>
+              <span class="tech-tag">full / compact / off</span>
+              <span class="tech-tag">Fastfetch</span>
               <span class="tech-tag">Tunnel & VPN Telemetry</span>
               <span class="tech-tag">Interception Proxy Watcher</span>
-              <span class="tech-tag">Security Tips Rotation</span>
+              <span class="tech-tag">Rotating Tips (tips on/off)</span>
             </div>
           </div>
         </div>
@@ -757,7 +773,7 @@
 
           <div class="terminal-body" id="cockpit-sim-body">
 <span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────</span>
-<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>
+<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>
 <span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">NETWORK & TUNNELS</span>                    <span class="c-bold">SYSTEM & TELEMETRY</span>
   <span class="c-muted">├─ Local IP :</span> <span class="c-cyan">192.168.1.45</span> (en0)       <span class="c-muted">├─ Uptime :</span> 2 days 14h 22m
@@ -766,10 +782,10 @@
 <span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">SECURITY & AGENTIC WORKSPACE</span>
   <span class="c-muted">├─ Active Dir :</span> <span class="c-purple">~/pentest/2026-10-17_acme_corp/</span> <span class="c-muted">(Scaffolded via 'mkeng')</span>
-  <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(cc)</span> • <span class="c-cyan">5 Sandboxed MCPs</span> <span class="c-muted">(sec-mcp)</span>
-  <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">cheat</span> <span class="c-muted">(or ?)</span> • <span class="c-yellow">doctor</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
+  <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(ccode)</span> • <span class="c-cyan">MCP servers</span> <span class="c-muted">(sec-mcp)</span>
+  <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">doctor</span> • <span class="c-yellow">hts</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
 <span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
-  <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!</span>
+  <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Ctrl+R opens Atuin history search; commands containing recognised secrets are not recorded.</span>
 <span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────</span>
 
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span> <span class="p-seg p-git"> engagement-active</span> <span class="p-seg p-time"> 00:58:34</span>
@@ -782,6 +798,8 @@
             <button class="cmd-chip" onclick="toggleCockpitProxy()">🛡️ Toggle Proxy Status</button>
             <button class="cmd-chip" onclick="cycleCockpitTip()">💡 Next Security Tip</button>
             <button class="cmd-chip" onclick="runFastfetchDemo()">📊 Fastfetch System Stats</button>
+            <button class="cmd-chip" onclick="simulateHts('welcome-compact')">⚙️ hts config welcome compact</button>
+            <button class="cmd-chip" onclick="simulateHts('config')">📋 hts config</button>
             <button class="cmd-chip" onclick="resetCockpit()">🔄 Reload Tab</button>
           </div>
         </div>
@@ -792,9 +810,9 @@
         <div class="hero-banner">
           <div class="hero-info">
             <h2>⚡ Daily Driver Terminal Environment</h2>
-            <p>Experience sub-millisecond shell latency, asynchronous auto-suggestions, smart fuzzy directory jumping, and high-speed git status reporting without bloat.</p>
+            <p>A zsh setup with a Powerlevel10k or Starship prompt (<code>hts config prompt p10k|starship</code>), inline auto-suggestions, directory jumping with zoxide, fuzzy history search with Atuin, and syntax-highlighted diffs with delta.</p>
             <div class="tag-row">
-              <span class="tech-tag">Starship Prompt</span>
+              <span class="tech-tag">p10k / Starship Prompt</span>
               <span class="tech-tag">zsh-autosuggestions</span>
               <span class="tech-tag">zoxide (smart cd)</span>
               <span class="tech-tag">Atuin (SQLite History)</span>
@@ -837,19 +855,19 @@
 
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api/src/auth</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd"><span class="c-cyan">atuin search</span> --interactive</span>
-<span class="c-cyan">┌─────────────────────── Atuin Shell History (Encrypted SQLite) ───────────────────────┐</span>
-<span class="c-cyan">│</span> <span class="c-green">Ctrl+R</span> <span class="c-muted">Filtered: 1,429 commands | Secrets scrubbed: true</span>                            <span class="c-cyan">│</span>
+<span class="c-cyan">┌─────────────────────── Atuin Shell History (local SQLite) ──────────────────────────┐</span>
+<span class="c-cyan">│</span> <span class="c-green">Ctrl+R</span> <span class="c-muted">secrets_filter: on | 1,429 commands recorded</span>                              <span class="c-cyan">│</span>
 <span class="c-cyan">│</span>                                                                                      <span class="c-cyan">│</span>
 <span class="c-cyan">│</span>  <span class="c-muted">2 mins ago</span>   <span class="c-purple">git status</span>                                                            <span class="c-cyan">│</span>
 <span class="c-cyan">│</span>  <span class="c-muted">5 mins ago</span>   <span class="c-purple">claude "audit the authentication middleware for timing attacks"</span>        <span class="c-cyan">│</span>
 <span class="c-cyan">│</span>  <span class="c-muted">1 hour ago</span>   <span class="c-purple">uv run pytest tests/test_crypto.py</span>                                    <span class="c-cyan">│</span>
 <span class="c-cyan">│</span>  <span class="c-muted">yesterday</span>    <span class="c-purple">docker compose up -d postgres redis</span>                                   <span class="c-cyan">│</span>
-<span class="c-cyan">│</span>  <span class="c-muted">3 days ago</span>   <span class="c-purple">sec-mcp setup --safe</span>                                                  <span class="c-cyan">│</span>
+<span class="c-cyan">│</span>  <span class="c-muted">3 days ago</span>   <span class="c-purple">sec-mcp list</span>                                                         <span class="c-cyan">│</span>
 <span class="c-cyan">└──────────────────────────────────────────────────────────────────────────────────────┘</span>
 
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api/src/auth</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">git diff</span>
-<span class="c-dim"># Powered by delta (Syntax-highlighted pager)</span>
+<span class="c-dim"># delta (syntax-highlighted pager)</span>
 <span class="c-blue">────────────────────────────────────────────────────────────────────────────────────────</span>
 <span class="c-bold">src/auth.ts</span>
 <span class="c-blue">────────────────────────────────────────────────────────────────────────────────────────</span>
@@ -867,7 +885,7 @@
             <button class="cmd-chip" onclick="simulateShell('status')">📊 git status</button>
             <button class="cmd-chip" onclick="simulateShell('eza')">📂 eza --tree</button>
             <button class="cmd-chip" onclick="simulateShell('atuin')">🔍 Atuin History</button>
-            <button class="cmd-chip" onclick="simulateShell('doctor')">🩺 sec-doctor</button>
+            <button class="cmd-chip" onclick="simulateShell('doctor')">🩺 doctor</button>
           </div>
         </div>
       </section>
@@ -877,14 +895,14 @@
         <div class="hero-banner">
           <div class="hero-info">
             <h2>🤖 Claude Code & MCP Server Suite</h2>
-            <p>Anthropic's terminal-native agent paired with scoped, secure Model Context Protocol servers. Read files safely, inspect repositories, test APIs, and automate dev tasks.</p>
+            <p>Claude Code (installed with Anthropic's native installer; <code>claude</code> or the <code>ccode</code> alias) with pinned Model Context Protocol servers. The filesystem server only sees <code>~/workspace</code> and <code>~/pentest</code>. GitHub and Brave Search are added only when you export their API keys.</p>
             <div class="tag-row">
-              <span class="tech-tag">Claude Code CLI</span>
-              <span class="tech-tag">Filesystem MCP (Scoped)</span>
-              <span class="tech-tag">GitHub MCP</span>
-              <span class="tech-tag">Fetch / Brave Search</span>
-              <span class="tech-tag">Memory / SQLite</span>
-              <span class="tech-tag">uvx / npx Runners</span>
+              <span class="tech-tag">Claude Code CLI (ccode)</span>
+              <span class="tech-tag">filesystem (scoped)</span>
+              <span class="tech-tag">memory</span>
+              <span class="tech-tag">fetch (uvx)</span>
+              <span class="tech-tag">github (needs token)</span>
+              <span class="tech-tag">brave-search (needs key)</span>
             </div>
           </div>
         </div>
@@ -900,8 +918,8 @@
               <span class="terminal-tab active">claude (Agent Session)</span>
             </div>
             <div class="titlebar-meta">
-              <span>MCP: 5 Servers Connected</span>
-              <span>Claude 3.7 Sonnet</span>
+              <span>MCP: 5 servers (keys set)</span>
+              <span>claude-sonnet-5-5</span>
             </div>
           </div>
 
@@ -910,9 +928,9 @@
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">claude</span>
 
 <span class="c-peach c-bold">╭────────────────────────────────────────────────────────────────────────</span>
-<span class="c-peach c-bold">│</span>  <span class="c-bold">Claude Code</span> <span class="c-muted">v0.2.32 (Anthropic Agentic CLI)</span>                           <span class="c-peach c-bold">│</span>
+<span class="c-peach c-bold">│</span>  <span class="c-bold">Claude Code</span> <span class="c-muted">(native install)</span>                                           <span class="c-peach c-bold">│</span>
 <span class="c-peach c-bold">│</span>  Model: <span class="c-green">claude-sonnet-5-5</span> | Context: <span class="c-cyan">200k tokens</span>                       <span class="c-peach c-bold">│</span>
-<span class="c-peach c-bold">│</span>  MCP Protocol: <span class="c-purple">Active (Filesystem, Git, Brave-Search, Memory, Semgrep)</span> <span class="c-peach c-bold">│</span>
+<span class="c-peach c-bold">│</span>  MCP Protocol: <span class="c-purple">filesystem, memory, fetch, github, brave-search</span>        <span class="c-peach c-bold">│</span>
 <span class="c-peach c-bold">╰────────────────────────────────────────────────────────────────────────</span>
 
 <span class="c-cyan">></span> <span class="c-bold">Check this repo for hardcoded API keys and explain any vulnerabilities found.</span>
@@ -920,8 +938,8 @@
 <span class="c-yellow">● Running tool:</span> <span class="c-bold">filesystem:list_directory</span> <span class="c-muted">{"path": "~/workspace/secure-vault"}</span>
   <span class="c-green">✓</span> Found 14 files across 4 directories.
 
-<span class="c-yellow">● Running tool:</span> <span class="c-bold">semgrep:run_scan</span> <span class="c-muted">{"rules": "p/secrets,p/owasp-top-ten"}</span>
-  <span class="c-green">✓</span> Scan completed in 410ms. Findings: 1 warning.
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">Bash</span> <span class="c-muted">{"command": "semgrep --config p/secrets ."}</span>
+  <span class="c-green">✓</span> Scan completed. Findings: 1 warning.
 
 <span class="c-purple">Claude:</span>
 I inspected the workspace and found a potential secret exposure in <span class="c-cyan">config/database.ts:18</span>:
@@ -935,7 +953,7 @@ in version control history.
 <span class="c-green">Proposed Solution:</span>
 1. Migrate the secret to an environment variable accessed via <span class="c-yellow">process.env.DATABASE_URL</span>.
 2. Generate a <span class="c-cyan">.env.example</span> template.
-3. Automatically load the variable with <span class="c-purple">direnv</span> in your local shell.
+3. Load the variable with <span class="c-purple">direnv</span> (review the <span class="c-yellow">.envrc</span>, then run <span class="c-yellow">direnv allow</span>).
 
 <span class="c-cyan">></span> Would you like me to apply this patch and verify with tests? <span class="c-muted">[y/n]</span> <span class="blinking-cursor"></span>
           </div>
@@ -943,6 +961,7 @@ in version control history.
           <div class="command-quickbar">
             <span class="quickbar-label">Claude MCP Actions:</span>
             <button class="cmd-chip" onclick="simulateClaude('mcp-list')">📋 /mcp list</button>
+            <button class="cmd-chip" onclick="simulateClaude('sec-mcp')">🔌 sec-mcp list</button>
             <button class="cmd-chip" onclick="simulateClaude('patch')">🔧 Apply Security Patch</button>
             <button class="cmd-chip" onclick="simulateClaude('research')">🌐 Research CVE-2026-X</button>
             <button class="cmd-chip" onclick="simulateClaude('reset')">🔄 Clear Session</button>
@@ -955,7 +974,7 @@ in version control history.
         <div class="hero-banner">
           <div class="hero-info">
             <h2>🖥️ GPU-Accelerated Terminal Emulator Matrix</h2>
-            <p>Modern terminals render text on your graphics card (Metal on macOS, Vulkan/OpenGL on Linux) for 120 FPS scrolling, zero input lag, native tabs, and true-color transparency.</p>
+            <p>Four GPU-accelerated terminal emulators, each configured with the Catppuccin Mocha colours. What gets installed depends on the platform; a terminal's config is written only if that terminal is present.</p>
             <div class="tag-row">
               <span class="tech-tag">Ghostty (Zig + Metal/GTK4)</span>
               <span class="tech-tag">WezTerm (Rust + Lua Scripting)</span>
@@ -969,10 +988,10 @@ in version control history.
           <!-- Ghostty Card -->
           <div class="split-col">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <span style="font-weight:700; color:#fff; font-size:1rem;">👻 Ghostty (Recommended on macOS & Wayland)</span>
-              <span class="card-badge badge-api">Metal Native</span>
+              <span style="font-weight:700; color:#fff; font-size:1rem;">👻 Ghostty</span>
+              <span class="card-badge badge-api">macOS / Arch</span>
             </div>
-            <p class="c-muted" style="margin-bottom:10px;">Created by Mitchell Hashimoto. Built with Zig. Native macOS tabs & windows, blur, sub-pixel rendering, zero config bloat.</p>
+            <p class="c-muted" style="margin-bottom:10px;">Created by Mitchell Hashimoto. Written in Zig. Native macOS tabs and windows. Installed on macOS (cask) and Arch (pacman); skipped on apt and dnf, which have no official package.</p>
             <span class="c-cyan c-bold"># ~/.config/ghostty/config</span>
 <pre style="color:var(--text); font-size:0.75rem; background:#11111b; padding:10px; border-radius:6px; margin:8px 0; border:1px solid #313244;">
 theme = "Catppuccin Mocha"
@@ -996,7 +1015,7 @@ keybind = super+shift+d=new_split:down
               <span style="font-weight:700; color:#fff; font-size:1rem;">⚡ WezTerm (Cross-Platform Lua Multiplexer)</span>
               <span class="card-badge badge-api">Lua Engine</span>
             </div>
-            <p class="c-muted" style="margin-bottom:10px;">Multiplexer terminal emulator written in Rust. Program tabs, status bars, and workspaces via Lua without tmux.</p>
+            <p class="c-muted" style="margin-bottom:10px;">Terminal emulator and multiplexer written in Rust, configured in Lua. On apt it adds the upstream apt repository; on dnf the upstream nightly COPR.</p>
             <span class="c-purple c-bold"># ~/.config/wezterm/wezterm.lua</span>
 <pre style="color:var(--text); font-size:0.75rem; background:#11111b; padding:10px; border-radius:6px; margin:8px 0; border:1px solid #313244;">
 local wezterm = require 'wezterm'
@@ -1011,6 +1030,25 @@ return config
 </pre>
           </div>
         </div>
+
+        <div class="split-grid" style="margin-top:12px; height:auto;">
+          <div class="split-col">
+            <span class="c-cyan c-bold"># Install matrix (--terminals)</span>
+<pre style="color:var(--text); font-size:0.75rem; background:#11111b; padding:10px; border-radius:6px; margin:8px 0; border:1px solid #313244; overflow-x:auto;">
+           macOS  apt          dnf     pacman  zypper
+Ghostty    yes    skipped      skipped yes     no
+WezTerm    yes    upstream apt COPR    yes     no
+Kitty      yes    yes          yes     yes     yes
+Alacritty  yes    if packaged  yes     yes     yes
+</pre>
+            <p class="c-muted">No GUI terminals are installed on WSL or on headless Linux. Alacritty on apt needs Debian 13+ or Ubuntu 24.04+.</p>
+          </div>
+          <div class="split-col">
+            <span class="c-purple c-bold"># Kitty and Alacritty</span>
+            <p class="c-muted" style="margin-top:8px;">Kitty (<code>~/.config/kitty/kitty.conf</code>) and Alacritty (<code>~/.config/alacritty/alacritty.toml</code>) get the same Catppuccin Mocha colours, JetBrains Mono Nerd Font, and window padding and opacity settings.</p>
+            <p class="c-muted" style="margin-top:8px;">Colours: <a href="https://github.com/catppuccin" target="_blank" rel="noopener" style="color:var(--accent-blue);">Catppuccin</a> (MIT licence, Copyright (c) 2021 Catppuccin).</p>
+          </div>
+        </div>
       </section>
 
       <!-- VIEW 4: Security Ops -->
@@ -1018,7 +1056,7 @@ return config
         <div class="hero-banner">
           <div class="hero-info">
             <h2>🛡️ Security Assessment & Attack Pipeline</h2>
-            <p>From active internal Active Directory pivoting with Ligolo-ng and NetExec to API contract property testing with Schemathesis and container auditing with Trivy.</p>
+            <p>Example output from tools the installer sets up: Active Directory enumeration and pivoting (NetExec, Ligolo-ng), API property testing (Schemathesis), container scanning (Trivy) and recon (ProjectDiscovery tools). Output is simulated. Use these tools only on systems you are authorized to test: labs, CTFs and engagements with written permission.</p>
             <div class="tag-row">
               <span class="tech-tag">Ligolo-ng (L3 TUN Pivot)</span>
               <span class="tech-tag">NetExec (AD Auditing)</span>
@@ -1080,8 +1118,8 @@ return config
       <section id="view-power-tools" class="view-pane">
         <div class="hero-banner">
           <div class="hero-info">
-            <h2>🦀 Modern CLI Power-Ups (Rust & Go Replacements)</h2>
-            <p>Replace 40-year-old UNIX utilities with modern, multi-threaded, syntax-aware, memory-safe CLI tools designed for modern screens and workflows.</p>
+            <h2>🦀 Modern CLI Tools (Rust & Go)</h2>
+            <p>Newer replacements for common UNIX utilities: btop, yazi, eza, bat, ripgrep, fd, zoxide and delta.</p>
           </div>
         </div>
 
@@ -1112,7 +1150,7 @@ return config
 <span class="c-cyan">│</span> <span class="c-yellow">48912</span>  <span class="c-green">claude</span>              <span class="c-muted">14</span>        <span class="c-blue">hacker</span>    <span class="c-purple">184 MB</span>     <span class="c-green">2.4%</span>   claude-code                                     <span class="c-cyan">│</span>
 <span class="c-cyan">│</span> <span class="c-yellow">47101</span>  <span class="c-green">ghostty</span>             <span class="c-muted">22</span>        <span class="c-blue">hacker</span>    <span class="c-purple">112 MB</span>     <span class="c-green">1.8%</span>   /Applications/Ghostty.app/Contents/MacOS/ghostty<span class="c-cyan">│</span>
 <span class="c-cyan">│</span> <span class="c-yellow">49200</span>  <span class="c-green">uvx prowler</span>         <span class="c-muted">8</span>         <span class="c-blue">hacker</span>    <span class="c-purple">96 MB</span>      <span class="c-green">1.1%</span>   prowler aws --compliance cis_v3                <span class="c-cyan">│</span>
-<span class="c-cyan">│</span> <span class="c-yellow">33214</span>  <span class="c-green">node (mcp-git)</span>      <span class="c-muted">10</span>        <span class="c-blue">hacker</span>    <span class="c-purple">64 MB</span>      <span class="c-green">0.4%</span>   @modelcontextprotocol/server-github             <span class="c-cyan">│</span>
+<span class="c-cyan">│</span> <span class="c-yellow">33214</span>  <span class="c-green">github-mcp-server</span> <span class="c-muted">10</span>        <span class="c-blue">hacker</span>    <span class="c-purple">64 MB</span>      <span class="c-green">0.4%</span>   github-mcp-server stdio                     <span class="c-cyan">│</span>
 <span class="c-cyan">│</span> <span class="c-yellow">12891</span>  <span class="c-green">atuin-daemon</span>        <span class="c-muted">4</span>         <span class="c-blue">hacker</span>    <span class="c-purple">22 MB</span>      <span class="c-green">0.1%</span>   atuin daemon                                    <span class="c-cyan">│</span>
 <span class="c-cyan">└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</span>
           </div>
@@ -1147,12 +1185,12 @@ return config
               <span class="card-title">🐚 Core Shell & Ergonomics</span>
               <span class="card-badge badge-core">Essential</span>
             </div>
-            <p class="card-desc">Sub-millisecond shell prompt, fuzzy directory jumping, and encrypted history with automatic token scrubbing.</p>
+            <p class="card-desc">Zsh with Oh My Zsh, fuzzy directory jumping, and shell history with automatic secret scrubbing.</p>
             <ul class="card-list">
-              <li><code>zsh + Starship</code> Fast cross-shell prompt</li>
-              <li><code>atuin</code> SQLite encrypted history + secret scrub</li>
-              <li><code>direnv</code> Directory environment isolation (.envrc)</li>
-              <li><code>zoxide + fzf</code> Jump anywhere in 2 keystrokes</li>
+              <li><code>zsh + p10k / Starship</code> Prompt (choose with <code>hts config prompt</code>)</li>
+              <li><code>atuin</code> SQLite history with secret scrubbing (not encrypted at rest)</li>
+              <li><code>direnv</code> Per-directory .envrc; trust each with <code>direnv allow</code></li>
+              <li><code>zoxide + fzf</code> Directory jumping and fuzzy finder</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">Included in all setups</span>
@@ -1191,12 +1229,12 @@ return config
               <span class="card-title">🤖 Claude Code & Dev Stack</span>
               <span class="card-badge badge-mcp">AI Agent</span>
             </div>
-            <p class="card-desc">Node.js LTS with safe non-root global directory (`~/.npm-global`), Claude Code CLI, and VS Code integration.</p>
+            <p class="card-desc">Node.js with a non-root npm prefix (<code>~/.npm-global</code>), Claude Code CLI, and VS Code.</p>
             <ul class="card-list">
-              <li><code>Node.js LTS</code> Modern runtime & safe npm prefix</li>
-              <li><code>@anthropic-ai/claude-code</code> Terminal pair programmer</li>
+              <li><code>Node.js</code> Node 22+; NodeSource LTS on apt/dnf</li>
+              <li><code>claude</code> Claude Code, native installer (alias <code>ccode</code>)</li>
               <li><code>VS Code ('code' CLI)</code> Command line editor launch</li>
-              <li><code>Astral uv / uvx</code> 10-100x faster Python tool runner</li>
+              <li><code>Astral uv / uvx</code> Python package and tool runner</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">Daily Dev / AI Pair</span>
@@ -1213,15 +1251,15 @@ return config
               <span class="card-title">🔌 Preconfigured MCP Suite</span>
               <span class="card-badge badge-mcp">Agent Tools</span>
             </div>
-            <p class="card-desc">Model Context Protocol tools for Claude Code and Desktop with strict directory sandboxing.</p>
+            <p class="card-desc">Pinned Model Context Protocol servers for Claude Code and Desktop. Existing config is merged, with a backup.</p>
             <ul class="card-list">
-              <li><code>Filesystem MCP</code> Scoped to safe project folders only</li>
-              <li><code>GitHub MCP</code> Review PRs, codebases, and issues</li>
-              <li><code>Brave Search / Fetch</code> Real-time web retrieval</li>
-              <li><code>sec-mcp CLI</code> Manage and inspect active MCP servers</li>
+              <li><code>filesystem</code> Scoped to ~/workspace and ~/pentest</li>
+              <li><code>github</code> Only if GITHUB_PERSONAL_ACCESS_TOKEN is set</li>
+              <li><code>fetch</code> (uvx), <code>memory</code>; <code>brave-search</code> only if BRAVE_API_KEY is set</li>
+              <li><code>sec-mcp</code> <code>list</code>, <code>inspect</code>, <code>setup</code></li>
             </ul>
             <div class="card-footer">
-              <span class="c-muted">Zero credential exposure</span>
+              <span class="c-muted">API keys stay in env vars</span>
               <label class="toggle-wrap">
                 <input type="checkbox" id="chk-mcp" class="toggle-checkbox" checked onchange="updateCommand()">
                 <span>Enable</span>
@@ -1233,14 +1271,14 @@ return config
           <div class="feature-card">
             <div class="card-head">
               <span class="card-title">🖥️ GPU Terminals & Cockpit</span>
-              <span class="card-badge badge-api">Hardware Accel</span>
+              <span class="card-badge badge-api">GPU terminals</span>
             </div>
-            <p class="card-desc">Install Ghostty, WezTerm, or Kitty with pre-tuned Catppuccin Mocha configs, plus Fastfetch welcome cockpit.</p>
+            <p class="card-desc">Ghostty, WezTerm, Kitty and Alacritty (where packaged) with Catppuccin Mocha configs, plus the Fastfetch welcome cockpit.</p>
             <ul class="card-list">
-              <li><code>Ghostty</code> Metal native macOS tabs & transparency</li>
-              <li><code>WezTerm</code> Lua scriptable terminal multiplexer</li>
-              <li><code>Fastfetch</code> Sub-10ms system dashboard</li>
-              <li><code>Welcome Cockpit</code> Network, VPN & proxy status at launch</li>
+              <li><code>Ghostty</code> macOS and Arch</li>
+              <li><code>WezTerm, Kitty, Alacritty</code> See the terminal matrix</li>
+              <li><code>Fastfetch</code> System info for the banner</li>
+              <li><code>Welcome Cockpit</code> Network, tunnel and proxy status in a new tab</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">Config deployed to ~/.config</span>
@@ -1257,13 +1295,13 @@ return config
               <span class="card-title">🏢 Active Directory & Pivoting</span>
               <span class="card-badge badge-ad">AD Assessment</span>
             </div>
-            <p class="card-desc">State-of-the-art Layer 3 kernel routing, Active Directory attack path mapping, and credential spraying.</p>
+            <p class="card-desc">Layer 3 tunnel routing, Active Directory attack-path mapping, and credential auditing.</p>
             <ul class="card-list">
               <li><code>ligolo-ng</code> TUN-based IP routing (no proxychains)</li>
-              <li><code>chisel</code> Fast TCP/UDP tunnel over WebSockets</li>
-              <li><code>netexec (nxc)</code> Modern multi-protocol CME successor</li>
+              <li><code>chisel</code> TCP/UDP tunnel over HTTP/WebSockets</li>
+              <li><code>netexec (nxc)</code> Multi-protocol AD auditing (CrackMapExec successor)</li>
               <li><code>certipy</code> Active Directory Certificate Services (AD CS)</li>
-              <li><code>bloodhound-python</code> Graph attack-path collector</li>
+              <li><code>bloodhound-python</code> + <code>bloodhound-cli</code> BloodHound ingestor and CE launcher (needs Docker)</li>
               <li><code>responder</code> LLMNR / NBT-NS / mDNS poisoner</li>
             </ul>
             <div class="card-footer">
@@ -1281,13 +1319,13 @@ return config
               <span class="card-title">🌐 Web & API Security</span>
               <span class="card-badge badge-api">API Testing</span>
             </div>
-            <p class="card-desc">Contract-driven automated API property fuzzing, endpoint discovery, and lightweight interception proxying.</p>
+            <p class="card-desc">OpenAPI/GraphQL property testing, API route discovery, parameter discovery, and an interception proxy.</p>
             <ul class="card-list">
               <li><code>schemathesis</code> Property fuzzer for OpenAPI & GraphQL</li>
               <li><code>kiterunner (kr)</code> Context-aware API route discovery</li>
-              <li><code>caido-cli</code> Modern high-speed Rust proxy daemon</li>
+              <li><code>caido-cli</code> Headless Caido proxy</li>
               <li><code>arjun</code> HTTP parameter discovery engine</li>
-              <li><code>ffuf & feroxbuster</code> Multi-threaded fuzzers</li>
+              <li><code>ffuf & feroxbuster</code> Content discovery and fuzzers</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">For modern REST/GraphQL APIs</span>
@@ -1304,13 +1342,14 @@ return config
               <span class="card-title">☁️ Cloud, Container & DevSecOps</span>
               <span class="card-badge badge-devsec">DevSecOps</span>
             </div>
-            <p class="card-desc">Unified vulnerability scanning, Software Bill of Materials (SBOM) generation, IaC static analysis, and Kubernetes auditing.</p>
+            <p class="card-desc">Vulnerability scanning, SBOM generation, IaC analysis, Kubernetes posture and CIS benchmark checks, and cloud provider CLIs.</p>
             <ul class="card-list">
               <li><code>trivy</code> Container, filesystem & IaC CVE scanner</li>
               <li><code>syft & grype</code> Anchore SBOM creator & CVE matcher</li>
               <li><code>checkov</code> Terraform & CloudFormation SAST scanner</li>
-              <li><code>kube-hunter</code> Live Kubernetes penetration testing</li>
-              <li><code>awscli & prowler</code> AWS CIS compliance audit</li>
+              <li><code>kubescape & kube-bench</code> Kubernetes posture scan and CIS benchmark</li>
+              <li><code>osv-scanner</code> Dependency vulnerability scanner (Google)</li>
+              <li><code>awscli, prowler, trufflehog, gitleaks</code> Cloud audit and secret scanning</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">For cloud & pipeline security</span>
@@ -1327,12 +1366,12 @@ return config
               <span class="card-title">📱 Mobile & Reverse Engineering</span>
               <span class="card-badge badge-sec">Reverse Eng</span>
             </div>
-            <p class="card-desc">Android DEX/APK decompilation, source code analysis, smali extraction, and security modification.</p>
+            <p class="card-desc">Android DEX/APK decompilation and rebuilding, and runtime instrumentation.</p>
             <ul class="card-list">
               <li><code>jadx & jadx-gui</code> DEX to readable Java decompiler</li>
               <li><code>apktool</code> Decompile APK resources & rebuild Smali</li>
-              <li><code>jwt_tool</code> Full JWT token analysis & attack suite</li>
-              <li><code>hashit</code> Instant MD5 / SHA1 / SHA256 checksums</li>
+              <li><code>frida-tools</code> Dynamic instrumentation toolkit</li>
+              <li><code>objection</code> Runtime mobile exploration (built on Frida)</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">For mobile application testing</span>
@@ -1349,14 +1388,14 @@ return config
               <span class="card-title">🛡️ Bug Bounty & Recon Pipeline</span>
               <span class="card-badge badge-sec">Recon</span>
             </div>
-            <p class="card-desc">Autonomous passive/active attack surface discovery, asset mapping, and vulnerability template scanning.</p>
+            <p class="card-desc">Passive and active attack-surface discovery, asset mapping, and template-based vulnerability scanning, plus the core pentest tools.</p>
             <ul class="card-list">
-              <li><code>subfinder & amass</code> Passive subdomain enumeration</li>
+              <li><code>subfinder, amass & bbot</code> Subdomain and asset enumeration</li>
               <li><code>httpx & katana</code> Live service probing & crawling</li>
-              <li><code>nuclei v3</code> Community vulnerability templates</li>
-              <li><code>SecLists (GitHub)</code> danielmiessler wordlists auto-cloned to <code>$SECLISTS</code></li>
-              <li><code>bbrecon</code> One-liner automated pipeline function</li>
-              <li><code>trufflehog</code> Secret & token detector with validation</li>
+              <li><code>nuclei v3</code> Template-based vulnerability scanner</li>
+              <li><code>SecLists</code> Wordlists cloned at a pinned release tag</li>
+              <li><code>bbrecon</code> Shell function chaining recon tools</li>
+              <li><code>nmap, sqlmap, hydra, john, hashcat</code> Core pentest tools</li>
             </ul>
             <div class="card-footer">
               <span class="c-muted">For perimeter recon</span>
@@ -1373,14 +1412,18 @@ return config
           <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Your Tailored Installation Command:</span>
+              <label class="toggle-wrap" style="font-size:0.78rem; color:#f9e2af; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="chk-dryrun" class="toggle-checkbox" onchange="updateCommand()">
+                <span>Preview only (<code>--dry-run</code>)</span>
+              </label>
               <label class="toggle-wrap" style="font-size:0.78rem; color:#a6e3a1; font-weight:600; cursor:pointer;">
                 <input type="checkbox" id="chk-unattended" class="toggle-checkbox" checked onchange="updateCommand()">
-                <span>⚡ Unattended Mode (<code>-y</code> / Zero Prompts)</span>
+                <span>Unattended mode (<code>-y</code>, no prompts)</span>
               </label>
             </div>
             <div class="export-cmd" id="clone-command" style="color:var(--text-muted);">git clone https://github.com/jinnu92/Hackers-terminal-setup.git &amp;&amp; cd Hackers-terminal-setup</div>
             <div class="export-cmd" id="install-command">./ter.sh -y</div>
-            <span style="font-size:0.72rem; color:var(--text-muted);">💡 <em>Tip: Adding <code>-y</code> skips all interactive prompts in apt, brew, and npx. In Claude Code, use <code>claude-yolo</code> or <code>--dangerously-skip-permissions</code> to bypass tool confirmation dialogs.</em></span>
+            <span style="font-size:0.72rem; color:var(--text-muted);"><em>Tip: tick "Preview only" first. <code>--dry-run</code> lists what would be installed and written and changes nothing. <code>-y</code> skips the installer's own prompts; package managers may still ask for your sudo password. Undo later with <code>./ter.sh --uninstall</code> or <code>--restore</code> (see Lifecycle Commands).</em></span>
           </div>
           <button class="copy-btn" onclick="copyInstallCmd()" title="Copies the clone step and install command together">📋 Copy Command</button>
         </div>
@@ -1390,8 +1433,8 @@ return config
       <section id="view-architecture" class="view-pane">
         <div class="hero-banner">
           <div class="hero-info">
-            <h2>📦 Modular Architecture (`lib/` Breakdown)</h2>
-            <p>Maintainable, clean decomposition. Each domain lives in its own module under <code>lib/</code>, and a single compiler script <code>bundle.sh</code> builds the single-file curl-pipeable distribution.</p>
+            <h2>📦 Modular Architecture (<code>lib/</code> Breakdown)</h2>
+            <p>Each domain lives in its own module under <code>lib/</code>. <code>bundle.sh</code> joins the modules into <code>ter.sh</code>, the single file that is piped from curl.</p>
           </div>
         </div>
 
@@ -1400,31 +1443,33 @@ return config
             <span class="c-cyan c-bold">Directory Structure:</span>
 <pre style="font-size:0.8rem; color:var(--text); line-height:1.5; margin-top:8px;">
 Hackers-terminal-setup/
-├── <span class="c-green">ter.sh</span>                <span class="c-muted"># Universal entrypoint (sources lib/ or runs bundled)</span>
-├── <span class="c-yellow">bundle.sh</span>             <span class="c-muted"># Compiler: joins lib/*.sh into standalone curl distribution</span>
+├── <span class="c-green">ter.sh</span>                <span class="c-muted"># Generated single file (built by bundle.sh)</span>
+├── <span class="c-yellow">bundle.sh</span>             <span class="c-muted"># Joins lib/*.sh into ter.sh</span>
 ├── <span class="c-purple">terminal_preview.html</span> <span class="c-muted"># Interactive visual showcase and profile builder</span>
 ├── <span class="c-blue">lib/</span>
-│   ├── <span class="c-cyan">common.sh</span>         <span class="c-muted"># Colors, logging, banners, OS detection</span>
-│   ├── <span class="c-cyan">pkg_mgr.sh</span>        <span class="c-muted"># Brew, apt, dnf, pacman unified wrapper</span>
-│   ├── <span class="c-cyan">helpers.sh</span>        <span class="c-muted"># Go, pipx, npm global prefix isolation</span>
-│   ├── <span class="c-cyan">preflight.sh</span>      <span class="c-muted"># Dependencies, disk checks, root safety</span>
+│   ├── <span class="c-cyan">common.sh</span>         <span class="c-muted"># Colours, logging, OS detection, results table</span>
+│   ├── <span class="c-cyan">versions.sh</span>       <span class="c-muted"># Pinned versions and SHA-256 digests</span>
+│   ├── <span class="c-cyan">pkg_mgr.sh</span>        <span class="c-muted"># brew, apt, dnf, pacman, zypper wrapper</span>
+│   ├── <span class="c-cyan">helpers.sh</span>        <span class="c-muted"># Go toolchain, pipx and go install helpers</span>
+│   ├── <span class="c-cyan">preflight.sh</span>      <span class="c-muted"># Homebrew, Oh My Zsh, disk space checks</span>
 │   ├── <span class="c-cyan">fonts.sh</span>          <span class="c-muted"># Modern Nerd Fonts multi-distro installer</span>
 │   ├── <span class="c-cyan">dev.sh</span>            <span class="c-muted"># Node.js LTS, Claude Code, VS Code CLI</span>
-│   ├── <span class="c-cyan">terminals.sh</span>      <span class="c-muted"># Ghostty, WezTerm, Kitty + aesthetic configs</span>
+│   ├── <span class="c-cyan">terminals.sh</span>      <span class="c-muted"># Ghostty, WezTerm, Kitty, Alacritty + configs</span>
 │   ├── <span class="c-cyan">shell_tools.sh</span>    <span class="c-muted"># Atuin, direnv, uv, btop, yazi, delta, Starship</span>
 │   ├── <span class="c-cyan">ad_pivoting.sh</span>    <span class="c-muted"># Ligolo-ng, Chisel, NetExec, BloodHound, Certipy</span>
 │   ├── <span class="c-cyan">web_api.sh</span>        <span class="c-muted"># Schemathesis, Kiterunner, Caido, Arjun, FFUF</span>
-│   ├── <span class="c-cyan">cloud_devsec.sh</span>   <span class="c-muted"># Trivy, Syft, Grype, Checkov, Kube-hunter</span>
-│   ├── <span class="c-cyan">mobile_re.sh</span>      <span class="c-muted"># Jadx, Apktool (DEX/APK decompilation & analysis)</span>
+│   ├── <span class="c-cyan">cloud_devsec.sh</span>   <span class="c-muted"># Trivy, Syft, Grype, Checkov, kubescape, kube-bench, osv-scanner</span>
+│   ├── <span class="c-cyan">mobile_re.sh</span>      <span class="c-muted"># jadx, Apktool, frida-tools, objection</span>
 │   ├── <span class="c-cyan">pentest.sh</span>        <span class="c-muted"># Core offensive security auditing suite</span>
 │   ├── <span class="c-cyan">bugbounty.sh</span>      <span class="c-muted"># Web recon, discovery & nuclei automation</span>
-│   ├── <span class="c-cyan">cloud.sh</span>          <span class="c-muted"># Cloud & container security testing tools</span>
-│   ├── <span class="c-cyan">ai_mcp.sh</span>         <span class="c-muted"># Preconfigured safe MCP suite & Claude config</span>
-│   ├── <span class="c-cyan">workflow.sh</span>       <span class="c-muted"># Tmux, aliases, custom helper functions</span>
+│   ├── <span class="c-cyan">cloud.sh</span>          <span class="c-muted"># Cloud provider CLIs and cloud security tools</span>
+│   ├── <span class="c-cyan">ai_mcp.sh</span>         <span class="c-muted"># MCP suite, sec-mcp, AI/LLM security tools</span>
+│   ├── <span class="c-cyan">workflow.sh</span>       <span class="c-muted"># lazygit, jq, yq, gh, pandoc, xh, yazi</span>
 │   ├── <span class="c-cyan">dashboard.sh</span>      <span class="c-muted"># Fastfetch & Tactical Security Welcome Cockpit</span>
-│   ├── <span class="c-cyan">doctor.sh</span>         <span class="c-muted"># sec_doctor automated health dashboard</span>
+│   ├── <span class="c-cyan">doctor.sh</span>         <span class="c-muted"># Diagnostic audit (text and JSON)</span>
 │   ├── <span class="c-cyan">configs.sh</span>        <span class="c-muted"># Dotfile generators (.zshrc, .tmux.conf, configs)</span>
-│   └── <span class="c-cyan">menu.sh</span>           <span class="c-muted"># Interactive ASCII menu & CLI argument parser</span>
+│   ├── <span class="c-cyan">lifecycle.sh</span>      <span class="c-muted"># --status, --restore, --uninstall, --update</span>
+│   └── <span class="c-cyan">menu.sh</span>           <span class="c-muted"># Menu, component table, argument parsing</span>
 </pre>
           </div>
 
@@ -1432,18 +1477,206 @@ Hackers-terminal-setup/
             <span class="c-purple c-bold">Key Architectural Principles:</span>
             <ul class="card-list" style="margin-top:12px; gap:12px;">
               <li>
-                <span class="c-green">✓ Dual-Mode Execution</span><br>
-                <span class="c-muted">Edit any file in <code>lib/*.sh</code> and run <code>./ter.sh</code> directly to test changes immediately. Run <code>./bundle.sh</code> to compile the single-file distribution.</span>
+                <span class="c-green">✓ Generated single file</span><br>
+                <span class="c-muted"><code>ter.sh</code> contains every module. Edit <code>lib/*.sh</code>, then run <code>./bundle.sh</code>. Run from a clone, it sources <code>lib/</code>; piped from curl, it uses the bundled copy only.</span>
               </li>
               <li>
                 <span class="c-green">✓ Clean Domain Isolation</span><br>
-                <span class="c-muted">Every domain (Active Directory, Web APIs, Containers, Mobile, AI) has its own module, dependencies, and doctor checks.</span>
+                <span class="c-muted">Each domain (Active Directory, Web APIs, Containers, Mobile, AI) has its own module and doctor checks.</span>
               </li>
               <li>
-                <span class="c-green">✓ Sub-15ms Terminal Startup</span><br>
-                <span class="c-muted">The modernized welcome cockpit avoids synchronous web queries and provides immediate, actionable telemetry at launch.</span>
+                <span class="c-green">✓ Pinned, verified downloads</span><br>
+                <span class="c-muted">Direct downloads are pinned in <code>lib/versions.sh</code> and checked against SHA-256 digests. Package-manager and pipx packages are not pinned.</span>
               </li>
             </ul>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- VIEW 8: Lifecycle Commands -->
+      <section id="view-lifecycle" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🧰 Preview, Inspect and Undo</h2>
+            <p>The installer can show what it would do, report what it did, and put your dotfiles back. Every dotfile it rewrites is copied to <code>~/.local/state/hts/backups/</code> first, and each run writes a log and exits non-zero if any step failed. Run the lifecycle commands on their own, not combined with component flags. The output below is simulated.</p>
+            <div class="tag-row">
+              <span class="tech-tag">--dry-run</span>
+              <span class="tech-tag">--status</span>
+              <span class="tech-tag">--restore</span>
+              <span class="tech-tag">--uninstall</span>
+              <span class="tech-tag">--purge-tools</span>
+              <span class="tech-tag">--update</span>
+              <span class="tech-tag">hts config</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="window-controls">
+              <span class="control-dot close"></span>
+              <span class="control-dot minimize"></span>
+              <span class="control-dot maximize"></span>
+            </div>
+            <div class="terminal-tabs">
+              <span class="terminal-tab active">ter.sh lifecycle</span>
+            </div>
+            <div class="titlebar-meta">
+              <span>simulated output</span>
+            </div>
+          </div>
+
+          <div class="terminal-body" id="lifecycle-sim-body">
+<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/Hackers-terminal-setup</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">./ter.sh --dry-run --core --mcp</span>
+<span class="c-cyan c-bold">Hackers Terminal Setup 2.1.0 — DRY RUN</span>
+<span class="c-muted">Nothing will be installed, written or changed.</span>
+
+  <span class="c-bold">Core terminal</span> (--core)
+    would install: fzf bat eza zoxide git-delta tmux fd ripgrep tldr; Powerlevel10k ...
+  <span class="c-bold">MCP Server Suite</span> (--mcp)
+    would write:   Claude Desktop claude_desktop_config.json, ~/pentest/.mcp.json, ~/.local/bin/sec-mcp
+
+<span class="c-yellow c-bold">Dry run complete — nothing was changed.</span>
+<span class="c-muted">(abridged; the real output lists every selected component)</span><span class="blinking-cursor"></span>
+          </div>
+
+          <div class="command-quickbar">
+            <span class="quickbar-label">Run a lifecycle command:</span>
+            <button class="cmd-chip" onclick="simulateLifecycle('dry-run')">👁️ --dry-run</button>
+            <button class="cmd-chip" onclick="simulateLifecycle('status')">📊 --status</button>
+            <button class="cmd-chip" onclick="simulateLifecycle('restore')">♻️ --restore</button>
+            <button class="cmd-chip" onclick="simulateLifecycle('uninstall')">🗑️ --uninstall</button>
+            <button class="cmd-chip" onclick="simulateLifecycle('update')">⬆️ --update</button>
+            <button class="cmd-chip" onclick="simulateLifecycle('hts-config')">⚙️ hts config</button>
+            <button class="cmd-chip" onclick="simulateLifecycle('clear')">🔄 Clear</button>
+          </div>
+        </div>
+
+        <div class="split-grid" style="margin-top:12px; height:auto;">
+          <div class="split-col">
+            <span class="c-cyan c-bold"># What each command does</span>
+            <ul class="card-list plain-list" style="margin-top:10px; gap:8px;">
+              <li><code>--dry-run</code> lists what would be installed and which files written; changes nothing.</li>
+              <li><code>--status</code> shows installed components, tracked tools and files, backup runs and the log path.</li>
+              <li><code>--restore [TS]</code> puts back the earliest backup of each file (or one run). It backs up the current file first.</li>
+              <li><code>--uninstall</code> restores backups and removes files the tool created. It asks first.</li>
+              <li><code>--uninstall --purge-tools</code> also removes tools recorded in the manifest.</li>
+              <li><code>--update</code> checks for a newer release and upgrades recorded tools (Go tools move to <code>@latest</code>).</li>
+            </ul>
+          </div>
+          <div class="split-col">
+            <span class="c-yellow c-bold"># Not undone automatically</span>
+            <ul class="card-list plain-list" style="margin-top:10px; gap:8px;">
+              <li>Login shell change: <code>chsh -s &lt;previous shell&gt;</code></li>
+              <li>Homebrew itself and Oh My Zsh</li>
+              <li>Package repositories and signing keys that were added (apt sources, taps, COPR)</li>
+              <li>npm prefix: <code>npm config delete prefix</code></li>
+              <li>Tools, unless you pass <code>--purge-tools</code></li>
+            </ul>
+            <p class="c-muted" style="margin-top:12px;">Your own additions in <code>~/.zshrc.local</code> are never touched by the installer.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 9: Acknowledgements -->
+      <section id="view-credits" class="view-pane">
+        <div class="hero-banner">
+          <div class="hero-info">
+            <h2>🤝 Acknowledgements</h2>
+            <p>This project installs and configures open-source software built by other people. None of it is written here. The listed projects are not affiliated with this project and do not endorse it. Names are credited to the project or organisation; follow the links for the official source.</p>
+          </div>
+        </div>
+
+        <div class="cards-grid">
+          <div class="feature-card">
+            <div class="card-head"><span class="card-title">Shell, terminal, fonts</span></div>
+            <p class="card-desc credit-links">
+              <a href="https://ohmyz.sh/" target="_blank" rel="noopener">Oh My Zsh</a>,
+              <a href="https://github.com/romkatv/powerlevel10k" target="_blank" rel="noopener">Powerlevel10k</a>,
+              <a href="https://github.com/zsh-users" target="_blank" rel="noopener">zsh-users</a>,
+              <a href="https://github.com/junegunn/fzf" target="_blank" rel="noopener">fzf</a>,
+              <a href="https://github.com/sharkdp/bat" target="_blank" rel="noopener">bat</a>,
+              <a href="https://github.com/eza-community/eza" target="_blank" rel="noopener">eza</a>,
+              <a href="https://github.com/ajeetdsouza/zoxide" target="_blank" rel="noopener">zoxide</a>,
+              <a href="https://github.com/dandavison/delta" target="_blank" rel="noopener">delta</a>,
+              <a href="https://github.com/tmux/tmux" target="_blank" rel="noopener">tmux</a>,
+              <a href="https://www.nerdfonts.com/" target="_blank" rel="noopener">Nerd Fonts</a>,
+              <a href="https://catppuccin.com/" target="_blank" rel="noopener">Catppuccin</a> (Mocha colours),
+              <a href="https://ghostty.org/" target="_blank" rel="noopener">Ghostty</a>,
+              <a href="https://wezterm.org/" target="_blank" rel="noopener">WezTerm</a>,
+              <a href="https://sw.kovidgoyal.net/kitty/" target="_blank" rel="noopener">Kitty</a>,
+              <a href="https://alacritty.org/" target="_blank" rel="noopener">Alacritty</a>.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="card-title">Shell tools, dev, AI agent</span></div>
+            <p class="card-desc credit-links">
+              <a href="https://atuin.sh/" target="_blank" rel="noopener">Atuin</a>,
+              <a href="https://direnv.net/" target="_blank" rel="noopener">direnv</a>,
+              <a href="https://starship.rs/" target="_blank" rel="noopener">Starship</a>,
+              <a href="https://astral.sh/" target="_blank" rel="noopener">Astral</a> (uv),
+              <a href="https://github.com/aristocratos/btop" target="_blank" rel="noopener">btop</a>,
+              <a href="https://github.com/sxyazi/yazi" target="_blank" rel="noopener">yazi</a>,
+              <a href="https://nodejs.org/" target="_blank" rel="noopener">Node.js</a>,
+              <a href="https://github.com/jesseduffield/lazygit" target="_blank" rel="noopener">lazygit</a>,
+              <a href="https://www.anthropic.com/" target="_blank" rel="noopener">Anthropic</a>
+              (<a href="https://github.com/anthropics/claude-code" target="_blank" rel="noopener">Claude Code</a>,
+              <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener">Model Context Protocol</a> and its reference servers),
+              <a href="https://github.com/github/github-mcp-server" target="_blank" rel="noopener">GitHub</a> and
+              <a href="https://github.com/brave/brave-search-mcp-server" target="_blank" rel="noopener">Brave</a> (MCP servers),
+              <a href="https://semgrep.dev/" target="_blank" rel="noopener">Semgrep</a>.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="card-title">Pentest, recon, bug bounty</span></div>
+            <p class="card-desc credit-links">
+              <a href="https://projectdiscovery.io/" target="_blank" rel="noopener">ProjectDiscovery</a>
+              (subfinder, httpx, nuclei, katana, dnsx, interactsh),
+              <a href="https://nmap.org/" target="_blank" rel="noopener">Nmap project</a>,
+              <a href="https://sqlmap.org/" target="_blank" rel="noopener">sqlmap</a>,
+              <a href="https://github.com/vanhauser-thc/thc-hydra" target="_blank" rel="noopener">THC-Hydra</a>,
+              <a href="https://hashcat.net/" target="_blank" rel="noopener">hashcat</a>,
+              <a href="https://github.com/danielmiessler/SecLists" target="_blank" rel="noopener">Daniel Miessler</a> (SecLists),
+              <a href="https://github.com/fortra/impacket" target="_blank" rel="noopener">Fortra</a> (Impacket),
+              <a href="https://github.com/ffuf/ffuf" target="_blank" rel="noopener">ffuf</a>,
+              <a href="https://github.com/owasp-amass/amass" target="_blank" rel="noopener">OWASP Amass</a>,
+              <a href="https://github.com/blacklanternsecurity/bbot" target="_blank" rel="noopener">Black Lantern Security</a> (bbot),
+              <a href="https://caido.io/" target="_blank" rel="noopener">Caido</a>,
+              <a href="https://github.com/Pennyw0rth/NetExec" target="_blank" rel="noopener">NetExec</a>.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="card-head"><span class="card-title">AD, web/API, cloud, mobile, AI</span></div>
+            <p class="card-desc credit-links">
+              <a href="https://github.com/nicocha30/ligolo-ng" target="_blank" rel="noopener">Ligolo-ng</a>,
+              <a href="https://github.com/jpillora/chisel" target="_blank" rel="noopener">Chisel</a>,
+              <a href="https://github.com/SpecterOps/BloodHound" target="_blank" rel="noopener">SpecterOps</a> (BloodHound),
+              <a href="https://github.com/ly4k/Certipy" target="_blank" rel="noopener">Certipy</a>,
+              <a href="https://github.com/lgandx/Responder" target="_blank" rel="noopener">Responder</a>,
+              <a href="https://github.com/schemathesis/schemathesis" target="_blank" rel="noopener">Schemathesis</a>,
+              <a href="https://github.com/assetnote/kiterunner" target="_blank" rel="noopener">Assetnote</a> (Kiterunner),
+              <a href="https://github.com/aquasecurity" target="_blank" rel="noopener">Aqua Security</a> (Trivy, kube-bench),
+              <a href="https://github.com/anchore" target="_blank" rel="noopener">Anchore</a> (Syft, Grype),
+              <a href="https://github.com/kubescape/kubescape" target="_blank" rel="noopener">Kubescape</a>,
+              <a href="https://github.com/google/osv-scanner" target="_blank" rel="noopener">Google</a> (OSV-Scanner),
+              <a href="https://github.com/prowler-cloud/prowler" target="_blank" rel="noopener">Prowler</a>,
+              <a href="https://github.com/skylot/jadx" target="_blank" rel="noopener">skylot</a> (jadx),
+              <a href="https://github.com/iBotPeaches/Apktool" target="_blank" rel="noopener">Apktool</a>,
+              <a href="https://frida.re/" target="_blank" rel="noopener">Frida</a>,
+              <a href="https://github.com/sensepost/objection" target="_blank" rel="noopener">objection</a>,
+              <a href="https://github.com/NVIDIA/garak" target="_blank" rel="noopener">garak</a>,
+              <a href="https://github.com/promptfoo/promptfoo" target="_blank" rel="noopener">promptfoo</a>,
+              <a href="https://ollama.com/" target="_blank" rel="noopener">Ollama</a>.
+            </p>
+          </div>
+        </div>
+
+        <div class="export-bar" style="margin-top:14px;">
+          <div style="display:flex; flex-direction:column; gap:6px; flex:1; font-size:0.8rem; color:var(--text-muted);">
+            <span>The full list, grouped like the components, is in the <a href="https://github.com/jinnu92/Hackers-terminal-setup#acknowledgements" target="_blank" rel="noopener" style="color:var(--accent-blue);">README</a>. Offensive tooling is for authorized testing, labs and CTFs only.</span>
+            <span>Catppuccin Mocha colours used in the generated terminal configs: MIT licence, Copyright (c) 2021 Catppuccin (<a href="https://github.com/catppuccin" target="_blank" rel="noopener" style="color:var(--accent-blue);">github.com/catppuccin</a>).</span>
           </div>
         </div>
       </section>
@@ -1455,14 +1688,15 @@ Hackers-terminal-setup/
     let vpnActive = true;
     let proxyActive = true;
     const tipsList = [
-      "Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!",
-      "Run 'nxc smb <subnet> -u user -p pass' for high-speed AD credential auditing.",
+      "Ctrl+R opens Atuin history search; commands containing recognised secrets are not recorded.",
+      "Run 'nxc smb <subnet> -u user -p pass' to audit AD credentials (authorized targets only).",
       "Use 'schematest <spec.json>' to property-fuzz APIs with Schemathesis.",
       "Use 'ligolo_start' to scaffold kernel TUN pivoting instead of proxychains.",
       "Run 'trivy fs .' to audit container, filesystem, and IaC vulnerabilities.",
       "Run 'sbom_audit <image>' to generate Syft SBOM and cross-scan with Grype.",
       "Run 'bbrecon <domain>' for a full automated recon pipeline.",
-      "Run 'sec-mcp list' to verify that all AI MCP servers are sandboxed."
+      "Run 'sec-mcp list' to see which MCP servers are configured and their filesystem scope.",
+      "Run 'hts config' to see or change the welcome banner, tips and prompt settings."
     ];
     let tipIndex = 0;
 
@@ -1478,6 +1712,8 @@ Hackers-terminal-setup/
         if (viewId === 'power-tools' && text.includes('rust')) return true;
         if (viewId === 'matrix' && text.includes('assessment')) return true;
         if (viewId === 'architecture' && text.includes('modular')) return true;
+        if (viewId === 'lifecycle' && text.includes('lifecycle')) return true;
+        if (viewId === 'credits' && text.includes('acknowledg')) return true;
         return false;
       });
       if (activeNav) activeNav.classList.add('active');
@@ -1532,7 +1768,7 @@ Hackers-terminal-setup/
     function resetCockpit() {
       const body = document.getElementById('cockpit-sim-body');
       body.innerHTML = `<span class="c-cyan c-bold">╭─────────────────────────────────────────────────────────────────────────────</span>
-<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT 2.0</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>
+<span class="c-cyan c-bold">│</span>  <span class="c-purple c-bold">⚡ HACKER TERMINAL COCKPIT</span>            <span class="c-muted">[macOS • arm64 • Sat 17 Oct 00:58]</span>
 <span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">NETWORK & TUNNELS</span>                    <span class="c-bold">SYSTEM & TELEMETRY</span>
   <span class="c-muted">├─ Local IP :</span> <span class="c-cyan">192.168.1.45</span> (en0)       <span class="c-muted">├─ Uptime :</span> 2 days 14h 22m
@@ -1541,10 +1777,10 @@ Hackers-terminal-setup/
 <span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
   <span class="c-bold">SECURITY & AGENTIC WORKSPACE</span>
   <span class="c-muted">├─ Active Dir :</span> <span class="c-purple">~/pentest/2026-10-17_acme_corp/</span> <span class="c-muted">(Scaffolded via 'mkeng')</span>
-  <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(cc)</span> • <span class="c-cyan">5 Sandboxed MCPs</span> <span class="c-muted">(sec-mcp)</span>
-  <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">cheat</span> <span class="c-muted">(or ?)</span> • <span class="c-yellow">doctor</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
+  <span class="c-muted">├─ AI Tools   :</span> <span class="c-green">Claude Code CLI</span> <span class="c-muted">(ccode)</span> • <span class="c-cyan">MCP servers</span> <span class="c-muted">(sec-mcp)</span>
+  <span class="c-muted">└─ Quick Ref  :</span> <span class="c-yellow">doctor</span> • <span class="c-yellow">hts</span> • <span class="c-yellow">bbrecon</span> • <span class="c-yellow">schematest</span> • <span class="c-yellow">nxc</span>
 <span class="c-cyan c-bold">├─────────────────────────────────────────────────────────────────────────────</span>
-  <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Prefix any sensitive command with SPACE to keep it out of Atuin & Zsh history!</span>
+  <span class="c-purple c-bold">💡 TIP:</span> <span class="c-yellow" id="cockpit-tip-text">Ctrl+R opens Atuin history search; commands containing recognised secrets are not recorded.</span>
 <span class="c-cyan c-bold">╰─────────────────────────────────────────────────────────────────────────────</span>
 
 <span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span> <span class="p-seg p-git"> engagement-active</span> <span class="p-seg p-time"> 00:58:34</span>
@@ -1642,39 +1878,37 @@ Hackers-terminal-setup/
     }
 
     function updateCommand() {
-      const unattended = document.getElementById('chk-unattended') && document.getElementById('chk-unattended').checked;
+      const el = id => document.getElementById(id);
+      const on = id => !!(el(id) && el(id).checked);
+      const unattended = on('chk-unattended');
+      const dryRun = on('chk-dryrun');
       const parts = ['./ter.sh'];
+      if (dryRun) parts.push('--dry-run');
       if (unattended) parts.push('-y');
 
-      const allChecked = document.getElementById('chk-core').checked &&
-        document.getElementById('chk-fonts').checked &&
-        document.getElementById('chk-dev').checked &&
-        document.getElementById('chk-mcp').checked &&
-        document.getElementById('chk-terminals').checked &&
-        document.getElementById('chk-ad-pivot').checked &&
-        document.getElementById('chk-web-api').checked &&
-        document.getElementById('chk-devsecops').checked &&
-        document.getElementById('chk-mobile').checked &&
-        document.getElementById('chk-recon').checked;
+      const ids = ['chk-core', 'chk-fonts', 'chk-dev', 'chk-mcp', 'chk-terminals',
+        'chk-ad-pivot', 'chk-web-api', 'chk-devsecops', 'chk-mobile', 'chk-recon'];
+      const allChecked = ids.every(on);
 
+      // Only flags listed in ./ter.sh --help are emitted.
       if (allChecked) {
-        if (!unattended) parts.push('--all');
+        parts.push('--all');
       } else {
-        if (document.getElementById('chk-core').checked) parts.push('--core', '--shell-tools');
-        if (document.getElementById('chk-fonts').checked) parts.push('--fonts');
-        if (document.getElementById('chk-dev').checked) parts.push('--dev');
-        if (document.getElementById('chk-mcp').checked) parts.push('--mcp');
-        if (document.getElementById('chk-terminals').checked) parts.push('--terminals', '--dashboard');
-        if (document.getElementById('chk-ad-pivot') && document.getElementById('chk-ad-pivot').checked) parts.push('--ad-pivot');
-        if (document.getElementById('chk-web-api') && document.getElementById('chk-web-api').checked) parts.push('--web-api');
-        if (document.getElementById('chk-devsecops') && document.getElementById('chk-devsecops').checked) parts.push('--devsecops');
-        if (document.getElementById('chk-mobile') && document.getElementById('chk-mobile').checked) parts.push('--mobile');
-        if (document.getElementById('chk-recon') && document.getElementById('chk-recon').checked) parts.push('--bugbounty', '--pentest');
+        if (on('chk-core')) parts.push('--core', '--shell-tools', '--config');
+        if (on('chk-fonts')) parts.push('--fonts');
+        if (on('chk-dev')) parts.push('--dev');
+        if (on('chk-mcp')) parts.push('--mcp');
+        if (on('chk-terminals')) parts.push('--terminals', '--dashboard');
+        if (on('chk-ad-pivot')) parts.push('--ad-pivot');
+        if (on('chk-web-api')) parts.push('--web-api');
+        if (on('chk-devsecops')) parts.push('--cloud');
+        if (on('chk-mobile')) parts.push('--mobile');
+        if (on('chk-recon')) parts.push('--bugbounty', '--pentest');
       }
 
-      const cmdEl = document.getElementById('install-command');
-      // ter.sh treats a bare "-y" as "install everything", so an empty selection must not emit it
-      cmdEl.textContent = parts.some(p => p.startsWith('--')) || allChecked
+      const cmdEl = el('install-command');
+      // a bare "-y" means "install everything", so an empty selection must not emit a command
+      cmdEl.textContent = parts.some(p => p.startsWith('--') && p !== '--dry-run')
         ? parts.join(' ')
         : '# Select at least one component above';
     }
@@ -1771,16 +2005,36 @@ Total: 2 (CRITICAL: 1, HIGH: 1)
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">atuin stats</span>
 <span class="c-cyan">Total commands:</span> 4,821
 <span class="c-cyan">Most used:</span> git (34%), claude (18%), eza (12%), nxc (8%)
-<span class="c-green">Privacy filter active:</span> 14 tokens scrubbed automatically`;
+<span class="c-green">Secrets filter on:</span> 14 commands matching a secret pattern were not recorded
+<span class="c-muted">(history file is plain SQLite; disk encryption protects it at rest)</span>`;
       } else if (action === 'doctor') {
         body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/api</span>
-<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">sec_doctor</span>
-<span class="c-green">━━━ Security & Shell Doctor Audit ━━━</span>
-<span class="c-green">✓</span> Shell: zsh 5.9 with Starship
-<span class="c-green">✓</span> History: Atuin SQLite v18.3.0 (encrypted & scrubbed)
-<span class="c-green">✓</span> AI Agent: Claude Code CLI v0.2.32
-<span class="c-green">✓</span> Assessment Tools: Ligolo-ng, NetExec, Schemathesis, Trivy, Jadx
-<span class="c-green">✓</span> All systems optimal!`;
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">doctor</span>
+<span class="c-cyan c-bold">  SECURITY TERMINAL ENVIRONMENT AUDIT</span>
+<span class="c-muted">  v2.1.0  Darwin arm64   [✓] ok  [✗] missing  [-] not installed  [~] n/a</span>
+
+<span class="c-yellow c-bold">  Core terminal</span>        <span class="c-cyan">installed</span>  <span class="c-muted">9 ok, 0 missing, 1 optional, 0 n/a</span>
+  <span class="c-green">[✓]</span> Zsh 5.9            <span class="c-green">[✓]</span> Oh My Zsh
+  <span class="c-green">[✓]</span> Powerlevel10k       <span class="c-green">[✓]</span> fzf, bat, eza, zoxide
+<span class="c-yellow c-bold">  Shell tools</span>          <span class="c-cyan">installed</span>  <span class="c-muted">6 ok, 0 missing, 0 optional, 0 n/a</span>
+  <span class="c-green">[✓]</span> atuin               <span class="c-green">[✓]</span> direnv
+  <span class="c-green">[✓]</span> uv                  <span class="c-green">[✓]</span> starship
+<span class="c-yellow c-bold">  MCP</span>                  <span class="c-cyan">installed</span>  <span class="c-muted">4 ok, 0 missing, 0 optional, 0 n/a</span>
+
+<span class="c-yellow c-bold">  Config &amp; hygiene</span>
+  <span class="c-green">[✓]</span> direnv                  <span class="c-muted">no auto-trusted prefixes</span>
+  <span class="c-green">[✓]</span> atuin                   <span class="c-muted">secrets_filter enabled</span>
+  <span class="c-green">[✓]</span> disk encryption         <span class="c-muted">FileVault is on</span>
+  <span class="c-green">[✓]</span> MCP: Claude Desktop     <span class="c-muted">no issues found</span>
+  <span class="c-yellow">[!]</span> MCP: pentest/.mcp.json  unpinned launcher found
+      <span class="c-muted">fix: pin a version, e.g. package@&lt;version&gt;</span>
+
+<span class="c-yellow c-bold">  State</span>
+  Manifest     ~/.local/state/hts/manifest.tsv (41 entries)
+  Backups      2 available
+  Total: 19 ok, 0 missing, 1 optional, 0 n/a, 1 warnings
+  <span class="c-green">PASS</span> — everything belonging to installed components is present.
+  <span class="c-muted">(illustrative output; yours depends on what is installed)</span>`;
       }
       body.scrollTop = body.scrollHeight;
     }
@@ -1790,25 +2044,120 @@ Total: 2 (CRITICAL: 1, HIGH: 1)
       if (action === 'mcp-list') {
         body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">/mcp</span>
 <span class="c-purple">Configured MCP Servers:</span>
-  • <span class="c-green">filesystem</span> (Sandboxed: ~/workspace/ & ~/pentest/)
-  • <span class="c-green">github</span> (Repo & PR inspector)
-  • <span class="c-green">brave-search</span> (Online search)
-  • <span class="c-green">memory</span> (Persistent graph)
-  • <span class="c-green">semgrep</span> (Code security auditor)`;
+  • <span class="c-green">filesystem</span> (scoped to ~/workspace and ~/pentest)
+  • <span class="c-green">memory</span> (knowledge graph across sessions)
+  • <span class="c-green">fetch</span> (web pages as markdown; run with uvx)
+  • <span class="c-green">github</span> (only when GITHUB_PERSONAL_ACCESS_TOKEN is set)
+  • <span class="c-green">brave-search</span> (only when BRAVE_API_KEY is set)`;
+      } else if (action === 'sec-mcp') {
+        body.innerHTML += `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/secure-vault</span>
+<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">sec-mcp list</span>
+<span class="c-cyan c-bold">Claude Desktop</span>  (~/Library/Application Support/Claude/claude_desktop_config.json)
+  [x] filesystem    npx -y @modelcontextprotocol/server-filesystem@2.4.0 ...
+      filesystem scope: ~/workspace, ~/pentest
+  [x] memory        npx -y @modelcontextprotocol/server-memory@2.2.1
+  [x] fetch         uvx mcp-server-fetch==2026.11.18
+<span class="c-cyan c-bold">Project (~/pentest)</span>  (~/pentest/.mcp.json)
+  [x] filesystem   [x] fetch   [x] memory
+<span class="c-muted">(illustrative; sec-mcp lists whatever is in your config files)</span>`;
       } else if (action === 'patch') {
         body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">y</span>
 <span class="c-yellow">● Running tool:</span> <span class="c-bold">filesystem:write_file</span> <span class="c-muted">{"path": "config/database.ts"}</span>
 <span class="c-green">✓</span> File updated cleanly.
-<span class="c-yellow">● Running tool:</span> <span class="c-bold">bash</span> <span class="c-muted">{"command": "npm test"}</span>
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">Bash</span> <span class="c-muted">{"command": "npm test"}</span>
 <span class="c-green">✓</span> 12 tests passed, 0 failures. Secret safely extracted to .env!`;
       } else if (action === 'research') {
         body.innerHTML += `\n<span class="c-cyan">></span> <span class="c-bold">Research latest OpenSSL CVE</span>
-<span class="c-yellow">● Running tool:</span> <span class="c-bold">fetch:get</span> <span class="c-muted">{"url": "https://nvd.nist.gov/vuln/detail/CVE-2026-0001"}</span>
+<span class="c-yellow">● Running tool:</span> <span class="c-bold">fetch:fetch</span> <span class="c-muted">{"url": "https://nvd.nist.gov/vuln/detail/CVE-2026-0001"}</span>
 <span class="c-purple">Claude:</span> Verified that this vulnerability only affects versions &lt; 3.2. Current system has 3.3.0 installed. No patch required.`;
       } else if (action === 'reset') {
         body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/workspace/secure-vault</span>
 <span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">claude</span>
-<span class="c-cyan">Session initialized. MCP Servers active. Ready for instructions.</span><span class="blinking-cursor"></span>`;
+<span class="c-cyan">Session initialized. Ready for instructions.</span><span class="blinking-cursor"></span>`;
+      }
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function simulateHts(action) {
+      const body = document.getElementById('cockpit-sim-body');
+      const prompt = `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/pentest/2026-10-17_acme_corp</span>\n<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> `;
+      if (action === 'welcome-compact') {
+        body.innerHTML += prompt + `<span class="p-cmd">hts config welcome compact</span>
+<span class="c-green">welcome = compact</span> <span class="c-muted">(applies in the next terminal tab; undo with: hts config welcome full)</span>`;
+      } else if (action === 'config') {
+        body.innerHTML += prompt + `<span class="p-cmd">hts config</span>
+<span class="c-muted">~/.config/hts/config</span>
+  welcome     = full      <span class="c-muted"># full | compact | off</span>
+  welcome_ip  = show      <span class="c-muted"># show | hide</span>
+  tips        = on        <span class="c-muted"># on | off</span>
+  prompt      = p10k      <span class="c-muted"># p10k | starship</span>
+<span class="c-muted">(illustrative; shows your current values. "hts config reset" restores defaults.)</span>`;
+      }
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function simulateLifecycle(action) {
+      const body = document.getElementById('lifecycle-sim-body');
+      const prompt = (cmd) => `\n<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/Hackers-terminal-setup</span>\n<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="p-cmd">${cmd}</span>\n`;
+      if (action === 'dry-run') {
+        body.innerHTML += prompt('./ter.sh --dry-run --all') + `<span class="c-cyan c-bold">Hackers Terminal Setup 2.1.0 — DRY RUN</span>
+<span class="c-muted">Nothing will be installed, written or changed.</span>
+  <span class="c-bold">Base preflight</span> (runs before any real install)
+    checks the package manager and free disk space; backs up ~/.zshrc
+  <span class="c-green">Core terminal</span> (--core)
+    would install: fzf bat eza zoxide git-delta tmux fd ripgrep tldr ...
+  <span class="c-muted">... one block per component ...</span>
+<span class="c-yellow c-bold">Dry run complete — nothing was changed.</span>`;
+      } else if (action === 'status') {
+        body.innerHTML += prompt('./ter.sh --status') + `<span class="c-cyan c-bold">━━━ Hackers Terminal Setup — status ━━━</span>
+  <span class="c-bold">Installed components:</span>
+    - core  (2026-11-22)
+    - shell-tools  (2026-11-22)
+    - mcp  (2026-11-22)
+  <span class="c-bold">Tracked tools:</span> 31
+  <span class="c-bold">Tracked files:</span> 9
+  <span class="c-bold">Backup runs:</span>
+    20261122-101500  (4 files)
+  <span class="c-bold">State dir:</span> ~/.local/state/hts
+  <span class="c-bold">Manifest:</span>  ~/.local/state/hts/manifest.tsv
+  <span class="c-bold">Backups:</span>   ~/.local/state/hts/backups
+  <span class="c-bold">Log:</span>       ~/.local/state/hts/install.log
+<span class="c-muted">(illustrative numbers)</span>`;
+      } else if (action === 'restore') {
+        body.innerHTML += prompt('./ter.sh --restore') + `<span class="c-cyan c-bold">━━━ Restore backed-up files ━━━</span>
+  <span class="c-bold">Backup runs:</span>
+    20261122-101500  (4 files)
+<span class="c-cyan">[*]</span> Restoring the EARLIEST backup of each file (your pre-install original).
+  <span class="c-bold">Files to restore (4):</span>
+    ~/.zshrc   &lt;- run 20261122-101500
+    ~/.config/starship.toml   &lt;- run 20261122-101500
+    ~/.config/atuin/config.toml   &lt;- run 20261122-101500
+    ~/.tmux.conf   &lt;- run 20261122-101500
+Restore these 4 file(s)? Current files are backed up first. [y/N]`;
+      } else if (action === 'uninstall') {
+        body.innerHTML += prompt('./ter.sh --uninstall') + `<span class="c-cyan c-bold">━━━ Uninstall (conservative) ━━━</span>
+  <span class="c-bold">Tools are NOT removed by default</span> (the manifest cannot prove you do not depend on them).
+  Commands to remove the recorded tools by hand (or re-run with --purge-tools):
+    brew uninstall ...
+  <span class="c-bold">Cannot be undone automatically:</span>
+    - Login shell change:        chsh -s &lt;your previous shell&gt;
+    - Homebrew itself
+    - Oh My Zsh
+    - Added package repos/taps
+    - npm prefix setting:        npm config delete prefix
+Proceed with the uninstall described above? [y/N]`;
+      } else if (action === 'update') {
+        body.innerHTML += prompt('./ter.sh --update') + `<span class="c-cyan c-bold">━━━ Update ━━━</span>
+<span class="c-cyan">[*]</span> Installed version: 2.1.0
+<span class="c-green">[✓]</span> Up to date (latest release: v2.1.0)
+<span class="c-muted">Then runs brew upgrade / npm -g update / pipx upgrade for recorded tools;
+Go tools are re-installed at @latest. apt/dnf/pacman tools are left to your package manager.</span>
+<span class="c-muted">(illustrative)</span>`;
+      } else if (action === 'hts-config') {
+        body.innerHTML += prompt('hts config prompt starship') + `<span class="c-green">prompt = starship</span> <span class="c-muted">(applies in the next terminal tab)</span>`;
+        body.innerHTML += prompt('hts config reset') + `<span class="c-green">settings reset to defaults</span> <span class="c-muted">(~/.config/hts/config)</span>`;
+      } else if (action === 'clear') {
+        body.innerHTML = `<span class="c-purple c-bold">╭─</span> <span class="p-seg p-dir">📁 ~/Hackers-terminal-setup</span>\n<span class="c-purple c-bold">╰─</span><span class="p-arrow">❯</span> <span class="blinking-cursor"></span>`;
       }
       body.scrollTop = body.scrollHeight;
     }
