@@ -164,6 +164,8 @@ resolve_pkg() {
         wireshark-cli)  name="wireshark" ;;
         python3-venv|python3-pip) name="python" ;;
         python3)        name="python" ;;
+        # 'chisel' on Homebrew is an unrelated LLDB tool; ligolo-ng has no formula
+        chisel|ligolo-ng) name="" ;;
         *)              name="$pkg" ;;
       esac ;;
     apt)
@@ -193,7 +195,7 @@ resolve_pkg() {
         # Not in the stock Fedora/RHEL repos
         lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
         semgrep|gitleaks|trufflehog|yazi|xh|seclists|responder|chisel) name="" ;;
-        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner)  name="" ;;
+        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner|apktool)  name="" ;;
         *)              name="$pkg" ;;
       esac ;;
     pacman)
@@ -225,7 +227,7 @@ resolve_pkg() {
         pipx)           name="python3-pipx" ;;
         lazygit|ffuf|nuclei|subfinder|httpx|katana|dnsx|gau|dalfox) name="" ;;
         semgrep|gitleaks|trufflehog|yazi|xh|seclists|responder|chisel) name="" ;;
-        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner)  name="" ;;
+        trivy|feroxbuster|ligolo-ng|kubescape|osv-scanner|apktool)  name="" ;;
         *)              name="$pkg" ;;
       esac ;;
     *)                  name="$pkg" ;;

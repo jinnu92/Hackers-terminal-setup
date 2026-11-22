@@ -102,11 +102,11 @@ ensure_zsh() {
     warn "zsh not found — installing..."
     case "$PKG_MGR" in
       brew)   brew install zsh ;;
-      apt)    sudo apt-get install -y zsh ;;
-      dnf)    sudo dnf install -y zsh ;;
-      yum)    sudo yum install -y zsh ;;
-      pacman) sudo pacman -S --noconfirm zsh ;;
-      zypper) sudo zypper install -y zsh ;;
+      apt)    _sudo apt-get install -y zsh ;;
+      dnf)    _sudo dnf install -y zsh ;;
+      yum)    _sudo yum install -y zsh ;;
+      pacman) _sudo pacman -S --noconfirm zsh ;;
+      zypper) _sudo zypper install -y zsh ;;
     esac
     command -v zsh &>/dev/null || { err "zsh install failed"; return 1; }
     ok "zsh installed: $(zsh --version)"
@@ -118,7 +118,7 @@ ensure_zsh() {
   zsh_path=$(command -v zsh)
   if [[ "${SHELL:-}" != "$zsh_path" ]]; then
     warn "Default shell is ${SHELL:-unknown} — changing to zsh..."
-    grep -qF "$zsh_path" /etc/shells || echo "$zsh_path" | sudo tee -a /etc/shells
+    grep -qF "$zsh_path" /etc/shells || echo "$zsh_path" | _sudo tee -a /etc/shells
     chsh -s "$zsh_path" || warn "chsh failed — run manually: chsh -s $zsh_path"
     ok "Default shell set to $zsh_path — takes effect on next login"
   else

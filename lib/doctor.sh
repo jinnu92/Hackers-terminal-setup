@@ -3,7 +3,10 @@
 #  lib/doctor.sh — Security Terminal Doctor & Diagnostic Audit
 #
 #  READ-ONLY. Only `command -v`, `--version` style probes and reads of config
-#  files happen here: no installs, no writes, no network calls.
+#  files happen here: no installs, no writes, no network calls. Tools whose
+#  version probe is known to create files or phone home are presence-only
+#  (see _DOC_NOPROBE), and the remaining probes run with telemetry and update
+#  checks switched off.
 #
 #  Environment:  HTS_DOCTOR_FORMAT=json   print one JSON document, nothing else
 #  Exit status:  0 when every required item of every installed component is
@@ -64,13 +67,17 @@ _doc_ver() { # binary "args" -> prints a short version string
   local out="" tmo=""
   local -a va
   [[ -z "${2:-}" || "$2" == "-" ]] && return 0
+  [[ -n "${_DOC_PROBE_HOME:-}" ]] || return 0   # no scratch HOME: presence only
+  case "$_DOC_NOPROBE" in *" ${1##*/} "*) return 0 ;; esac
   read -r -a va <<< "$2"
   command -v timeout >/dev/null 2>&1 && tmo=timeout
   [[ -z "$tmo" ]] && command -v gtimeout >/dev/null 2>&1 && tmo=gtimeout
   if [[ -n "$tmo" ]]; then
-    out="$("$tmo" 5 "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
+    out="$(env "${_DOC_PROBE_ENV[@]}" \
+      "$tmo" 5 "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
   else
-    out="$("$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
+    out="$(env "${_DOC_PROBE_ENV[@]}" \
+      "$1" "${va[@]}" 2>&1 </dev/null | head -n 20)"
   fi
   printf '%s\n' "$out" | grep -m1 -oE '[0-9]+\.[0-9]+(\.[0-9A-Za-z_+-]+)*' | head -n1 | cut -c1-13
 }
@@ -200,6 +207,7 @@ _doc_collect_items() {
   if [[ "$_DOC_OS" == "Darwin" ]]; then claude_cfg="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
   else claude_cfg="$HOME/.config/Claude/claude_desktop_config.json"; fi
   _b mcp "sec-mcp" sec-mcp "-"
+  _b mcp "github-mcp-server" github-mcp-server "-" opt
   _b mcp "MCP Inspector" mcp-inspector "-"
   _b mcp "detect-secrets" detect-secrets "--version"
   _b mcp "semgrep" semgrep "--version" opt
@@ -254,6 +262,8 @@ _doc_collect_items() {
   _b ad-pivot "Chisel" chisel "--version"
   _b ad-pivot+pentest "NetExec (nxc)" "nxc|netexec" "-"
   _b ad-pivot "BloodHound.py" bloodhound-python "-"
+  _b ad-pivot "BH CE ingestor" bloodhound-ce-python "-"
+  _b ad-pivot "BloodHound CLI" bloodhound-cli "-"
   _b ad-pivot "Certipy" certipy "-"
   _b ad-pivot "Responder" responder "-"
 
@@ -304,6 +314,7 @@ _doc_collect_items() {
   _b workflow "lazygit" lazygit "--version"
   _b workflow "xh" xh "--version" optlinux
   _b workflow "Obsidian" "app:Obsidian.app" "-" mac
+  _b workflow "hts command" hts "-" opt
 
   # 17 Tactical cockpit
   _b dashboard "fastfetch" fastfetch "--version"
@@ -315,162 +326,6 @@ _doc_collect_items() {
   _f config ".tmux.conf" "$HOME/.tmux.conf"
   _f config "pentest.zsh" "$zc/pentest.zsh"
   _f config "advanced_pentest" "$zc/advanced_pentest.zsh"
-}
-
-# ─── Hygiene checks (read-only) ───────────────────────────────────────────────
-_DOC_SECRET_RE='^(ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|BSA|sk-|xox[abp]-|AKIA)[A-Za-z0-9_./+=-]{16,}$'
-
-_doc_mcp_pkg() { # file label package-token  (npm or uvx package argument)
-  local f=$1 lbl=$2 t=$3 base
-  base=$t
-  [[ "${t:1}" == *@* ]] && base="${t%@*}"
-  case "$base" in
-    @modelcontextprotocol/server-github)
-      _doc_hyg warn "$lbl" "uses server-github, which is deprecated and archived" \
-        "switch to GitHub's official github-mcp-server" ;;
-    @modelcontextprotocol/server-brave-search)
-      _doc_hyg warn "$lbl" "uses server-brave-search, which is deprecated and archived" \
-        "switch to Brave's maintained MCP server (@brave/brave-search-mcp-server)" ;;
-    @modelcontextprotocol/server-fetch)
-      _doc_hyg warn "$lbl" "server-fetch does not exist on npm" \
-        "use the Python mcp-server-fetch via uvx with a pinned version" ;;
-  esac
-  return 0
-}
-
-_doc_mcp_pin() { # label kind(npx|uvx) package
-  local lbl=$1 kind=$2 p=$3 ver=""
-  [[ "${p:1}" == *@* ]] && ver="${p##*@}"
-  [[ "$kind" == "uvx" && "$p" == *==* ]] && ver="${p##*==}"
-  if [[ -z "$ver" || "$ver" == "latest" ]]; then
-    _doc_hyg warn "$lbl" "$kind launches $p unpinned" "pin a version, e.g. ${p%%@latest}@<version>"
-  fi
-  return 0
-}
-
-_doc_mcp_path() { # label path
-  local lbl=$1 p=$2 h="${HOME%/}"
-  case "$p" in
-    /|"~"|"~/"|'$HOME'|'$HOME/'|'${HOME}'|'${HOME}/')
-      _doc_hyg warn "$lbl" "filesystem server is allowed the whole home or root ($p)" \
-        "list only project directories such as ~/workspace" ;;
-    *)
-      if [[ "${p%/}" == "$h" ]]; then
-        _doc_hyg warn "$lbl" "filesystem server is allowed your entire home directory" \
-          "list only project directories such as ~/workspace"
-      fi ;;
-  esac
-  return 0
-}
-
-_doc_scan_mcp() { # file label
-  local f=$1 lbl=$2 t mode="" before pair key val n0 n1
-  local keyre='(KEY|TOKEN|SECRET|PASSW|AUTH)'
-  if [[ ! -f "$f" ]]; then _doc_hyg skip "$lbl" "not present" ""; return 0; fi
-  n0=${#_DH_ST[@]}
-  while IFS= read -r t; do
-    t="${t#\"}"; t="${t%\"}"
-    case "$mode" in
-      npx|uvx)
-        case "$t" in
-          args) continue ;;
-          --from) mode="${mode}from"; continue ;;
-          -*) continue ;;
-        esac
-        _doc_mcp_pkg "$f" "$lbl" "$t"; _doc_mcp_pin "$lbl" "$mode" "$t"
-        case "$t" in *server-filesystem*) mode=fs ;; *) mode="" ;; esac
-        continue ;;
-      npxfrom|uvxfrom)
-        _doc_mcp_pkg "$f" "$lbl" "$t"; _doc_mcp_pin "$lbl" "${mode%from}" "$t"; mode=""; continue ;;
-      fs)
-        case "$t" in
-          /*|"~"*|'$'*) _doc_mcp_path "$lbl" "$t"; continue ;;
-        esac
-        mode="" ;;
-    esac
-    case "$t" in
-      npx|*/npx) mode=npx ;;
-      uvx|*/uvx) mode=uvx ;;
-    esac
-  done < <(grep -oE '"([^"\\]|\\.)*"' "$f" 2>/dev/null)
-
-  while IFS= read -r pair; do
-    key="${pair#\"}"; key="${key%%\"*}"
-    val="${pair#*:}"; val="${val#"${val%%[![:space:]]*}"}"; val="${val#\"}"; val="${val%\"}"
-    [[ -z "$val" || "$val" == *'$'* ]] && continue
-    if [[ "$val" =~ $_DOC_SECRET_RE ]] || { [[ "$key" =~ $keyre ]] \
-        && [[ "$val" =~ ^[A-Za-z0-9_+=-]{24,}$ ]]; }; then
-      _doc_hyg warn "$lbl" "plaintext secret stored under key $key" \
-        "keep it out of the file: set it in your environment or secret manager"
-    fi
-  done < <(grep -oE '"[^"\\]+"[[:space:]]*:[[:space:]]*"[^"\\]{8,}"' "$f" 2>/dev/null)
-
-  n1=${#_DH_ST[@]}
-  [[ $n1 -eq $n0 ]] && _doc_hyg ok "$lbl" "no issues found" ""
-  return 0
-}
-
-_doc_scan_misc() {
-  local f content q1='"' q2="'" re
-  # direnv: [whitelist] prefix = [...] trusts whole directory trees
-  f="$HOME/.config/direnv/direnv.toml"
-  if [[ -f "$f" ]]; then
-    content="$(tr '\n' ' ' < "$f" 2>/dev/null)"
-    re='\[whitelist\][^[]*prefix[[:space:]]*=[[:space:]]*\[[^]]*['"$q1$q2"']'
-    if [[ "$content" =~ $re ]]; then
-      _doc_hyg warn "direnv" "[whitelist] auto-trusts whole directory prefixes" \
-        "remove the prefix list and run 'direnv allow' per project"
-    else
-      _doc_hyg ok "direnv" "no auto-trusted prefixes" ""
-    fi
-  else
-    _doc_hyg skip "direnv" "not present" ""
-  fi
-  # Atuin: secrets_filter must not be disabled
-  f="$HOME/.config/atuin/config.toml"
-  if [[ -f "$f" ]]; then
-    if grep -qE '^[[:space:]]*secrets_filter[[:space:]]*=[[:space:]]*false' "$f" 2>/dev/null; then
-      _doc_hyg warn "atuin" "secrets_filter is disabled" "set secrets_filter = true in $f"
-    else
-      _doc_hyg ok "atuin" "secrets_filter enabled" ""
-    fi
-  else
-    _doc_hyg skip "atuin" "not present" ""
-  fi
-}
-
-# ─── Manifest: which components did the user install? ─────────────────────────
-# Sets _DOC_MODE (known|info), _DOC_INST (space-padded list of group ids).
-_doc_read_manifest() {
-  local c
-  _DOC_MODE=info; _DOC_INST=" "; _DOC_MANI_NOTE="no manifest — the installer has not run in install mode"
-  [[ -f "$HTS_MANIFEST" ]] || return 0
-  while IFS= read -r c; do
-    c="${c#--}"; c="$(printf '%s' "$c" | tr '[:upper:]_' '[:lower:]-')"
-    case "$c" in
-      dev) _DOC_INST="$_DOC_INST""node claude code " ;;
-      cloud|cloud-devsec|devsecops) _DOC_INST="$_DOC_INST""cloud " ;;
-      ad-pivoting|pivoting|ad) _DOC_INST="$_DOC_INST""ad-pivot " ;;
-      configs) _DOC_INST="$_DOC_INST""config " ;;
-      doctor|"") ;;
-      *) _DOC_INST="$_DOC_INST$c " ;;
-    esac
-  done < <(awk -F'\t' '$2=="component"{print $3}' "$HTS_MANIFEST" 2>/dev/null)
-  if [[ "$_DOC_INST" == " " ]]; then
-    _DOC_MANI_NOTE="manifest has no component records"
-  else
-    _DOC_MODE=known; _DOC_MANI_NOTE=""
-  fi
-  return 0
-}
-
-_doc_active() { # owners -> 0 when any owner is an installed component
-  local o
-  [[ "$_DOC_MODE" == "known" ]] || return 1
-  for o in $1; do
-    case "$_DOC_INST" in *" $o "*) return 0 ;; esac
-  done
-  return 1
 }
 
 _doc_jesc() {
@@ -535,16 +390,7 @@ _doc_render_text() {
   done
 
   echo ""
-  echo -e "${BOLD}${YELLOW}  Config & hygiene${RESET}"
-  local nh=${#_DH_ST[@]}
-  for ((i = 0; i < nh; i++)); do
-    case "${_DH_ST[$i]}" in
-      ok)   printf '  %b %-23.23s %b%s%b\n' "${GREEN}[✓]${RESET}" "${_DH_NAME[$i]}" "$DIM" "${_DH_MSG[$i]}" "$RESET" ;;
-      warn) printf '  %b %-23.23s %s\n' "${YELLOW}[!]${RESET}" "${_DH_NAME[$i]}" "${_DH_MSG[$i]}"
-            printf '      %bfix: %s%b\n' "$DIM" "${_DH_FIX[$i]}" "$RESET" ;;
-      *)    printf '  %b %-23.23s %b%s%b\n' "${DIM}[~]${RESET}" "${_DH_NAME[$i]}" "$DIM" "${_DH_MSG[$i]}" "$RESET" ;;
-    esac
-  done
+  _doc_render_hygiene_text
 
   echo ""
   echo -e "${BOLD}${YELLOW}  State${RESET}"
@@ -567,7 +413,7 @@ _doc_render_text() {
 }
 
 _doc_render_json() {
-  local g i j n=${#_DI_G[@]} nh=${#_DH_ST[@]} first gfirst=1 ifirst st
+  local g i n=${#_DI_G[@]} gfirst=1 ifirst st
   local inst=0 miss=0 opt=0 na=0 fail=0 state
   printf '{"version":"%s","platform":{"os":"%s","arch":"%s"},"mode":"%s",' \
     "$(_doc_jesc "$HTS_VERSION")" "$(_doc_jesc "$_DOC_OS")" "$(_doc_jesc "$(uname -m)")" \
@@ -605,14 +451,7 @@ _doc_render_json() {
     else state=not_selected; fi
     printf '"%s":"%s"' "$g" "$state"
   done
-  printf '},"hygiene":['
-  first=1
-  for ((j = 0; j < nh; j++)); do
-    [[ $first -eq 0 ]] && printf ','
-    first=0
-    printf '{"name":"%s","status":"%s","detail":"%s","fix":"%s"}' "$(_doc_jesc "${_DH_NAME[$j]}")" \
-      "${_DH_ST[$j]}" "$(_doc_jesc "${_DH_MSG[$j]}")" "$(_doc_jesc "${_DH_FIX[$j]}")"
-  done
+  _doc_render_hygiene_json
   printf '],"state":{"manifest":"%s","manifest_entries":%s,"log":"%s","backups":%s},' \
     "$(_doc_jesc "$HTS_MANIFEST")" "$_DOC_MANI_N" "$(_doc_jesc "$HTS_LOG")" "$_DOC_BACKUPS"
   printf '"totals":{"installed":%d,"missing":%d,"not_installed":%d,"na":%d,"warnings":%d,"failing":%d},' \
@@ -622,29 +461,15 @@ _doc_render_json() {
 }
 
 _doc_main() {
-  local json=0 i
+  local json=0
   [[ "${HTS_DOCTOR_FORMAT:-}" == "json" ]] && json=1
   _doc_reset
   _doc_read_manifest
+  _doc_probe_setup
   _doc_collect_items
+  _doc_probe_cleanup
 
-  if [[ "$_DOC_OS" == "Darwin" ]]; then
-    _doc_scan_mcp "$HOME/Library/Application Support/Claude/claude_desktop_config.json" "MCP: Claude Desktop"
-  else
-    _doc_scan_mcp "$HOME/.config/Claude/claude_desktop_config.json" "MCP: Claude Desktop"
-  fi
-  _doc_scan_mcp "$HOME/pentest/.mcp.json" "MCP: pentest/.mcp.json"
-  _doc_scan_misc
-
-  _DOC_WARNS=0
-  for ((i = 0; i < ${#_DH_ST[@]}; i++)); do
-    [[ "${_DH_ST[$i]}" == "warn" ]] && _DOC_WARNS=$((_DOC_WARNS + 1))
-  done
-  _DOC_MANI_N=0
-  [[ -f "$HTS_MANIFEST" ]] && _DOC_MANI_N="$(wc -l < "$HTS_MANIFEST" 2>/dev/null | tr -d ' ')"
-  _DOC_BACKUPS=0
-  [[ -d "$HTS_BACKUP_ROOT" ]] && _DOC_BACKUPS="$(find "$HTS_BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-
+  _doc_run_hygiene
   _T_FAIL=0
   if [[ $json -eq 1 ]]; then _doc_render_json; else _doc_render_text; fi
   [[ ${_T_FAIL:-0} -eq 0 ]]
@@ -652,6 +477,9 @@ _doc_main() {
 
 sec_doctor() {
   local old_path="$PATH" rc=0 d
+  if ! declare -F _doc_run_hygiene >/dev/null; then
+    err "lib/doctor_hygiene.sh is not loaded"; return 1
+  fi
   for d in "$HOME/.local/bin" "$HOME/.npm-global/bin" "$HOME/go/bin" "$HOME/.cargo/bin" \
            /opt/homebrew/bin /usr/local/bin; do
     case ":$PATH:" in *":$d:"*) ;; *) [[ -d "$d" ]] && PATH="$PATH:$d" ;; esac

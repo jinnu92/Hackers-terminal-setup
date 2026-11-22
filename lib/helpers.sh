@@ -94,10 +94,31 @@ install_golang() {
   return "$rc"
 }
 
+# _pipx_pkg_name <spec> — distribution name from a pipx spec (name, name==1.2,
+# name[extra], git+https://host/user/repo.git@ref), lower-cased with _ as -.
+_pipx_pkg_name() {
+  local n=$1
+  case "$n" in
+    *://*) n="${n##*/}"; n="${n%%@*}"; n="${n%.git}" ;;
+    *)     n="${n%%[=<>~!@[ ;]*}" ;;
+  esac
+  printf '%s' "$n" | tr '[:upper:]_' '[:lower:]-'
+}
+
+# _pipx_has <spec> — succeeds when pipx already manages that package. pipx prints
+# lines such as "   package NAME 1.2.3, installed using Python 3.12".
+_pipx_has() {
+  local want
+  want="$(_pipx_pkg_name "$1")"
+  [[ -n "$want" ]] || return 1
+  pipx list 2>/dev/null | sed -n 's/^[[:space:]]*package \([^ ,]*\).*/\1/p' \
+    | tr '[:upper:]_' '[:lower:]-' | grep -qxF -- "$want"
+}
+
 pipx_install() {
   local pkg=$1
   export PATH="$HOME/.local/bin:$PATH"
-  if pipx list 2>/dev/null | grep -q "^  $pkg"; then
+  if _pipx_has "$pkg"; then
     info "$pkg already installed via pipx"
   else
     log "Installing $pkg via pipx..."
@@ -151,8 +172,10 @@ npm_global_install() {
 }
 
 go_install() {
-  local pkg=$1   # full go import path e.g. github.com/foo/bar@latest
+  local pkg=$1   # go import path, optionally pinned: github.com/foo/bar@v1.2.3
   local name=$2  # binary name to check
+  # A pin from the caller is kept as is; without one the owner wants the latest.
+  [[ "$pkg" == *@* ]] || pkg="${pkg}@latest"
   export GOPATH="$HOME/go"
   export PATH="$HOME/go/bin:$PATH"
   if command -v "$name" &>/dev/null; then

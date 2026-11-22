@@ -19,7 +19,12 @@ install_node() {
     local interp=""
     case "$PKG_MGR" in
       brew)
-        pkg_install node || warn "brew install node failed"
+        if [[ "$current_version" -gt 0 ]] && brew list node &>/dev/null; then
+          # pkg_install would skip a formula that is "already installed"
+          brew upgrade node || warn "brew upgrade node failed"
+        else
+          pkg_install node || warn "brew install node failed"
+        fi
         ;;
       apt)
         log "Setting up NodeSource LTS repository for Debian/Ubuntu..."
@@ -41,6 +46,11 @@ install_node() {
         ;;
     esac
     hash -r 2>/dev/null || true
+    if command -v node &>/dev/null; then
+      current_version=$(node -v | sed 's/v//' | cut -d. -f1)
+      [[ "$current_version" -ge "$min_version" ]] || \
+        warn "Node.js $(node -v) on PATH is still below v${min_version} (another install or version manager may shadow it)"
+    fi
   fi
 
   # Configure npm global directory without sudo

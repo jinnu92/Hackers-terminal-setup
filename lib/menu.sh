@@ -15,7 +15,7 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Core & Developer Stack:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}1${RESET}   Core terminal     ${DIM}OMZ plugins, p10k, fzf, bat, eza, tmux${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}2${RESET}   Hacker Fonts      ${DIM}MesloLGS, JetBrains Mono, Fira Code, Hack...${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}   Node.js & npm     ${DIM}Modern LTS Node.js + safe non-root npm prefix${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}3${RESET}   Node.js & npm     ${DIM}Newest LTS Node.js (min 22) + safe non-root npm prefix${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}4${RESET}   Claude Code CLI   ${DIM}Anthropic Claude Code agentic coding CLI tool${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}5${RESET}   VS Code & CLI     ${DIM}Visual Studio Code editor & 'code' CLI${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}6${RESET}   GPU Terminals     ${DIM}Ghostty, WezTerm, Kitty + aesthetic configs${RESET}"
@@ -24,11 +24,11 @@ show_menu() {
   echo -e "${BOLD}${CYAN}  ║${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${BOLD}Security Assessment Suites:${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}9${RESET}   Pentest tools     ${DIM}nmap, sqlmap, hydra, john, gobuster, SecLists${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}10${RESET}  Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf, katana${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Active Directory  ${DIM}Ligolo-ng, Chisel, NetExec, BloodHound, Certipy${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  Web & API Sec     ${DIM}Schemathesis, Kiterunner, Caido, Arjun, FFUF${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  Cloud & DevSecOps ${DIM}Trivy, Syft, Grype, Checkov, Kube-hunter, AWS${RESET}"
-  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}14${RESET}  Mobile & Reverse  ${DIM}Jadx, Apktool (DEX/APK decompilation & analysis)${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}10${RESET}  Bug bounty        ${DIM}subfinder, httpx, nuclei, amass, ffuf, katana, bbot${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}11${RESET}  Active Directory  ${DIM}Ligolo-ng, Chisel, NetExec, BloodHound CE, Certipy${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}12${RESET}  Web & API Sec     ${DIM}Schemathesis, Kiterunner, Caido CLI, Arjun, ffuf${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}13${RESET}  Cloud & DevSecOps ${DIM}Trivy, Syft, Grype, Checkov, Kubescape, AWS${RESET}"
+  echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}14${RESET}  Mobile & Reverse  ${DIM}Jadx, Apktool, Frida, objection (decompile & instrument)${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}15${RESET}  AI / LLM sec      ${DIM}garak, promptfoo, jwt_tool, ollama...${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}16${RESET}  Workflow tools    ${DIM}lazygit, jq, yq, gh, pandoc, obsidian...${RESET}"
   echo -e "${BOLD}${CYAN}  ║${RESET}  ${GREEN}17${RESET}  Tactical Cockpit  ${DIM}Fastfetch + Modern Welcome Terminal Cockpit${RESET}"
@@ -115,7 +115,7 @@ hts_comp_info() {
     core)
       HTS_C_NUM=1; HTS_C_FLAG="--core"; HTS_C_NAME="Core terminal"; HTS_C_CMD="install_core"
       HTS_C_DESC="OMZ plugins, p10k, fzf, bat, eza, tmux"
-      HTS_C_INSTALLS="fzf bat eza zoxide git-delta tmux fd ripgrep tldr; Meslo Nerd Font; zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions; Powerlevel10k; lazygit via Go on Linux"
+      HTS_C_INSTALLS="fzf bat eza zoxide git-delta tmux fd ripgrep tldr; lazygit (package, pinned release binary on Linux, else go install); Meslo Nerd Font; zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions; Powerlevel10k"
       HTS_C_WRITES="~/.oh-my-zsh/custom/plugins/*, ~/.oh-my-zsh/custom/themes/powerlevel10k, font files" ;;
     fonts)
       HTS_C_NUM=2; HTS_C_FLAG="--fonts"; HTS_C_NAME="Hacker Fonts"; HTS_C_CMD="install_fonts all"
@@ -124,8 +124,8 @@ hts_comp_info() {
       HTS_C_WRITES="font files (macOS casks / ~/Library/Fonts, Linux ~/.local/share/fonts/NerdFonts)" ;;
     node)
       HTS_C_NUM=3; HTS_C_FLAG="--node"; HTS_C_NAME="Node.js & npm"; HTS_C_CMD="install_node"
-      HTS_C_DESC="Modern LTS Node.js + safe non-root npm prefix"
-      HTS_C_INSTALLS="Node.js (18+) and npm via the system package manager"
+      HTS_C_DESC="Newest LTS Node.js (min 22) + safe non-root npm prefix"
+      HTS_C_INSTALLS="Node.js: the newest LTS, minimum v22 (Homebrew node, NodeSource LTS repo on apt/dnf/yum, distro package on pacman/zypper); an older Node is upgraded; npm"
       HTS_C_WRITES="npm global prefix ~/.npm-global (npm config), ~/.npm-global/bin" ;;
     claude)
       HTS_C_NUM=4; HTS_C_FLAG="--claude"; HTS_C_NAME="Claude Code CLI"; HTS_C_CMD="install_claude"
@@ -135,32 +135,32 @@ hts_comp_info() {
     code)
       HTS_C_NUM=5; HTS_C_FLAG="--code"; HTS_C_NAME="VS Code & CLI"; HTS_C_CMD="install_code"
       HTS_C_DESC="Visual Studio Code editor & 'code' CLI"
-      HTS_C_INSTALLS="Visual Studio Code (cask or distro package)"
+      HTS_C_INSTALLS="Visual Studio Code (cask on macOS; Microsoft apt/rpm repository on Linux)"
       HTS_C_WRITES="~/.local/bin/code symlink" ;;
     dev)
       HTS_C_NUM="-"; HTS_C_FLAG="--dev"; HTS_C_NAME="Developer stack"; HTS_C_CMD="install_dev"
       HTS_C_DESC="Node.js + Claude Code + VS Code"
-      HTS_C_INSTALLS="Node.js, @anthropic-ai/claude-code, Visual Studio Code"
-      HTS_C_WRITES="~/.npm-global, ~/.local/bin/code symlink" ;;
+      HTS_C_INSTALLS="Node.js (newest LTS, minimum v22), Claude Code (native installer), Visual Studio Code"
+      HTS_C_WRITES="~/.npm-global (unless nvm/fnm/Volta manages Node), ~/.local/bin/claude, ~/.local/bin/code symlink" ;;
     terminals)
       HTS_C_NUM=6; HTS_C_FLAG="--terminals"; HTS_C_NAME="GPU Terminals"; HTS_C_CMD="install_terminals"
       HTS_C_DESC="Ghostty, WezTerm, Kitty + aesthetic configs"
-      HTS_C_INSTALLS="Ghostty (macOS) or Kitty/WezTerm/Ghostty depending on distro"
-      HTS_C_WRITES="~/.config/ghostty/config and themes/catppuccin-mocha, ~/.config/wezterm/wezterm.lua, ~/.config/kitty/kitty.conf, ~/.config/alacritty/alacritty.toml" ;;
+      HTS_C_INSTALLS="Per platform. macOS: Ghostty, WezTerm, Kitty, Alacritty (casks). apt: Kitty, WezTerm (upstream repo), Alacritty when packaged, no Ghostty. dnf: Kitty, Alacritty, WezTerm (COPR), no Ghostty. pacman: all four. zypper: Kitty, Alacritty. Nothing on WSL or headless Linux"
+      HTS_C_WRITES="Config for each terminal that is installed: ~/.config/ghostty/config and themes/catppuccin-mocha, ~/.config/wezterm/wezterm.lua, ~/.config/kitty/kitty.conf, ~/.config/alacritty/alacritty.toml (existing files are backed up)" ;;
     shell-tools)
       HTS_C_NUM=7; HTS_C_FLAG="--shell-tools"; HTS_C_NAME="Shell History"; HTS_C_CMD="install_shell_tools"
       HTS_C_DESC="Atuin SQLite history, direnv, uv, btop, yazi, Starship"
-      HTS_C_INSTALLS="atuin, direnv, uv, btop, yazi, git-delta, eza, zoxide, ripgrep, fzf, bat, fd, starship"
-      HTS_C_WRITES="~/.config/atuin/config.toml, ~/.config/direnv/direnv.toml, ~/.config/starship.toml" ;;
+      HTS_C_INSTALLS="atuin, direnv, uv, btop, yazi (cargo on Linux), git-delta, eza, zoxide, ripgrep, fzf, bat, fd, starship"
+      HTS_C_WRITES="~/.config/atuin/config.toml, ~/.config/direnv/direnv.toml (trusts no directory automatically), ~/.config/starship.toml; existing files are backed up. The prompt in ~/.zshrc is chosen by HTS_PROMPT (p10k default, or starship)" ;;
     mcp)
       HTS_C_NUM=8; HTS_C_FLAG="--mcp"; HTS_C_NAME="MCP Server Suite"; HTS_C_CMD="setup_mcp_suite"
       HTS_C_DESC="Preconfigured Claude Code & Desktop MCP suite"
-      HTS_C_INSTALLS="Node.js if missing; @modelcontextprotocol/inspector (npm); semgrep and detect-secrets (pipx)"
-      HTS_C_WRITES="~/workspace and ~/pentest directories, Claude Desktop claude_desktop_config.json (macOS: ~/Library/Application Support/Claude, Linux: ~/.config/Claude), ~/pentest/.mcp.json, ~/.local/bin/sec-mcp" ;;
+      HTS_C_INSTALLS="@modelcontextprotocol/inspector (pinned, npm); semgrep, detect-secrets (pipx); uv/uvx if missing; github-mcp-server (pinned release binary, only when GITHUB_PERSONAL_ACCESS_TOKEN is set); Node.js if missing"
+      HTS_C_WRITES="Merges pinned servers into the Claude Desktop config (macOS: ~/Library/Application Support/Claude/claude_desktop_config.json, Linux: ~/.config/Claude/), ~/pentest/.mcp.json and Claude Code user scope: filesystem, memory and fetch (uvx) always; github and brave-search only when GITHUB_PERSONAL_ACCESS_TOKEN / BRAVE_API_KEY are set. Existing configs are backed up, other servers are kept, keys are never written. Also ~/workspace, ~/pentest, ~/.local/bin/sec-mcp, ~/.local/bin/github-mcp-server" ;;
     pentest)
       HTS_C_NUM=9; HTS_C_FLAG="--pentest"; HTS_C_NAME="Pentest tools"; HTS_C_CMD="install_pentest"
       HTS_C_DESC="nmap, sqlmap, hydra, john, gobuster, SecLists"
-      HTS_C_INSTALLS="nmap netcat wget curl httpie gobuster hydra sqlmap masscan tcpdump openssl gpg python3 pipx john hashcat (wireshark-cli on Linux); impacket, pwntools, scapy, netexec (pipx); SecLists"
+      HTS_C_INSTALLS="nmap netcat wget curl httpie gobuster hydra sqlmap masscan tcpdump openssl gpg python3 pipx john hashcat (tshark on Linux); impacket, pwntools, scapy (pipx/uv); NetExec (pinned git tag); SecLists"
       HTS_C_WRITES="~/pentest/wordlists/seclists" ;;
     seclists)
       HTS_C_NUM="-"; HTS_C_FLAG="--seclists"; HTS_C_NAME="SecLists"; HTS_C_CMD="install_seclists"
@@ -169,29 +169,29 @@ hts_comp_info() {
       HTS_C_WRITES="~/pentest/wordlists/seclists" ;;
     bugbounty)
       HTS_C_NUM=10; HTS_C_FLAG="--bugbounty"; HTS_C_NAME="Bug bounty"; HTS_C_CMD="install_bugbounty"
-      HTS_C_DESC="subfinder, httpx, nuclei, amass, ffuf, katana"
-      HTS_C_INSTALLS="subfinder httpx nuclei katana dnsx interactsh-client gau hakrawler waybackurls amass dalfox (go install); Burp Suite and Caido (macOS casks); arjun (pipx)"
-      HTS_C_WRITES="~/go/bin, nuclei templates" ;;
+      HTS_C_DESC="subfinder, httpx, nuclei, amass, ffuf, katana, bbot, Caido CLI"
+      HTS_C_INSTALLS="ffuf, feroxbuster, nikto, mitmproxy; subfinder httpx nuclei katana dnsx interactsh-client gau hakrawler waybackurls amass (pinned, go install); dalfox; Caido CLI; arjun and bbot (pipx/uv); Burp Suite (macOS cask)"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin, ~/.local/share/nikto, nuclei templates" ;;
     ad-pivot)
       HTS_C_NUM=11; HTS_C_FLAG="--ad-pivot"; HTS_C_NAME="Active Directory"; HTS_C_CMD="install_ad_pivoting"
-      HTS_C_DESC="Ligolo-ng, Chisel, NetExec, BloodHound, Certipy"
-      HTS_C_INSTALLS="Ligolo-ng, Chisel (go install), NetExec, BloodHound, Certipy (uv or pipx)"
-      HTS_C_WRITES="~/.local/bin, ~/go/bin" ;;
+      HTS_C_DESC="Ligolo-ng, Chisel, NetExec, BloodHound CE, Certipy"
+      HTS_C_INSTALLS="Ligolo-ng proxy (installed as ligolo-proxy, alias ligolo) and Chisel (pinned release downloads); NetExec, BloodHound.py, BloodHound CE ingestor (bloodhound-ce-python), Certipy (pipx/uv); BloodHound CE CLI (bloodhound-cli, launcher only, needs Docker); Responder (git clone with a wrapper)"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin, ~/.local/share/Responder" ;;
     web-api)
       HTS_C_NUM=12; HTS_C_FLAG="--web-api"; HTS_C_NAME="Web & API Sec"; HTS_C_CMD="install_web_api"
-      HTS_C_DESC="Schemathesis, Kiterunner, Caido, Arjun, FFUF"
-      HTS_C_INSTALLS="Schemathesis, Arjun (uv or pipx); Kiterunner (go install); Caido; ffuf, feroxbuster"
+      HTS_C_DESC="Schemathesis, Kiterunner, Caido CLI, Arjun, ffuf, feroxbuster"
+      HTS_C_INSTALLS="Schemathesis, Arjun (pipx/uv); Kiterunner (kr); Caido CLI (caido-cli); ffuf, feroxbuster"
       HTS_C_WRITES="~/go/bin, ~/.local/bin" ;;
     cloud)
       HTS_C_NUM=13; HTS_C_FLAG="--cloud"; HTS_C_NAME="Cloud & DevSecOps"; HTS_C_CMD="hts_install_cloud_suite"
-      HTS_C_DESC="AWS/Azure/gcloud CLIs, Trivy, Syft, Grype, Checkov, Kube-hunter, prowler"
-      HTS_C_INSTALLS="awscli, azure-cli, google-cloud-sdk; cloudfox, gitleaks, trufflehog (go install); prowler, pacu, s3scanner, checkov, kube-hunter (pipx/uv); Trivy, Syft, Grype"
-      HTS_C_WRITES="~/.local/bin, ~/go/bin" ;;
+      HTS_C_DESC="AWS/Azure/gcloud CLIs, Trivy, Syft, Grype, Checkov, Kubescape, kube-bench, prowler"
+      HTS_C_INSTALLS="AWS CLI, Azure CLI, gcloud (cask on macOS, official archive on Linux); cloudfox, gitleaks, trufflehog (go install); prowler, pacu, s3scanner, checkov (pipx/uv); Trivy, Syft, Grype; kubescape, kube-bench, osv-scanner"
+      HTS_C_WRITES="~/.local/bin, ~/go/bin, ~/.local/share/google-cloud-sdk (Linux)" ;;
     mobile)
       HTS_C_NUM=14; HTS_C_FLAG="--mobile"; HTS_C_NAME="Mobile & Reverse"; HTS_C_CMD="install_mobile_re"
-      HTS_C_DESC="Jadx, Apktool (DEX/APK decompilation & analysis)"
-      HTS_C_INSTALLS="jadx, apktool"
-      HTS_C_WRITES="~/.local/share/jadx and ~/.local/bin links (Linux fallback only)" ;;
+      HTS_C_DESC="Jadx, Apktool, Frida, objection (decompile & instrument)"
+      HTS_C_INSTALLS="jadx, apktool (no apktool package on dnf/yum/zypper: manual install); frida-tools (frida) and objection (pipx/uv)"
+      HTS_C_WRITES="~/.local/share/jadx and ~/.local/bin links (Linux fallback only), ~/.local/bin for pipx tools" ;;
     ai)
       HTS_C_NUM=15; HTS_C_FLAG="--ai"; HTS_C_NAME="AI / LLM sec"; HTS_C_CMD="install_ai_llm"
       HTS_C_DESC="garak, promptfoo, jwt_tool, ollama..."
@@ -370,7 +370,7 @@ hts_print_banner() {
   echo -e "  1. ${YELLOW}Set terminal font:${RESET}  'MesloLGS NF' (p10k) or 'JetBrainsMono Nerd Font'"
   echo -e "  2. ${YELLOW}Reload shell:${RESET}       ${BOLD}exec zsh${RESET}"
   echo -e "  3. ${YELLOW}Configure prompt:${RESET}   ${BOLD}p10k configure${RESET} (or Starship: ${BOLD}starship.toml${RESET})"
-  echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}cc${RESET})"
+  echo -e "  4. ${YELLOW}Start Claude Code:${RESET}  ${BOLD}claude${RESET} (or ${BOLD}ccode${RESET})"
   echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
   echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
   echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
@@ -451,9 +451,19 @@ run_selections() {
     HTS_SHOW_BANNER=1
   fi
 
+  # After the last installing component (before the read-only doctor audit),
+  # install the small `hts` command if its module is part of this build.
+  local hts_cli_done=0
   for id in $ids; do
+    if [[ "$id" == "doctor" && "$doctor_only" -eq 0 && "$hts_cli_done" -eq 0 ]]; then
+      hts_cli_done=1
+      if declare -F install_hts_cli >/dev/null; then run_step "hts command" install_hts_cli || true; fi
+    fi
     hts_run_component "$id" || true
   done
+  if [[ "$doctor_only" -eq 0 && "$hts_cli_done" -eq 0 ]]; then
+    if declare -F install_hts_cli >/dev/null; then run_step "hts command" install_hts_cli || true; fi
+  fi
 
   hts_print_summary || HTS_RUN_RC=1
   return 0
