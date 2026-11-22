@@ -8,11 +8,19 @@
 set -e
 
 # If running directly from cloned repo with lib/ present, source modules dynamically for live development
-_HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -d "$_HTS_ROOT/lib" ]]; then
-  for _mod in common pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
-    [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
-  done
+# Piped mode (curl | bash): BASH_SOURCE[0] is empty at top level, so the script text
+# itself is arriving on stdin. Record that here (top level is the only reliable place;
+# inside functions BASH_SOURCE[0] is not empty) and never source lib/ from the cwd.
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+  _HTS_PIPED=0
+  _HTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ -d "$_HTS_ROOT/lib" ]]; then
+    for _mod in common pkg_mgr helpers preflight fonts dev terminals shell_tools ad_pivoting web_api cloud_devsec mobile_re pentest bugbounty cloud ai_mcp workflow dashboard doctor configs menu; do
+      [[ -f "$_HTS_ROOT/lib/${_mod}.sh" ]] && source "$_HTS_ROOT/lib/${_mod}.sh"
+    done
+  fi
+else
+  _HTS_PIPED=1
 fi
 
 
@@ -3246,7 +3254,21 @@ show_menu() {
   echo ""
   echo -e "  ${DIM}Enter choices separated by spaces (e.g: 1 2 4 6 7 8 11 12 17 18), 'A' or 'y' for all [default: A]:${RESET}"
   echo -ne "  ${BOLD}> ${RESET}"
-  read -r choices
+  if [[ "${_HTS_PIPED:-0}" == "1" ]]; then
+    # Script text is arriving on stdin (curl | bash): read the answer from the terminal.
+    if { exec 3</dev/tty; } 2>/dev/null; then
+      read -r choices <&3 || choices=""
+      exec 3<&-
+    else
+      echo "" >&2
+      echo -e "  ${RED}[-] Cannot show the interactive menu: no terminal available (script is being piped).${RESET}" >&2
+      echo "      Pass flags instead, e.g.: curl -fsSL <url>/ter.sh | bash -s -- --all" >&2
+      echo "      See: curl -fsSL <url>/ter.sh | bash -s -- --help" >&2
+      exit 1
+    fi
+  else
+    read -r choices
+  fi
   # Default to 'A' (all) if user presses Enter
   if [[ -z "$choices" ]]; then
     choices="A"
