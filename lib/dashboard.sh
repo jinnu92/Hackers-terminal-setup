@@ -135,7 +135,7 @@ _PENTEST_TIPS=(
   "Run 'doctor' for a quick tool check ('./ter.sh --doctor' runs the full audit)."
   "Use 'yazi' for lightning-fast async terminal file management with image previews."
   "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
-  "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
+  "Run 'hts config' to change this welcome screen, or 'hts help' for all commands."
   "Run 'hts config' to switch the welcome screen (full/compact/off) or the prompt."
 )
 
@@ -229,7 +229,7 @@ _show_welcome() {
 
   echo ""
   echo -e "${_W_BOLD}${_W_CYAN}╭─────────────────────────────────────────────────────────────────────────────╮${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}│${_W_RESET}  ${_W_BOLD}${_W_PURPLE}⚡ HACKER TERMINAL COCKPIT 2.0${_W_RESET}            ${_W_DIM}[${os_label} • ${arch_label} • ${the_date}]${_W_RESET}  ${_W_BOLD}${_W_CYAN}│${_W_RESET}"
+  echo -e "${_W_BOLD}${_W_CYAN}│${_W_RESET}  ${_W_BOLD}${_W_PURPLE}⚡ HACKER TERMINAL COCKPIT${_W_RESET}                ${_W_DIM}[${os_label} • ${arch_label} • ${the_date}]${_W_RESET}  ${_W_BOLD}${_W_CYAN}│${_W_RESET}"
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   printf "  ${_W_BOLD}%-35s${_W_RESET}  ${_W_BOLD}%-35s${_W_RESET}\n" "NETWORK & TUNNELS" "SYSTEM & TELEMETRY"
   printf "  ${_W_DIM}├─ Local IP :${_W_RESET} %-23s  ${_W_DIM}├─ Uptime :${_W_RESET} %-23s\n" "$local_ip" "$uptime_str"
@@ -238,8 +238,8 @@ _show_welcome() {
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
   printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
-  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
-  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}hts config${_W_RESET}\n"
+  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}Sandboxed MCP servers${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
+  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}hts help${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}hts config${_W_RESET}\n"
   if [[ $_W_TIPS == on ]]; then
     echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
 

@@ -1642,6 +1642,8 @@ write_ghostty_config() {
   # Write fallback catppuccin-mocha theme file so both casing styles work seamlessly
   backup_file "$cfg_dir/themes/catppuccin-mocha"
   cat > "$cfg_dir/themes/catppuccin-mocha" << 'MOCHA_THEME'
+# Catppuccin Mocha palette — https://github.com/catppuccin/ghostty
+# MIT License, Copyright (c) 2021 Catppuccin
 palette = 0=#45475a
 palette = 1=#f38ba8
 palette = 2=#a6e3a1
@@ -4435,7 +4437,7 @@ _PENTEST_TIPS=(
   "Run 'doctor' for a quick tool check ('./ter.sh --doctor' runs the full audit)."
   "Use 'yazi' for lightning-fast async terminal file management with image previews."
   "Use 'btop' for real-time CPU, GPU, memory, and process telemetry."
-  "Run 'cheat <keyword>' or '?' to search the built-in tactical reference manual."
+  "Run 'hts config' to change this welcome screen, or 'hts help' for all commands."
   "Run 'hts config' to switch the welcome screen (full/compact/off) or the prompt."
 )
 
@@ -4529,7 +4531,7 @@ _show_welcome() {
 
   echo ""
   echo -e "${_W_BOLD}${_W_CYAN}╭─────────────────────────────────────────────────────────────────────────────╮${_W_RESET}"
-  echo -e "${_W_BOLD}${_W_CYAN}│${_W_RESET}  ${_W_BOLD}${_W_PURPLE}⚡ HACKER TERMINAL COCKPIT 2.0${_W_RESET}            ${_W_DIM}[${os_label} • ${arch_label} • ${the_date}]${_W_RESET}  ${_W_BOLD}${_W_CYAN}│${_W_RESET}"
+  echo -e "${_W_BOLD}${_W_CYAN}│${_W_RESET}  ${_W_BOLD}${_W_PURPLE}⚡ HACKER TERMINAL COCKPIT${_W_RESET}                ${_W_DIM}[${os_label} • ${arch_label} • ${the_date}]${_W_RESET}  ${_W_BOLD}${_W_CYAN}│${_W_RESET}"
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   printf "  ${_W_BOLD}%-35s${_W_RESET}  ${_W_BOLD}%-35s${_W_RESET}\n" "NETWORK & TUNNELS" "SYSTEM & TELEMETRY"
   printf "  ${_W_DIM}├─ Local IP :${_W_RESET} %-23s  ${_W_DIM}├─ Uptime :${_W_RESET} %-23s\n" "$local_ip" "$uptime_str"
@@ -4538,8 +4540,8 @@ _show_welcome() {
   echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
   printf "  ${_W_BOLD}%-73s${_W_RESET}\n" "SECURITY & AGENTIC WORKSPACE"
   printf "  ${_W_DIM}├─ Active Dir :${_W_RESET} %-59s\n" "${PWD/#$HOME/~}"
-  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}5 Sandboxed MCPs${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
-  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}cheat${_W_RESET} ${_W_DIM}(or ?)${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}hts config${_W_RESET}\n"
+  printf "  ${_W_DIM}├─ AI Tools   :${_W_RESET} ${_W_GREEN}Claude Code CLI${_W_RESET} ${_W_DIM}(ccode)${_W_RESET} • ${_W_CYAN}Sandboxed MCP servers${_W_RESET} ${_W_DIM}(sec-mcp)${_W_RESET}\n"
+  printf "  ${_W_DIM}└─ Quick Ref  :${_W_RESET} ${_W_YELLOW}hts help${_W_RESET} • ${_W_YELLOW}doctor${_W_RESET} • ${_W_YELLOW}bbrecon${_W_RESET} • ${_W_YELLOW}schematest${_W_RESET} • ${_W_YELLOW}hts config${_W_RESET}\n"
   if [[ $_W_TIPS == on ]]; then
     echo -e "${_W_BOLD}${_W_CYAN}├─────────────────────────────────────────────────────────────────────────────┤${_W_RESET}"
 
@@ -7084,7 +7086,7 @@ hts_print_banner() {
   echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
   echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
   echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
-  echo -e "  8. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
+  echo -e "  8. ${YELLOW}Change settings:${RESET}    ${BOLD}hts config${RESET} (welcome screen, prompt) or ${BOLD}hts help${RESET}"
   echo ""
 }
 
@@ -7212,9 +7214,9 @@ hts_help() {
       echo "  --bugbounty      Install bug bounty tools (subfinder, httpx, nuclei, ffuf, katana)"
       echo "  --ad-pivot       Install Active Directory & Pivoting tools (Ligolo-ng, Chisel, NetExec)"
       echo "  --web-api        Install Web & API security tools (Schemathesis, Kiterunner, Caido, Arjun)"
-      echo "  --devsecops      Install Container & DevSecOps tools (Trivy, Syft, Grype, Checkov)"
       echo "  --mobile         Install Mobile & Reverse Engineering tools (Jadx, Apktool)"
-      echo "  --cloud          Install cloud security tools (AWS CLI, Azure, gcloud, prowler)"
+      echo "  --cloud          Install cloud & DevSecOps tools (AWS/Azure/gcloud CLIs, Trivy, Syft, Grype,"
+      echo "                   Checkov, kubescape, kube-bench, osv-scanner, prowler); alias: --devsecops"
       echo "  --ai             Install AI / LLM security tools"
       echo "  --workflow       Install workflow tools"
       echo "  --dashboard      Install Fastfetch & Tactical Security Welcome Cockpit"
@@ -7244,7 +7246,7 @@ hts_help() {
       echo "  ./ter.sh                                  # Launch interactive menu (press Enter or 'y' for all)"
       echo "  ./ter.sh --all                            # Install complete hacker terminal"
       echo "  ./ter.sh -y --fonts --dev --mcp           # Install selected tools unattended"
-      echo "  ./ter.sh --ad-pivot --web-api --devsecops # Install comprehensive assessment suite"
+      echo "  ./ter.sh --ad-pivot --web-api --cloud     # Install comprehensive assessment suite"
       echo "  ./ter.sh --doctor                         # Audit current environment & tools"
       echo "  ./ter.sh --dry-run --all                  # Preview everything, change nothing"
       echo "  ./ter.sh --list                           # Show the component table"

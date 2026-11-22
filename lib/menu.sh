@@ -374,7 +374,7 @@ hts_print_banner() {
   echo -e "  5. ${YELLOW}Manage MCP suite:${RESET}   ${BOLD}sec-mcp list${RESET} or ${BOLD}sec-mcp inspect${RESET}"
   echo -e "  6. ${YELLOW}Run Atuin history:${RESET}  ${BOLD}Ctrl+R${RESET} (scrubs tokens automatically)"
   echo -e "  7. ${YELLOW}Run System Doctor:${RESET}  ${BOLD}doctor${RESET} (or ${BOLD}sec-doctor${RESET})"
-  echo -e "  8. ${YELLOW}Open cheat sheet:${RESET}   ${BOLD}cheat${RESET} or ${BOLD}?${RESET}"
+  echo -e "  8. ${YELLOW}Change settings:${RESET}    ${BOLD}hts config${RESET} (welcome screen, prompt) or ${BOLD}hts help${RESET}"
   echo ""
 }
 

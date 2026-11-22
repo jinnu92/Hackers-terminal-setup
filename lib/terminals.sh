@@ -173,6 +173,8 @@ write_ghostty_config() {
   # Write fallback catppuccin-mocha theme file so both casing styles work seamlessly
   backup_file "$cfg_dir/themes/catppuccin-mocha"
   cat > "$cfg_dir/themes/catppuccin-mocha" << 'MOCHA_THEME'
+# Catppuccin Mocha palette — https://github.com/catppuccin/ghostty
+# MIT License, Copyright (c) 2021 Catppuccin
 palette = 0=#45475a
 palette = 1=#f38ba8
 palette = 2=#a6e3a1
