@@ -115,6 +115,19 @@ _pipx_has() {
     | tr '[:upper:]_' '[:lower:]-' | grep -qxF -- "$want"
 }
 
+# _uv_tool_fallback <pkg> — retry a failed pipx install with uv and an older,
+# widely supported Python (uv downloads that interpreter itself). The newest
+# system Python often has no prebuilt wheels for packages with native code.
+_uv_tool_fallback() {
+  local pkg=$1 py="${HTS_PY_FALLBACK:-3.13}"
+  if ! command -v uv &>/dev/null; then
+    pipx install uv >/dev/null 2>&1 || return 1
+    command -v uv &>/dev/null || return 1
+  fi
+  warn "pipx could not build $pkg with the system Python; retrying with uv and Python $py..."
+  uv tool install --python "$py" "$pkg"
+}
+
 pipx_install() {
   local pkg=$1
   export PATH="$HOME/.local/bin:$PATH"
@@ -124,6 +137,8 @@ pipx_install() {
     log "Installing $pkg via pipx..."
     if pipx install "$pkg"; then
       hts_manifest_add tool "$pkg" "pipx"
+    elif _uv_tool_fallback "$pkg"; then
+      hts_manifest_add tool "$pkg" "uv"
     else
       warn "pipx install $pkg failed"
       return 1

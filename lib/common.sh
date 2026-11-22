@@ -103,12 +103,23 @@ hts_verify_cmd() {
   return 1
 }
 
+# _hts_manifest_has <kind> <name> — true when the manifest has such a line
+_hts_manifest_has() {
+  [[ -n "${HTS_MANIFEST:-}" && -f "$HTS_MANIFEST" ]] || return 1
+  awk -F '\t' -v k="$1" -v n="$2" '$2 == k && $3 == n { found = 1 } END { exit !found }' "$HTS_MANIFEST"
+}
+
 # backup_file <path> — copy an existing file/symlink to the per-run backup dir.
 # Once per run per path. Always returns 0.
 backup_file() {
   local src=${1:-} rel dest
   [[ -n "$src" ]] || return 0
   if [[ ! -f "$src" && ! -L "$src" ]]; then
+    return 0
+  fi
+  # A path the manifest records as created by this tool, with no earlier backup,
+  # never belonged to the user: there is nothing of theirs to preserve.
+  if _hts_manifest_has file "$src" && ! _hts_manifest_has backup "$src"; then
     return 0
   fi
   case "$HTS_BACKED_UP" in

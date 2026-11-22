@@ -136,12 +136,17 @@ ensure_omz() {
   else
     warn "Oh My Zsh not found — installing..."
     # Preserve the user's own .zshrc before the OMZ installer swaps in its template
+    local had_zshrc=0
+    [[ -e "$HOME/.zshrc" || -L "$HOME/.zshrc" ]] && had_zshrc=1
     backup_file "$HOME/.zshrc"
     if ! hts_run_remote_script "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh" "env RUNZSH=no CHSH=no sh"; then
       err "Oh My Zsh install failed"
       return 1
     fi
     ok "Oh My Zsh installed"
+    if [[ "$had_zshrc" -eq 0 && -e "$HOME/.zshrc" ]]; then
+      hts_track_file "$HOME/.zshrc"
+    fi
   fi
   export ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
   _HTS_DID_OMZ=1
